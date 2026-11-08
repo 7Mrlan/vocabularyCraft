@@ -1,0 +1,542 @@
+package dev.wordloom.ui.home
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.School
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import dev.wordloom.ui.components.drawSearchRipples
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import dev.wordloom.data.model.WordEntry
+import dev.wordloom.ui.components.SearchPill
+import dev.wordloom.ui.components.SpeakerButton
+import dev.wordloom.ui.components.WaveDivider
+import dev.wordloom.ui.theme.SerifFamily
+import dev.wordloom.ui.theme.WordloomTheme
+
+private val HeroTop = Color(0xFF061B45)
+private val HeroMid = Color(0xFF0A2E7A)
+private val HeroBottom = Color(0xFF0C3B9E)
+
+@Composable
+fun HomeScreen(
+    dueCount: Int,
+    totalCards: Int,
+    recent: List<WordEntry>,
+    dailyWord: WordEntry?,
+    dailyInDeck: Boolean,
+    onAddDaily: (WordEntry) -> Unit,
+    onSearch: () -> Unit,
+    onRandom: () -> Unit,
+    onReview: () -> Unit,
+    onWord: (String) -> Unit,
+    onOpenMap: () -> Unit,
+    onOpenLists: () -> Unit,
+) {
+    val wl = WordloomTheme.colors
+    val band = wl.primaryBright
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(wl.surface)
+            // The feed runs edge to edge; keep the last card clear of the
+            // gesture bar and give it room to breathe.
+            .navigationBarsPadding(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 28.dp),
+    ) {
+        item {
+            val word = recent.firstOrNull()?.word
+            var pillCenterY by remember { mutableStateOf(0f) }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Brush.verticalGradient(listOf(HeroTop, HeroMid, HeroBottom)))
+                    .statusBarsPadding()
+                    .drawBehind {
+                        if (pillCenterY > 0f) {
+                            drawSearchRipples(Offset(x = 40.dp.toPx(), y = pillCenterY))
+                        }
+                    },
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(top = 18.dp, bottom = 44.dp),
+                ) {
+                    BrandRow(onOpenMap = onOpenMap, onOpenLists = onOpenLists)
+                    Spacer(Modifier.height(22.dp))
+                    SearchPill(
+                        placeholder = "搜索单词、释义或用法",
+                        onClick = onSearch,
+                        modifier = Modifier.onGloballyPositioned {
+                            pillCenterY = it.positionInRoot().y + it.size.height / 2f
+                        },
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable(onClick = onRandom),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Shuffle,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.9f),
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "随机一个词",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = Color.White.copy(alpha = 0.9f),
+                        )
+                    }
+                }
+
+                WaveDivider(
+                    color = band,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(52.dp),
+                )
+            }
+        }
+
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(band)
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 14.dp),
+            ) {
+                // Three equal cards get cramped under 400dp. One primary action
+                // carries the hierarchy, and the two quiet ones sit below it.
+                PrimaryActionCard(
+                    background = Color.White,
+                    contentColor = wl.primary,
+                    icon = Icons.Filled.AutoStories,
+                    title = "查一个词",
+                    subtitle = "英英释义 · 音标 · 发音",
+                    onClick = onSearch,
+                )
+                Spacer(Modifier.height(10.dp))
+                // Both cards are statistics, not buttons with a label: the right
+                // side carries the number or word that makes the card worth
+                // tapping, so no half of it sits empty.
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    val lastWord = recent.firstOrNull()?.word
+                    ArrowCard(
+                        modifier = Modifier.weight(1f),
+                        background = wl.coralSoft,
+                        contentColor = wl.coral,
+                        title = "复习",
+                        subtitle = if (dueCount > 0) "$dueCount 个待复习" else "今日已清空",
+                        onClick = onReview,
+                    )
+                    ArrowCard(
+                        modifier = Modifier.weight(1f),
+                        background = wl.mint,
+                        contentColor = wl.mintInk,
+                        title = "最近",
+                        subtitle = lastWord ?: "遇见生词",
+                        onClick = if (lastWord == null) onRandom else ({ onWord(lastWord) }),
+                    )
+                }
+            }
+        }
+
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(wl.surface),
+            ) {
+                WaveDivider(
+                    color = band,
+                    flipped = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(42.dp),
+                )
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = wl.surfaceAlt,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(top = 20.dp)
+                        .clickable(onClick = onReview),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(18.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (dueCount > 0) "今天有 $dueCount 个词等你" else "今天没有待复习的词",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = wl.ink,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = "收藏夹里共 $totalCards 个词 · FSRS 间隔重复",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = wl.inkMuted,
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .background(wl.action, CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        dailyWord?.let { entry ->
+            item {
+                DailyWordCard(
+                    entry = entry,
+                    inDeck = dailyInDeck,
+                    onAdd = { onAddDaily(entry) },
+                    onOpen = { onWord(entry.word) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrandRow(onOpenMap: () -> Unit, onOpenLists: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Canvas(modifier = Modifier.size(26.dp)) {
+            val stroke = Stroke(width = 2.2f * density)
+            drawCircle(color = Color.White, radius = size.minDimension / 2.6f, style = stroke)
+            drawCircle(
+                color = Color.White,
+                radius = 2.4f * density,
+                center = Offset(size.width / 2f, size.height / 2f),
+            )
+            drawLine(
+                color = Color.White,
+                start = Offset(size.width / 2f, 0f),
+                end = Offset(size.width / 2f, size.height),
+                strokeWidth = 1.2f * density,
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = "Wordloom",
+            fontFamily = SerifFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 22.sp,
+            color = Color.White,
+        )
+        Spacer(Modifier.weight(1f))
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .background(Color.White.copy(alpha = 0.14f), CircleShape)
+                .clickable(onClick = onOpenLists),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.List,
+                contentDescription = "词表",
+                tint = Color.White,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .background(Color.White.copy(alpha = 0.14f), CircleShape)
+                .clickable(onClick = onOpenMap),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Place,
+                contentDescription = "打开学习地图",
+                tint = Color.White,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PrimaryActionCard(
+    background: Color,
+    contentColor: Color,
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = background,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(contentColor.copy(alpha = 0.10f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = contentColor,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = contentColor,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = contentColor.copy(alpha = 0.72f),
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                tint = contentColor.copy(alpha = 0.7f),
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ArrowCard(
+    modifier: Modifier = Modifier,
+    background: Color,
+    contentColor: Color,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = modifier
+            .height(76.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = background,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 16.dp, end = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
+                    color = contentColor,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                    color = contentColor.copy(alpha = 0.72f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .background(contentColor, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun DailyWordCard(
+    entry: WordEntry,
+    inDeck: Boolean,
+    onAdd: () -> Unit,
+    onOpen: () -> Unit,
+) {
+    val wl = WordloomTheme.colors
+    val sense = entry.senses.firstOrNull()
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(top = 16.dp)
+            .clickable(onClick = onOpen),
+        shape = RoundedCornerShape(22.dp),
+        color = wl.surface,
+        shadowElevation = 2.dp,
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = "每日一词",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                color = wl.inkMuted,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = entry.word,
+                    fontFamily = SerifFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 30.sp,
+                    color = wl.ink,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Spacer(Modifier.width(10.dp))
+                entry.audio.firstOrNull()?.let { clip ->
+                    SpeakerButton(url = clip.url)
+                }
+            }
+
+            entry.ipa.firstOrNull()?.let { p ->
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = p.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    // primaryDeep is a light-mode-only shade; on #0B1320 it vanishes.
+                    color = if (wl.isDark) wl.primary else wl.primaryDeep,
+                )
+            }
+
+            val blurb = entry.shortBlurb?.takeIf { it.isNotBlank() } ?: sense?.definition
+            if (blurb != null) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = blurb,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontFamily = SerifFamily,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                        fontSize = 15.sp,
+                        lineHeight = 24.sp,
+                    ),
+                    color = wl.ink,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = if (inDeck) wl.surfaceAlt else wl.primary,
+                ) {
+                    Text(
+                        text = if (inDeck) "已在复习队列" else "加入复习",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (inDeck) wl.inkMuted else Color.White,
+                        modifier = Modifier
+                            .clickable(enabled = !inDeck, onClick = onAdd)
+                            .padding(horizontal = 16.dp, vertical = 9.dp),
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = "查看词条",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = wl.primary,
+                    modifier = Modifier
+                        .clickable(onClick = onOpen)
+                        .padding(vertical = 9.dp),
+                )
+            }
+        }
+    }
+}

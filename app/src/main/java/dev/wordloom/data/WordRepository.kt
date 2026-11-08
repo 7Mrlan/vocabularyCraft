@@ -1,0 +1,159 @@
+package dev.wordloom.data
+
+import dev.wordloom.data.local.CachedWordEntity
+import dev.wordloom.data.local.ListWithCount
+import dev.wordloom.data.local.ListWordEntity
+import dev.wordloom.data.local.WordListEntity
+import dev.wordloom.data.local.CardEntity
+import dev.wordloom.data.local.WordloomDao
+import dev.wordloom.data.model.WordEntry
+import dev.wordloom.data.remote.DictionarySource
+import dev.wordloom.srs.CardProgress
+import dev.wordloom.srs.DAY_MS
+import dev.wordloom.srs.Rating
+import dev.wordloom.srs.ReviewOutcome
+import dev.wordloom.srs.Scheduler
+import android.util.Log
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.Json
+
+class WordRepository(
+    private val source: DictionarySource,
+    private val dao: WordloomDao,
+) {
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val cacheTtl = 30 * DAY_MS
+
+    suspend fun lookup(
+        term: String,
+        forceRefresh: Boolean = false,
+        markRecent: Boolean = true,
+    ): WordEntry? {
+        val cleaned = term.trim()
+        if (cleaned.isEmpty()) return null
+        val key = cleaned.lowercase()
+
+        if (!forceRefresh) {
+            dao.cachedWord(key)?.let { cached ->
+                if (System.currentTimeMillis() - cached.fetchedAt < cacheTtl) {
+                    decode(cached)?.let { entry ->
+                        if (markRecent) dao.touchRecent(key, System.currentTimeMillis())
+                        return entry
+                    }
+                }
+            }
+        }
+
+        Log.d(TAG, "cache miss for $key, hitting ${source.id}")
+        val started = System.currentTimeMillis()
+        val entry = source.lookup(cleaned) ?: return null
+        Log.d(TAG, "source returned '${entry.word}' in ${System.currentTimeMillis() - started}ms")
+        dao.putWord(
+            CachedWordEntity(
+                word = key,
+                json = json.encodeToString(WordEntry.serializer(), entry),
+                fetchedAt = entry.fetchedAt,
+                recentAt = if (markRecent) System.currentTimeMillis() else 0L,
+            )
+        )
+        return entry
+    }
+
+    suspend fun suggest(prefix: String): List<String> =
+        if (prefix.isBlank()) emptyList() else source.suggest(prefix)
+
+    suspend fun randomWord(): String? = source.random()
+
+    fun recentWords(): Flow<List<WordEntry>> =
+        dao.recentWords().map { list -> list.mapNotNull { decode(it) } }
+
+    fun cards(): Flow<List<CardEntity>> = dao.cards()
+
+    fun dueCards(): Flow<List<CardEntity>> =
+        cards().map { list ->
+            // Read the clock on every emission: a card added after the flow was
+            // created must still show up as due.
+            val now = System.currentTimeMillis()
+            list.filter { it.dueAt <= now }.sortedBy { it.dueAt }
+        }
+
+    suspend fun isInDeck(word: String): Boolean = dao.card(word.lowercase()) != null
+
+    suspend fun addToDeck(entry: WordEntry) {
+        val key = entry.word.lowercase()
+        if (dao.card(key) != null) return
+        val now = System.currentTimeMillis()
+        val preview = entry.senses.firstOrNull()?.definition.orEmpty().take(200)
+        dao.putCard(
+            CardEntity(
+                word = key,
+                stability = 0.0,
+                difficulty = 0.0,
+                reps = 0,
+                lapses = 0,
+                lastReviewAt = 0L,
+                dueAt = now,
+                addedAt = now,
+                preview = preview,
+            )
+        )
+    }
+
+    suspend fun removeFromDeck(word: String) = dao.deleteCard(word.lowercase())
+
+    suspend fun review(card: CardEntity, rating: Rating): ReviewOutcome {
+        val outcome = Scheduler.review(
+            CardProgress(
+                stability = card.stability,
+                difficulty = card.difficulty,
+                reps = card.reps,
+                lapses = card.lapses,
+                lastReviewAt = card.lastReviewAt,
+                dueAt = card.dueAt,
+            ),
+            rating,
+        )
+        dao.putCard(
+            card.copy(
+                stability = outcome.progress.stability,
+                difficulty = outcome.progress.difficulty,
+                reps = outcome.progress.reps,
+                lapses = outcome.progress.lapses,
+                lastReviewAt = outcome.progress.lastReviewAt,
+                dueAt = outcome.progress.dueAt,
+            )
+        )
+        return outcome
+    }
+
+    // ---- word lists ----
+
+    fun lists(): Flow<List<ListWithCount>> = dao.listsWithCount()
+
+    fun wordsInList(listId: Long): Flow<List<String>> =
+        dao.wordsInList(listId).map { rows -> rows.map { it.word } }
+
+    suspend fun createList(name: String): Long =
+        dao.insertList(WordListEntity(name = name.trim(), createdAt = System.currentTimeMillis()))
+
+    suspend fun addToList(listId: Long, word: String) {
+        dao.addToList(ListWordEntity(listId, word.trim().lowercase(), System.currentTimeMillis()))
+    }
+
+    suspend fun removeFromList(listId: Long, word: String) = dao.removeFromList(listId, word)
+
+    suspend fun deleteList(listId: Long) {
+        dao.clearListWords(listId)
+        dao.deleteList(listId)
+    }
+
+    suspend fun trimOldCache() = dao.trimCache(System.currentTimeMillis() - 90 * DAY_MS)
+
+    private fun decode(entity: CachedWordEntity): WordEntry? =
+        runCatching { json.decodeFromString(WordEntry.serializer(), entity.json) }.getOrNull()
+
+    private companion object {
+        const val TAG = "Wordloom"
+    }
+}

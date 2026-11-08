@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Hero background studies</title>
+<style>
+  :root{
+    --navy-0:#061B45; --navy-1:#0A2E7A; --navy-2:#0C3B9E;
+    --azure:#189FFE; --ink:#162941;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:#0d1117; font-family:-apple-system,"Helvetica Neue",Arial,sans-serif;
+    padding:24px; display:flex; flex-direction:column; gap:22px; align-items:flex-start;
+  }
+  .label{color:#8b98ab; font-size:12px; letter-spacing:.02em; margin:0 0 -10px 2px}
+  .phone{width:393px; height:300px; border-radius:0; overflow:hidden; position:relative}
+  .hero{
+    position:absolute; inset:0;
+    background:linear-gradient(180deg,var(--navy-0) 0%, var(--navy-1) 58%, var(--navy-2) 100%);
+    overflow:hidden;
+  }
+  .content{position:relative; z-index:3; padding:22px 20px 0}
+  .brand{display:flex; align-items:center; gap:10px; color:#fff}
+  .mark{
+    width:22px; height:22px; border-radius:50%; border:2px solid #fff; position:relative;
+  }
+  .mark:before{content:""; position:absolute; left:9px; top:0; width:1.6px; height:18px; background:#fff}
+  .mark:after{content:""; position:absolute; left:8px; top:8px; width:3px; height:3px; background:#fff; border-radius:50%}
+  .wordmark{font-family:Georgia,"Times New Roman",serif; font-weight:700; font-size:22px}
+  .pin{
+    margin-left:auto; width:34px; height:34px; border-radius:50%;
+    background:rgba(255,255,255,.14); display:flex; align-items:center; justify-content:center;
+  }
+  .pin svg{width:16px; height:16px; fill:#fff; opacity:.95}
+  .pill{
+    margin-top:22px; height:56px; border-radius:28px; background:#fff;
+    display:flex; align-items:center; gap:12px; padding:0 20px;
+    box-shadow:0 10px 24px rgba(0,0,0,.18);
+  }
+  .pill svg{width:20px; height:20px; flex:0 0 auto}
+  .pill span{color:#5B6B82; font-size:16px}
+  .random{margin-top:14px; display:flex; align-items:center; gap:8px; color:rgba(255,255,255,.9); font-size:13px; font-weight:600}
+  .random svg{width:16px; height:16px; stroke:#fff; fill:none; stroke-width:2}
+
+  /* ---------- A: page rules ---------- */
+  .rules{position:absolute; inset:0; z-index:1}
+  .rules span{
+    position:absolute; left:20px; height:1px; background:rgba(255,255,255,.09); border-radius:1px;
+  }
+  .rules span:nth-child(4){background:rgba(126,196,255,.28)}
+
+  /* ---------- B: waveform ---------- */
+  .wave{position:absolute; inset:0; z-index:1}
+
+  /* ---------- C: frequency bars ---------- */
+  .bars{position:absolute; left:0; right:0; bottom:0; height:150px; z-index:1; display:flex; align-items:flex-end; gap:6px; padding:0 20px}
+  .bars i{
+    flex:1; background:rgba(255,255,255,.07); border-radius:4px 4px 0 0; display:block;
+  }
+  .bars i.accent{background:rgba(126,196,255,.22)}
+</style>
+</head>
+<body>
+
+<p class="label">A · 词条横线 —— 像一页词典的正文行，左对齐、长短不一</p>
+<div class="phone">
+  <div class="hero">
+    <div class="rules" aria-hidden="true"></div>
+    <div class="content">
+      <div class="brand"><span class="mark"></span><span class="wordmark">Wordloom</span>
+        <span class="pin"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z"/></svg></span>
+      </div>
+      <div class="pill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#005AFB" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+        <span>搜索单词、释义或用法</span>
+      </div>
+      <div class="random">
+        <svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+        随机一个词
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="label">B · 声波线 —— 一条贯穿的音频波形，中间被搜索框截断</p>
+<div class="phone">
+  <div class="hero">
+    <svg class="wave" viewBox="0 0 393 300" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M-10 118 C 40 92, 70 148, 110 120 S 180 86, 220 118 S 300 154, 340 116 S 390 96, 405 118"
+            fill="none" stroke="rgba(255,255,255,.14)" stroke-width="1.4"/>
+      <path d="M-10 196 C 50 172, 80 222, 130 196 S 205 166, 250 198 S 330 228, 370 194 S 400 180, 410 196"
+            fill="none" stroke="rgba(255,255,255,.09)" stroke-width="1.2"/>
+      <path d="M-10 62 C 60 44, 90 84, 140 64 S 210 40, 250 64 S 330 88, 380 58 S 400 52, 410 62"
+            fill="none" stroke="rgba(126,196,255,.10)" stroke-width="1.2"/>
+    </svg>
+    <div class="content">
+      <div class="brand"><span class="mark"></span><span class="wordmark">Wordloom</span>
+        <span class="pin"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z"/></svg></span>
+      </div>
+      <div class="pill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#005AFB" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+        <span>搜索单词、释义或用法</span>
+      </div>
+      <div class="random">
+        <svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+        随机一个词
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="label">C · 词频柱 —— 一排高低不一的柱体，像词汇量在增长</p>
+<div class="phone">
+  <div class="hero">
+    <div class="bars" aria-hidden="true"></div>
+    <div class="content">
+      <div class="brand"><span class="mark"></span><span class="wordmark">Wordloom</span>
+        <span class="pin"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z"/></svg></span>
+      </div>
+      <div class="pill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#005AFB" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+        <span>搜索单词、释义或用法</span>
+      </div>
+      <div class="random">
+        <svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+        随机一个词
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // A: dictionary rules — ragged lines above and below the search pill
+  const rules = document.querySelector('.rules');
+  const widths = [52, 44, 56, 38, 48];
+  let y = 196;
+  widths.forEach((w, i) => {
+    const l = document.createElement('span');
+    l.style.top = y + 'px';
+    l.style.width = w * 6 + 'px';
+    l.style.opacity = String(1 - i * 0.14);
+    rules.appendChild(l);
+    y += 22;
+  });
+
+  // C: frequency bars
+  const bars = document.querySelector('.bars');
+  const v = [22,30,26,38,34,46,42,54,48,62,58,70,66,76,72,84,80,90,86,96,92,104,100,112];
+  v.forEach((h, i) => {
+    const b = document.createElement('i');
+    b.style.height = h + 'px';
+    if (i === 14 || i === 15) b.classList.add('accent');
+    bars.appendChild(b);
+  });
+</script>
+</body>
+</html>

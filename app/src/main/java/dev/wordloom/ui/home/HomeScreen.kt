@@ -1,6 +1,7 @@
 package dev.wordloom.ui.home
 
 import androidx.compose.foundation.Canvas
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,19 +24,12 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.AutoStories
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import dev.wordloom.R
 import dev.wordloom.ui.components.drawSearchRipples
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -50,13 +44,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.wordloom.data.model.WordEntry
@@ -132,10 +126,10 @@ fun HomeScreen(
                         modifier = Modifier.clickable(onClick = onRandom),
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.Shuffle,
+                            painter = painterResource(R.drawable.wl_spark_knockout),
                             contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.9f),
-                            modifier = Modifier.size(18.dp),
+                            tint = Color.Unspecified,
+                            modifier = Modifier.size(19.dp),
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
@@ -169,7 +163,7 @@ fun HomeScreen(
                 PrimaryActionCard(
                     background = Color.White,
                     contentColor = wl.primary,
-                    icon = Icons.Filled.AutoStories,
+                    iconRes = R.drawable.wl_book_light,
                     title = "查一个词",
                     subtitle = "英英释义 · 音标 · 发音",
                     onClick = onSearch,
@@ -246,7 +240,7 @@ fun HomeScreen(
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                painter = painterResource(R.drawable.wl_forward),
                                 contentDescription = null,
                                 tint = Color.White,
                                 modifier = Modifier.size(20.dp),
@@ -305,10 +299,10 @@ private fun BrandRow(onOpenMap: () -> Unit, onOpenLists: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.List,
+                painter = painterResource(R.drawable.wl_list_knockout),
                 contentDescription = "词表",
-                tint = Color.White,
-                modifier = Modifier.size(18.dp),
+                tint = Color.Unspecified,
+                modifier = Modifier.size(19.dp),
             )
         }
         Spacer(Modifier.width(8.dp))
@@ -320,10 +314,10 @@ private fun BrandRow(onOpenMap: () -> Unit, onOpenLists: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = Icons.Filled.Place,
+                painter = painterResource(R.drawable.wl_pin_knockout),
                 contentDescription = "打开学习地图",
-                tint = Color.White,
-                modifier = Modifier.size(18.dp),
+                tint = Color.Unspecified,
+                modifier = Modifier.size(19.dp),
             )
         }
     }
@@ -333,7 +327,7 @@ private fun BrandRow(onOpenMap: () -> Unit, onOpenLists: () -> Unit) {
 private fun PrimaryActionCard(
     background: Color,
     contentColor: Color,
-    icon: ImageVector,
+    @DrawableRes iconRes: Int,
     title: String,
     subtitle: String,
     onClick: () -> Unit,
@@ -356,10 +350,10 @@ private fun PrimaryActionCard(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = icon,
+                    painter = painterResource(iconRes),
                     contentDescription = null,
-                    tint = contentColor,
-                    modifier = Modifier.size(22.dp),
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(24.dp),
                 )
             }
             Spacer(Modifier.width(12.dp))
@@ -377,10 +371,10 @@ private fun PrimaryActionCard(
                 )
             }
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                painter = painterResource(R.drawable.wl_forward),
                 contentDescription = null,
                 tint = contentColor.copy(alpha = 0.7f),
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(20.dp),
             )
         }
     }
@@ -432,10 +426,10 @@ private fun ArrowCard(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    painter = painterResource(R.drawable.wl_forward),
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(17.dp),
                 )
             }
         }

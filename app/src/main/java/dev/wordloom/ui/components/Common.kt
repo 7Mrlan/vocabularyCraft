@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -27,10 +24,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.wordloom.R
 import dev.wordloom.ui.theme.WordloomTheme
 
 @Composable
@@ -54,9 +53,9 @@ fun SearchPill(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Icon(
-                imageVector = Icons.Filled.Search,
+                painter = painterResource(R.drawable.wl_search_light),
                 contentDescription = null,
-                tint = WordloomTheme.colors.primary,
+                tint = Color.Unspecified,
             )
             Text(
                 text = placeholder,
@@ -135,9 +134,9 @@ fun SpeakerButton(url: String, modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = Icons.Filled.VolumeUp,
+            painter = painterResource(R.drawable.wl_volume),
             contentDescription = "播放发音",
-            tint = wl.primary,
+            tint = Color.Unspecified,
             modifier = Modifier.size(18.dp),
         )
     }
@@ -159,10 +158,10 @@ fun PlayAllChip(
         horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         Icon(
-            imageVector = Icons.Filled.VolumeUp,
+            painter = painterResource(R.drawable.wl_volume),
             contentDescription = null,
-            tint = color,
-            modifier = Modifier.size(13.dp),
+            tint = Color.Unspecified,
+            modifier = Modifier.size(14.dp),
         )
         Text(
             text = "全部",

@@ -19,6 +19,7 @@
 | 词族（Word family，可点进任意派生词） | ✅ |
 | 同义词详情页（按义项分组，词可点） | ✅ |
 | 复习进度条（本地 FSRS 状态） | ✅ |
+| 自绘 duotone 图标（斜置长剑做返回，浅/深两套） | ✅ |
 | 随机词 | ✅ |
 | 收藏到复习队列 | ✅ |
 | FSRS-5 间隔重复复习（四档评分） | ✅ |
@@ -144,6 +145,9 @@ adb shell settings put global http_proxy 10.0.2.2:7890   # 换成你的代理端
 | 深色首页 | 深色词条页 | 搜索联想 |
 | ![同义词](docs/screenshots/synonyms.png) | ![词条页底部](docs/screenshots/word-bottom.png) | |
 | 同义词页 | 词族 / 复习进度 | |
+| ![图标](docs/screenshots/icons.png) |
+|---|
+| 图标全集（浅 / 深） |
 
 ## 目录结构
 

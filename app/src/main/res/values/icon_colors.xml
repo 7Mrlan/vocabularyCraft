@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Duotone icon inks. Night values live in values-night/icon_colors.xml. -->
+    <color name="wl_icon_ink">#162941</color>
+    <color name="wl_icon_fill">#DCEAF9</color>
+    <color name="wl_icon_fill2">#A9CCEF</color>
+    <color name="wl_icon_accent">#F06989</color>
+</resources>

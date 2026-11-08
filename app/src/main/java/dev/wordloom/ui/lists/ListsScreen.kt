@@ -11,14 +11,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,8 +32,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.wordloom.R
 import dev.wordloom.data.local.ListWithCount
 import dev.wordloom.ui.theme.WordloomTheme
 
@@ -62,7 +63,12 @@ fun ListsScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", tint = wl.ink)
+                Icon(
+                    painter = painterResource(R.drawable.wl_back),
+                    contentDescription = "返回",
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(26.dp),
+                )
             }
             Text("词表", style = MaterialTheme.typography.titleLarge, color = wl.ink)
             Spacer(Modifier.weight(1f))
@@ -130,9 +136,10 @@ fun ListsScreen(
                                 )
                             }
                             Icon(
-                                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                painter = painterResource(R.drawable.wl_chevron),
                                 contentDescription = null,
                                 tint = wl.inkMuted,
+                                modifier = Modifier.size(20.dp),
                             )
                         }
                     }

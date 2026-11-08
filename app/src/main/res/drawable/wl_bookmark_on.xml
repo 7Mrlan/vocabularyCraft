@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Wordloom icon set. Drawn on a 24 grid: pale fill, 1.2-1.5 ink outline,
+     one coral knot. Night inks live in values-night/icon_colors.xml. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path android:pathData="M7.2,4.4 L16.8,4.4 A1.2,1.2 0 0,1 18,5.6 L18,20.2 C18,21 17.1,21.5 16.4,21 L12,18 L7.6,21 C6.9,21.5 6,21 6,20.2 L6,5.6 A1.2,1.2 0 0,1 7.2,4.4 Z"
+        android:fillColor="#FF005AFB"
+        android:strokeColor="@color/wl_icon_ink"
+        android:strokeWidth="1.2"
+        android:strokeLineJoin="round" />
+    <path android:pathData="M12,6.2 L12,9.3"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round" android:strokeAlpha="0.9" />
+</vector>

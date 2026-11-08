@@ -18,9 +18,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,7 +40,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import dev.wordloom.R
 import dev.wordloom.data.model.Suggestion
 import dev.wordloom.ui.theme.WordloomTheme
 
@@ -73,7 +72,12 @@ fun SearchScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Filled.ArrowBack, contentDescription = "返回", tint = wl.ink)
+                Icon(
+                    painter = painterResource(R.drawable.wl_back),
+                    contentDescription = "返回",
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(26.dp),
+                )
             }
             TextField(
                 value = query,
@@ -88,7 +92,11 @@ fun SearchScreen(
                 singleLine = true,
                 shape = RoundedCornerShape(26.dp),
                 leadingIcon = {
-                    Icon(Icons.Filled.Search, contentDescription = null, tint = wl.primary)
+                    Icon(
+                        painter = painterResource(R.drawable.wl_search),
+                        contentDescription = null,
+                        tint = Color.Unspecified,
+                    )
                 },
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = wl.surfaceAlt,

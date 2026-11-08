@@ -19,12 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BookmarkBorder
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
@@ -52,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.wordloom.R
 import dev.wordloom.data.model.WordEntry
 import dev.wordloom.ui.WordUiState
 import dev.wordloom.data.local.CardEntity
@@ -166,7 +162,12 @@ fun WordScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Filled.ArrowBack, contentDescription = "返回", tint = wl.ink)
+                Icon(
+                    painter = painterResource(R.drawable.wl_back),
+                    contentDescription = "返回",
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(26.dp),
+                )
             }
             // No word text here: the 36sp headline right below already says it.
             Spacer(Modifier.weight(1f))
@@ -174,15 +175,20 @@ fun WordScreen(
                 val inDeck = state.inDeck
                 IconButton(onClick = { onToggleDeck(state.entry, inDeck) }) {
                     Icon(
-                        imageVector = if (inDeck) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
+                        painter = painterResource(
+                            if (inDeck) R.drawable.wl_bookmark_on else R.drawable.wl_bookmark,
+                        ),
                         contentDescription = if (inDeck) "取消收藏" else "加入复习",
-                        // When active, use the vibrant primary blue from the home screen (#005AFB)
-                        tint = if (inDeck) wl.primary else wl.inkMuted,
+                        tint = Color.Unspecified,
                     )
                 }
             }
             IconButton(onClick = onRetry) {
-                Icon(Icons.Filled.Refresh, contentDescription = "刷新", tint = wl.inkMuted)
+                Icon(
+                    painter = painterResource(R.drawable.wl_refresh),
+                    contentDescription = "刷新",
+                    tint = Color.Unspecified,
+                )
             }
         }
 
@@ -282,10 +288,10 @@ private fun WordContent(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.List,
+                            painter = painterResource(R.drawable.wl_list),
                             contentDescription = null,
-                            tint = look.link,
-                            modifier = Modifier.size(14.dp),
+                            tint = Color.Unspecified,
+                            modifier = Modifier.size(15.dp),
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Wordloom icon set. Drawn on a 24 grid: pale fill, 1.2-1.5 ink outline,
+     one coral knot. Knockout cut for saturated (blue) surfaces; colours are baked in. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path android:pathData="M12,3.9 C12.7,8.3 15.7,11.3 20.1,12 C15.7,12.7 12.7,15.7 12,20.1 C11.3,15.7 8.3,12.7 3.9,12 C8.3,11.3 11.3,8.3 12,3.9 Z"
+        android:fillColor="#7AFFFFFF"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.2"
+        android:strokeLineJoin="round" />
+    <path android:pathData="M10.6,12 A1.4,1.4 0 1,0 13.4,12 A1.4,1.4 0 1,0 10.6,12 Z"
+        android:fillColor="#FFFFC2CE" />
+</vector>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="wl_icon_ink">#E8F2F7</color>
+    <color name="wl_icon_fill">#22405F</color>
+    <color name="wl_icon_fill2">#3C74AD</color>
+    <color name="wl_icon_accent">#FFA18C</color>
+</resources>

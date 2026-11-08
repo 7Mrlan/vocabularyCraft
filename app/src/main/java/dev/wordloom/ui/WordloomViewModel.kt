@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dev.wordloom.data.WordRepository
 import dev.wordloom.data.local.CardEntity
 import dev.wordloom.data.local.ListWithCount
+import dev.wordloom.data.model.Suggestion
 import dev.wordloom.data.model.WordEntry
 import dev.wordloom.srs.DAY_MS
 import dev.wordloom.srs.Rating
@@ -33,8 +34,8 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
     private val _wordState = MutableStateFlow<WordUiState>(WordUiState.Idle)
     val wordState: StateFlow<WordUiState> = _wordState.asStateFlow()
 
-    private val _suggestions = MutableStateFlow<List<String>>(emptyList())
-    val suggestions: StateFlow<List<String>> = _suggestions.asStateFlow()
+    private val _suggestions = MutableStateFlow<List<Suggestion>>(emptyList())
+    val suggestions: StateFlow<List<Suggestion>> = _suggestions.asStateFlow()
 
     private val _randomRequest = MutableStateFlow(0)
 

@@ -3,6 +3,7 @@ package dev.wordloom.data.remote
 import dev.wordloom.data.model.AudioClip
 import dev.wordloom.data.model.Pronunciation
 import dev.wordloom.data.model.Sense
+import dev.wordloom.data.model.Suggestion
 import dev.wordloom.data.model.SynonymGroup
 import dev.wordloom.data.model.WordEntry
 import kotlinx.coroutines.Dispatchers
@@ -78,7 +79,7 @@ class WiktionarySource(
         )
     }
 
-    override suspend fun suggest(prefix: String): List<String> = withContext(Dispatchers.IO) {
+    override suspend fun suggest(prefix: String): List<Suggestion> = withContext(Dispatchers.IO) {
         val url = "https://en.wiktionary.org/w/api.php".toHttpUrl().newBuilder()
             .addQueryParameter("action", "opensearch")
             .addQueryParameter("search", prefix.trim())
@@ -89,7 +90,7 @@ class WiktionarySource(
         runCatching {
             val body = get(url.toString())
             val root = json.parseToJsonElement(body).jsonArray
-            root.getOrNull(1)?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
+            root.getOrNull(1)?.jsonArray?.map { Suggestion(it.jsonPrimitive.content) } ?: emptyList()
         }.getOrElse { emptyList() }
     }
 

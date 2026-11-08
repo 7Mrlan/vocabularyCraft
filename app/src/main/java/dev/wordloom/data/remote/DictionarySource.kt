@@ -1,5 +1,6 @@
 package dev.wordloom.data.remote
 
+import dev.wordloom.data.model.Suggestion
 import dev.wordloom.data.model.WordEntry
 
 /**
@@ -15,7 +16,7 @@ interface DictionarySource {
 
     suspend fun lookup(term: String): WordEntry?
 
-    suspend fun suggest(prefix: String): List<String>
+    suspend fun suggest(prefix: String): List<Suggestion>
 
     suspend fun random(): String?
 }

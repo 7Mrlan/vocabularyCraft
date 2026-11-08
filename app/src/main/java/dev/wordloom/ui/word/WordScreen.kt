@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,6 +30,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -53,7 +55,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.wordloom.data.model.WordEntry
 import dev.wordloom.ui.WordUiState
+import dev.wordloom.data.local.CardEntity
+import dev.wordloom.srs.DAY_MS
+import dev.wordloom.ui.components.PlayAllChip
 import dev.wordloom.ui.components.SpeakerButton
+import dev.wordloom.ui.components.rememberAudioPlayer
 import dev.wordloom.ui.theme.SansFamily
 import dev.wordloom.ui.theme.SerifFamily
 import dev.wordloom.ui.theme.WordloomTheme
@@ -136,12 +142,15 @@ private fun posColor(pos: String, dark: Boolean = false): Color {
 @Composable
 fun WordScreen(
     state: WordUiState,
+    card: CardEntity?,
     lists: List<dev.wordloom.data.local.ListWithCount>,
     onBack: () -> Unit,
     onRetry: () -> Unit,
     onToggleDeck: (WordEntry, Boolean) -> Unit,
     onAddToList: (Long, String) -> Unit,
     onCreateList: (String, (Long) -> Unit) -> Unit,
+    onWord: (String) -> Unit,
+    onOpenSynonyms: () -> Unit,
 ) {
     val wl = WordloomTheme.colors
 
@@ -160,20 +169,8 @@ fun WordScreen(
             IconButton(onClick = onBack) {
                 Icon(Icons.Filled.ArrowBack, contentDescription = "返回", tint = wl.ink)
             }
-            val appBarWord = (state as? WordUiState.Loaded)?.entry?.word
-            if (appBarWord != null) {
-                Text(
-                    text = appBarWord,
-                    fontFamily = SerifFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    color = wl.inkMuted,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f),
-                )
-            } else {
-                Spacer(Modifier.weight(1f))
-            }
+            // No word text here: the 36sp headline right below already says it.
+            Spacer(Modifier.weight(1f))
             if (state is WordUiState.Loaded) {
                 val inDeck = state.inDeck
                 IconButton(onClick = { onToggleDeck(state.entry, inDeck) }) {
@@ -220,10 +217,12 @@ fun WordScreen(
             is WordUiState.Loaded -> WordContent(
                 entry = state.entry,
                 inDeck = state.inDeck,
+                card = card,
                 lists = lists,
-                onToggleDeck = { onToggleDeck(state.entry, state.inDeck) },
                 onAddToList = onAddToList,
                 onCreateList = onCreateList,
+                onWord = onWord,
+                onOpenSynonyms = onOpenSynonyms,
             )
 
             WordUiState.Idle -> CenterBox {
@@ -233,14 +232,17 @@ fun WordScreen(
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun WordContent(
     entry: WordEntry,
     inDeck: Boolean,
+    card: CardEntity?,
     lists: List<dev.wordloom.data.local.ListWithCount>,
-    onToggleDeck: () -> Unit,
     onAddToList: (Long, String) -> Unit,
     onCreateList: (String, (Long) -> Unit) -> Unit,
+    onWord: (String) -> Unit,
+    onOpenSynonyms: () -> Unit,
 ) {
     var showLists by remember { mutableStateOf(false) }
     var showAllSenses by remember { mutableStateOf(false) }
@@ -248,6 +250,7 @@ private fun WordContent(
     val wl = WordloomTheme.colors
     val look = if (wl.isDark) DarkLook else LightLook
     val uriHandler = LocalUriHandler.current
+    val player = rememberAudioPlayer()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -301,18 +304,18 @@ private fun WordContent(
         // 2. Pronunciations: US Flag + Audio + IPA / UK Flag + Audio + IPA
         if (entry.ipa.isNotEmpty() || entry.audio.isNotEmpty()) {
             item {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                FlowRow(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    val usAudio = entry.audio.firstOrNull { it.label.equals("US", true) } ?: entry.audio.firstOrNull()
+                    // A region can carry more than one clip ("either" ships two US takes),
+                    // and the reference page shows one speaker per clip.
+                    val usClips = entry.audio.filter { it.label.equals("US", true) }
                     val usIpa = entry.ipa.firstOrNull { it.label.equals("US", true) }?.text ?: entry.ipa.firstOrNull()?.text
-                    if (usAudio != null || usIpa != null) {
+                    if (usClips.isNotEmpty() || usIpa != null) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(text = "🇺🇸", fontSize = 16.sp)
-                            if (usAudio != null) {
-                                SpeakerButton(url = usAudio.url)
-                            }
+                            usClips.forEach { clip -> SpeakerButton(url = clip.url) }
                             if (usIpa != null) {
                                 Text(
                                     text = usIpa,
@@ -340,6 +343,13 @@ private fun WordContent(
                                     color = look.headline,
                                 )
                             }
+                        }
+                    }
+
+                    // Play every available clip back to back, US then UK.
+                    if (entry.audio.size > 1) {
+                        PlayAllChip(color = look.link) {
+                            player.playAll(entry.audio.map { it.url })
                         }
                     }
                 }
@@ -514,58 +524,86 @@ private fun WordContent(
                                 ) { append(syns.joinToString(", ")) }
                             },
                             style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(start = 34.dp),
+                            modifier = Modifier
+                                .padding(start = 34.dp)
+                                .clickable { onOpenSynonyms() },
                         )
                     }
                 }
             }
 
-            if (entry.senses.size > 4) {
-                item {
-                    TextButton(onClick = { showAllSenses = !showAllSenses }) {
-                        Text(
-                            text = if (showAllSenses) "收起" else "显示全部 ${entry.senses.size} 个义项",
-                            color = look.link,
-                            style = MaterialTheme.typography.labelLarge,
-                        )
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (entry.senses.size > 4) {
+                        TextButton(onClick = { showAllSenses = !showAllSenses }) {
+                            Text(
+                                text = if (showAllSenses) "收起" else "显示全部 ${entry.senses.size} 个义项",
+                                color = look.link,
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                        }
+                    }
+                    if (entry.senses.any { it.synonymsList.isNotEmpty() || it.synonyms.isNotEmpty() }) {
+                        TextButton(onClick = onOpenSynonyms) {
+                            Text(
+                                text = "全部同义词",
+                                color = look.link,
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // 7. Bottom action buttons
-        item {
-            Spacer(Modifier.height(14.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Button(
-                    onClick = onToggleDeck,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (inDeck) look.panel else wl.primary,
-                        contentColor = if (inDeck) look.headline else wl.onPrimary,
+        // 7. Word family — the site's <vcom:wordfamily> list.
+        if (entry.wordFamily.isNotEmpty()) {
+            item {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Word family",
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.4.sp,
                     ),
+                    color = look.synLabel,
+                )
+                Spacer(Modifier.height(8.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text(if (inDeck) "已在复习队列" else "加入复习", maxLines = 1)
+                    entry.wordFamily.forEach { relative ->
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = look.panel,
+                            modifier = Modifier.clickable { onWord(relative) },
+                        ) {
+                            Text(
+                                text = relative,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                                color = look.headline,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            )
+                        }
+                    }
                 }
-                Button(
-                    onClick = { showLists = true },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        // Light: the reference site's navy. Dark: the app's own
-                        // primary + onPrimary, since navy on #0B1320 disappears.
-                        containerColor = if (look.isDark) wl.primary else look.headline,
-                        contentColor = if (look.isDark) wl.onPrimary else Color.White,
-                    ),
-                ) {
-                    Text("加入词表", maxLines = 1)
-                }
+                Spacer(Modifier.height(20.dp))
             }
-            Spacer(Modifier.height(20.dp))
+        }
+
+        // 8. Review progress — only when this word is in the deck.
+        if (inDeck && card != null) {
+            item {
+                ReviewProgress(card = card, look = look, wl = wl)
+                Spacer(Modifier.height(20.dp))
+            }
+        }
+
+        // 9. Source line
+        item {
+            Spacer(Modifier.height(4.dp))
             Text(
                 text = "来源：${entry.sourceName}",
                 style = MaterialTheme.typography.bodySmall,
@@ -620,6 +658,65 @@ private fun WordListsDialog(
             }
         },
     )
+}
+
+/**
+ * Local FSRS state for a saved word: how often it has been reviewed, how close it
+ * is to a long interval, and when it is due. Replaces the site's account-bound
+ * progress bar, which never existed on the word page itself.
+ */
+@Composable
+private fun ReviewProgress(
+    card: CardEntity,
+    look: WordLook,
+    wl: dev.wordloom.ui.theme.WlColors,
+) {
+    val reviewed = card.reps
+    // 8 successful reviews is roughly "known" for our FSRS preset.
+    val fraction = (reviewed / 8f).coerceIn(0.04f, 1f)
+    val dueText = when {
+        card.dueAt <= System.currentTimeMillis() -> "现在就到复习时间"
+        else -> {
+            val days = ((card.dueAt - System.currentTimeMillis()) / DAY_MS).coerceAtLeast(1)
+            "${days} 天后复习"
+        }
+    }
+
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "复习进度",
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.4.sp,
+                ),
+                color = look.synLabel,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = "$reviewed / 8",
+                style = MaterialTheme.typography.bodySmall,
+                color = look.synLabel,
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        LinearProgressIndicator(
+            progress = { fraction },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp),
+            color = wl.primary,
+            trackColor = look.panel,
+            strokeCap = androidx.compose.ui.graphics.StrokeCap.Round,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "已复习 $reviewed 次 · $dueText",
+            style = MaterialTheme.typography.bodySmall,
+            color = look.synLabel,
+        )
+    }
 }
 
 @Composable

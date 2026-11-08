@@ -150,18 +150,19 @@ val SerifFamily = FontFamily(
 结构（自上而下）：
 
 ```
-← 标题行（返回 · 词 · 书签 · 刷新）
+← 标题行（返回 · 书签 · 刷新）        ← 不再重复词名，标题就在下面一行
 quick  [☰ Add to list]            ← 36sp 衬线藏蓝 + 描边按钮
-🇺🇸 🔊 /kwɪk/                     ← 旗帜 + 播放 + 音标，同一行基线对齐
+🇺🇸 🔊🔊 /kwɪk/  [🔊 全部]          ← 旗帜 + 每条录音一个喇叭 + 音标 + 全部连读
 Other forms: quicker; quickest; quicks   ← #545454，词形加粗
 如果……                             ← 短导读（衬线 17/28）
 这段词还有一层意思……                 ← 长导读（无衬线 15/25 #444）
 ▛ Definitions of quick ▟          ← 紫色斜角横幅，白字斜体词名
 1. (adjective)  moving quickly…    ← 编号列 26dp + 词性胶囊列 86dp + 正文
    "quick of foot"                 ← 斜体例句
-   synonyms: agile, nimble, spry   ← 藏蓝
-   显示全部 8 个义项                 ← 展开按钮
-[ 加入复习 ]  [ 加入词表 ]          ← 等宽双按钮
+   synonyms: agile, nimble, spry   ← 藏蓝，整行可点进同义词页
+   显示全部 8 个义项 · 全部同义词     ← 两个文字按钮
+Word family                        ← <vcom:wordfamily>，胶囊可点
+复习进度 [====----] 0/8            ← 只在已收藏时出现，FSRS 本地状态
 来源：Vocabulary.com / 原始链接
 ```
 
@@ -169,6 +170,15 @@ Other forms: quicker; quickest; quicks   ← #545454，词形加粗
   这样「(adjective)」不会把正文推成参差的左边缘
 - **收藏态**：书签为实心时用首页亮蓝 `#005AFB`（`wl.primary`），未收藏用 `inkMuted`
 - 正文默认只显示 4 条义项，与参考站折叠行为一致
+- **不再有底部双按钮**：加词表走标题旁的 `Add to list`，加复习走右上书签，
+  底部重复一次只是把同一动作说两遍，还占掉半屏
+- **顶部不再写一遍词名**：AppBar 左边只留返回箭头，词名交给 36sp 标题
+
+### 同义词页
+
+`SynonymsScreen` 把各义项的 synonyms 按义项分组，每条形如「义项序号 + 词性 + 定义（衬线斜体）
++ 胶囊词」；点任意胶囊进入该词的词条页。数据全部来自已经在内存里的 `WordEntry`，
+进入这个页面不会再发一次网络请求。
 
 ### 深色模式
 
@@ -191,5 +201,5 @@ Other forms: quicker; quickest; quicks   ← #545454，词形加粗
 词性色同样各给一套亮色版本（noun `#4BD58A`、verb `#FF9350`、adjective `#56B6F0`、
 adverb `#A894FF`…），由 `posColor(pos, dark)` 选择。
 
-底部主按钮在深色下改用主题的 `primary` / `onPrimary`（亮蓝 + 深字），因为 `#00578A`
-在深底上会糊成一片。
+复习进度条在深色下用主题 `primary`（亮蓝）画进度、`panel` 画轨道；`#00578A` 在深底上
+会糊成一片，不再使用。

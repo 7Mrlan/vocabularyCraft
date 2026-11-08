@@ -6,6 +6,7 @@ import dev.wordloom.data.local.ListWordEntity
 import dev.wordloom.data.local.WordListEntity
 import dev.wordloom.data.local.CardEntity
 import dev.wordloom.data.local.WordloomDao
+import dev.wordloom.data.model.Suggestion
 import dev.wordloom.data.model.WordEntry
 import dev.wordloom.data.remote.DictionarySource
 import dev.wordloom.srs.CardProgress
@@ -60,7 +61,7 @@ class WordRepository(
         return entry
     }
 
-    suspend fun suggest(prefix: String): List<String> =
+    suspend fun suggest(prefix: String): List<Suggestion> =
         if (prefix.isBlank()) emptyList() else source.suggest(prefix)
 
     suspend fun randomWord(): String? = source.random()

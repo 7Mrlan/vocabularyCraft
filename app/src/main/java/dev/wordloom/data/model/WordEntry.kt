@@ -11,6 +11,8 @@ data class WordEntry(
     val shortBlurb: String? = null,
     val longBlurb: String? = null,
     val etymology: String? = null,
+    /** Words built from the same root, e.g. great → greater, greatly, greatness. */
+    val wordFamily: List<String> = emptyList(),
     val senses: List<Sense> = emptyList(),
     val sourceName: String = "Vocabulary.com",
     val sourceUrl: String = "",
@@ -37,6 +39,14 @@ data class SynonymGroup(
     /** The sense qualifier in parentheses, e.g. "moving with speed". */
     val sense: String = "",
     val words: List<String> = emptyList(),
+)
+
+/** One row in the search-suggestion list. */
+@Serializable
+data class Suggestion(
+    val word: String,
+    /** Short gloss shown under the word, as on the reference site. */
+    val definition: String = "",
 )
 
 @Serializable

@@ -3,17 +3,27 @@ package dev.wordloom.data.remote
 import dev.wordloom.data.model.AudioClip
 import dev.wordloom.data.model.Pronunciation
 import dev.wordloom.data.model.Sense
+import dev.wordloom.data.model.Suggestion
 import dev.wordloom.data.model.WordEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
+import org.jsoup.parser.Parser
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
 class VocabularyComSource(
     private val client: OkHttpClient = defaultClient(),
+    private val noFollowClient: OkHttpClient = defaultClient().newBuilder()
+        .followRedirects(false)
+        .build(),
     private val fallback: WiktionarySource = WiktionarySource(client),
 ) : DictionarySource {
 
@@ -33,9 +43,58 @@ class VocabularyComSource(
         fallback.lookup(cleaned)
     }
 
-    override suspend fun suggest(prefix: String): List<String> = fallback.suggest(prefix)
+    /**
+     * The site's own smart-search box calls `dictionary/autocomplete-ss` and renders
+     * the returned HTML fragment; we parse the same fragment so suggestions carry the
+     * one-line gloss the reference UI shows under each word.
+     */
+    override suspend fun suggest(prefix: String): List<Suggestion> = withContext(Dispatchers.IO) {
+        val cleaned = prefix.trim()
+        if (cleaned.isEmpty()) return@withContext emptyList()
 
-    override suspend fun random(): String? = fallback.random()
+        val local = runCatching { suggestFromSmartSearch(cleaned) }.getOrNull().orEmpty()
+        if (local.isNotEmpty()) return@withContext local
+        fallback.suggest(cleaned)
+    }
+
+    override suspend fun random(): String? = withContext(Dispatchers.IO) {
+        // /randomword 302s to /dictionary/{word}; read the Location instead of following.
+        runCatching {
+            val request = Request.Builder()
+                .url("https://www.vocabulary.com/randomword")
+                .header("User-Agent", USER_AGENT)
+                .build()
+            noFollowClient.newCall(request).execute().use { resp ->
+                val location = resp.header("Location").orEmpty()
+                location.substringAfterLast("/dictionary/", "").takeIf { it.isNotBlank() }
+            }
+        }.getOrNull() ?: fallback.random()
+    }
+
+    private fun suggestFromSmartSearch(prefix: String): List<Suggestion> {
+        val encoded = URLEncoder.encode(prefix, "UTF-8")
+        val url = "https://www.vocabulary.com/dictionary/autocomplete-ss?search=$encoded&maxResults=8"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", USER_AGENT)
+            .header("X-Requested-With", "XMLHttpRequest")
+            .header("Referer", "https://www.vocabulary.com/dictionary/$encoded")
+            .build()
+
+        val body = client.newCall(request).execute().use { resp ->
+            if (!resp.isSuccessful) return emptyList()
+            resp.body?.string().orEmpty()
+        }
+        val doc = Jsoup.parse(body)
+        return doc.select("div.word-result").mapNotNull { row ->
+            val word = row.selectFirst(".word")?.text()?.trim().orEmpty()
+            if (word.isEmpty()) return@mapNotNull null
+            Suggestion(
+                word = word,
+                definition = row.selectFirst(".definition")?.text()?.trim().orEmpty(),
+            )
+        }
+    }
 
     private fun fetchFromVocab(word: String): WordEntry? {
         val encoded = URLEncoder.encode(word, "UTF-8")
@@ -114,12 +173,32 @@ class VocabularyComSource(
             forms = forms,
             shortBlurb = shortBlurb,
             longBlurb = longBlurb,
+            wordFamily = parseWordFamily(doc, wordAttr),
             senses = senses,
             sourceName = "Vocabulary.com",
             sourceUrl = "https://www.vocabulary.com/dictionary/$encoded",
             license = "",
             fetchedAt = System.currentTimeMillis(),
         )
+    }
+
+    /**
+     * The fragment embeds a `<vcom:wordfamily data="[{word,type,…}]">` custom element.
+     * The attribute is HTML-escaped JSON, so unescape before parsing.
+     */
+    private fun parseWordFamily(doc: Document, headword: String): List<String> {
+        val raw = Regex("<vcom:wordfamily[^>]*\\sdata=\"([^\"]+)\"")
+            .find(doc.html())
+            ?.groupValues
+            ?.get(1)
+            ?: return emptyList()
+        val decoded = Parser.unescapeEntities(raw, false)
+        return runCatching {
+            Json.parseToJsonElement(decoded).jsonArray
+                .mapNotNull { it.jsonObject["word"]?.jsonPrimitive?.content }
+                .filter { !it.equals(headword, ignoreCase = true) }
+                .distinct()
+        }.getOrElse { emptyList() }
     }
 
     companion object {

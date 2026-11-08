@@ -143,6 +143,35 @@ fun SpeakerButton(url: String, modifier: Modifier = Modifier) {
     }
 }
 
+/** Small outlined pill that plays every pronunciation clip in sequence. */
+@Composable
+fun PlayAllChip(
+    color: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = modifier
+            .background(color.copy(alpha = 0.10f), RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.VolumeUp,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(13.dp),
+        )
+        Text(
+            text = "全部",
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+            color = color,
+        )
+    }
+}
+
 @Composable
 fun rememberAudioPlayer(): AudioPlayer {
     val context = LocalContext.current
@@ -155,8 +184,23 @@ fun rememberAudioPlayer(): AudioPlayer {
 
 class AudioPlayer {
     private var mediaPlayer: MediaPlayer? = null
+    private var queue: List<String> = emptyList()
+    private var queueIndex = 0
 
     fun play(url: String) {
+        queue = emptyList()
+        start(url)
+    }
+
+    /** Plays the clips in order, one after the other (the "play all" button). */
+    fun playAll(urls: List<String>) {
+        if (urls.isEmpty()) return
+        queue = urls
+        queueIndex = 0
+        start(urls.first())
+    }
+
+    private fun start(url: String) {
         release()
         mediaPlayer = runCatching {
             MediaPlayer().apply {
@@ -171,6 +215,13 @@ class AudioPlayer {
                 setOnCompletionListener {
                     it.release()
                     if (mediaPlayer == it) mediaPlayer = null
+                    val next = queue.getOrNull(queueIndex + 1)
+                    if (next != null) {
+                        queueIndex += 1
+                        start(next)
+                    } else {
+                        queue = emptyList()
+                    }
                 }
                 setOnErrorListener { mp, _, _ ->
                     mp.release()

@@ -40,13 +40,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.wordloom.data.model.Suggestion
 import dev.wordloom.ui.theme.WordloomTheme
 
 @Composable
 fun SearchScreen(
-    suggestions: List<String>,
+    suggestions: List<Suggestion>,
     onQueryChange: (String) -> Unit,
     onSubmit: (String) -> Unit,
     onBack: () -> Unit,
@@ -112,18 +115,28 @@ fun SearchScreen(
         }
 
         LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(suggestions, key = { it }) { item ->
+            items(suggestions, key = { it.word }) { item ->
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onSubmit(item) }
-                        .padding(horizontal = 24.dp, vertical = 14.dp),
+                        .clickable { onSubmit(item.word) }
+                        .padding(horizontal = 24.dp, vertical = 12.dp),
                 ) {
                     Text(
-                        text = item,
-                        style = MaterialTheme.typography.bodyLarge,
+                        text = item.word,
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                         color = wl.ink,
                     )
+                    if (item.definition.isNotBlank()) {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = item.definition,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = wl.inkMuted,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                     Spacer(Modifier.height(10.dp))
                     HorizontalDivider(color = wl.outline)
                 }

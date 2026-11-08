@@ -17,6 +17,7 @@ import dev.wordloom.ui.lists.ListsScreen
 import dev.wordloom.ui.map.MapScreen
 import dev.wordloom.ui.review.ReviewScreen
 import dev.wordloom.ui.search.SearchScreen
+import dev.wordloom.ui.word.SynonymsScreen
 import dev.wordloom.ui.word.WordScreen
 
 @Composable
@@ -76,6 +77,7 @@ fun AppNav(viewModel: WordloomViewModel) {
             LaunchedEffect(term) { viewModel.loadWord(term) }
             WordScreen(
                 state = wordState,
+                card = cards.firstOrNull { it.word == term.lowercase() },
                 lists = lists,
                 onBack = { nav.popBackStack() },
                 onRetry = { viewModel.loadWord(term, forceRefresh = true) },
@@ -84,6 +86,32 @@ fun AppNav(viewModel: WordloomViewModel) {
                 },
                 onAddToList = viewModel::addToList,
                 onCreateList = viewModel::createList,
+                onWord = ::openWord,
+                onOpenSynonyms = {
+                    (wordState as? WordUiState.Loaded)?.entry?.word?.let { loaded ->
+                        nav.navigate("synonyms/${Uri.encode(loaded)}")
+                    }
+                },
+            )
+        }
+
+        composable(
+            route = "synonyms/{term}",
+            arguments = listOf(navArgument("term") { type = NavType.StringType }),
+        ) { entry ->
+            val term = Uri.decode(entry.arguments?.getString("term").orEmpty())
+            // The word page already has this entry loaded; reloading would flash a spinner.
+            LaunchedEffect(term) {
+                val loaded = (wordState as? WordUiState.Loaded)?.entry
+                if (loaded == null || !loaded.word.equals(term, ignoreCase = true)) {
+                    viewModel.loadWord(term)
+                }
+            }
+            SynonymsScreen(
+                entry = (wordState as? WordUiState.Loaded)?.entry
+                    ?.takeIf { it.word.equals(term, ignoreCase = true) },
+                onBack = { nav.popBackStack() },
+                onWord = ::openWord,
             )
         }
 

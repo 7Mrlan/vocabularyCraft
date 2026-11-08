@@ -14,8 +14,11 @@
 | 功能 | 状态 |
 |---|---|
 | 英英查词（导读、其他形态、音标、释义、例句、synonyms） | ✅ |
-| US / UK 发音播放 | ✅ |
-| 搜索联想（opensearch） | ✅ |
+| US / UK 发音播放 + 全部连读 | ✅ |
+| 搜索联想（原站 `autocomplete-ss`，带一行释义） | ✅ |
+| 词族（Word family，可点进任意派生词） | ✅ |
+| 同义词详情页（按义项分组，词可点） | ✅ |
+| 复习进度条（本地 FSRS 状态） | ✅ |
 | 随机词 | ✅ |
 | 收藏到复习队列 | ✅ |
 | FSRS-5 间隔重复复习（四档评分） | ✅ |
@@ -43,8 +46,12 @@
 
 `VocabularyComSource` 抓 `definition.ajax?search={word}&lang=en` 返回的 SSR 片段，用 Jsoup 取
 `p.word-forms`（其他形态）、`p.short` / `p.long`（两段导读）、`.ipa-with-audio`（US/UK 音标与
-`audio.vocabulary.com` 音频）、`li.sense`（词性、释义、例句、synonyms）。抓不到或没有内容时
-自动退回 Wiktionary。搜索联想与随机词始终走 Wiktionary（`action=opensearch` / `list=random`）。
+`audio.vocabulary.com` 音频，一个区块可能带多条录音）、`li.sense`（词性、释义、例句、synonyms），
+以及 `<vcom:wordfamily>` 里转义的 JSON（词族）。抓不到或没有内容时自动退回 Wiktionary。
+
+搜索联想直接复刻原站 smart-search 的调用：`dictionary/autocomplete-ss?search={prefix}&maxResults=8`，
+解析返回的 HTML 片段，所以每行都带一行释义。随机词走 `/randomword` 的 302 跳转取 Location；
+这两条失败时都退回 Wiktionary（`action=opensearch` / `list=random`）。
 
 词条正文（导读、释义、例句）由 Vocabulary.com 编辑撰写。本项目是个人自用，不打包正文、
 运行时按需取并在词条页底部标注来源与原始链接。若将来改成对外分发，把 `WordloomApp.kt` 里
@@ -120,6 +127,9 @@ adb shell settings put global http_proxy 10.0.2.2:7890   # 换成你的代理端
 |---|---|
 | 首页渲染 | ✅ 渐变 hero + 波浪 + 三张卡 |
 | 搜索 `quick` | ✅ 8 个义项（先显示 4 个，点「显示全部」展开）、US/UK 音标、`Other forms: quicker; quickest; quicks`、三段 synonyms |
+| 搜索联想 `gre` | ✅ 8 条，来自原站 `autocomplete-ss`，每条带一行释义（gregarious / great / grey …） |
+| 词族 + 同义词页 `great` | ✅ `greater / greatly / greatness / greats / greatnesses`；同义词 27 个按义项分组，点词可跳转 |
+| 全部连读 `either` | ✅ 两条 US 录音并排，点「全部」依次播放 |
 | 收藏 | ✅ 首页计数从 0 → 1，出现「最近查过」 |
 | 复习 | ✅ 翻卡 → 评分「良好」→ 「已复习 1」 |
 | FSRS 落库 | ✅ `stability=3.173`、`difficulty=5.282`、`due=3 天后`，与公式手算一致 |
@@ -129,9 +139,11 @@ adb shell settings put global http_proxy 10.0.2.2:7890   # 换成你的代理端
 |---|---|---|
 | 首页 | 词条页 | 复习卡 |
 
-| ![深色首页](docs/screenshots/home-dark.png) | ![深色词条](docs/screenshots/word-dark.png) |
-|---|---|
-| 深色首页 | 深色词条页 |
+| ![深色首页](docs/screenshots/home-dark.png) | ![深色词条](docs/screenshots/word-dark.png) | ![搜索联想](docs/screenshots/search-suggestions.png) |
+|---|---|---|
+| 深色首页 | 深色词条页 | 搜索联想 |
+| ![同义词](docs/screenshots/synonyms.png) | ![词条页底部](docs/screenshots/word-bottom.png) | |
+| 同义词页 | 词族 / 复习进度 | |
 
 ## 目录结构
 

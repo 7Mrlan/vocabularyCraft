@@ -26,6 +26,7 @@ fun AppNav(viewModel: WordloomViewModel) {
 
     val wordState by viewModel.wordState.collectAsStateWithLifecycle()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
+    val searching by viewModel.searching.collectAsStateWithLifecycle()
     val recent by viewModel.recent.collectAsStateWithLifecycle()
     val dueCards by viewModel.dueCards.collectAsStateWithLifecycle()
     val dueCount by viewModel.dueCount.collectAsStateWithLifecycle()
@@ -60,12 +61,15 @@ fun AppNav(viewModel: WordloomViewModel) {
         composable("search") {
             SearchScreen(
                 suggestions = suggestions,
+                searching = searching,
+                recent = recent.map { it.word }.take(8),
                 onQueryChange = viewModel::onQueryChanged,
                 onSubmit = { term ->
                     viewModel.loadWord(term)
                     openWord(term)
                 },
                 onBack = { nav.popBackStack() },
+                onRandom = { viewModel.randomWord(::openWord) },
             )
         }
 

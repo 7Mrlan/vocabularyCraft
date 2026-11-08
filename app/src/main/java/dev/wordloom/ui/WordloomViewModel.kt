@@ -37,6 +37,10 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
     private val _suggestions = MutableStateFlow<List<Suggestion>>(emptyList())
     val suggestions: StateFlow<List<Suggestion>> = _suggestions.asStateFlow()
 
+    /** True while a suggestion request is in flight, so the UI never reports "no match" too early. */
+    private val _searching = MutableStateFlow(false)
+    val searching: StateFlow<Boolean> = _searching.asStateFlow()
+
     private val _randomRequest = MutableStateFlow(0)
 
     private var suggestJob: Job? = null
@@ -138,11 +142,17 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
         suggestJob?.cancel()
         if (prefix.isBlank()) {
             _suggestions.value = emptyList()
+            _searching.value = false
             return
         }
         suggestJob = viewModelScope.launch {
             delay(250)
-            _suggestions.value = runCatching { repo.suggest(prefix) }.getOrElse { emptyList() }
+            try {
+                _searching.value = true
+                _suggestions.value = runCatching { repo.suggest(prefix) }.getOrElse { emptyList() }
+            } finally {
+                _searching.value = false
+            }
         }
     }
 

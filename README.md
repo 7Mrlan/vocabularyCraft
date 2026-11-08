@@ -15,7 +15,7 @@
 |---|---|
 | 英英查词（导读、其他形态、音标、释义、例句、synonyms） | ✅ |
 | US / UK 发音播放 + 全部连读 | ✅ |
-| 搜索联想（原站 `autocomplete-ss`，带一行释义） | ✅ |
+| 搜索联想（原站 `autocomplete-ss`，带一行释义；结果按「词 / 短语」分组） | ✅ |
 | 词族（Word family，可点进任意派生词） | ✅ |
 | 同义词详情页（按义项分组，词可点） | ✅ |
 | 复习进度条（本地 FSRS 状态） | ✅ |
@@ -140,9 +140,11 @@ adb shell settings put global http_proxy 10.0.2.2:7890   # 换成你的代理端
 |---|---|---|
 | 首页 | 词条页 | 复习卡 |
 
-| ![深色首页](docs/screenshots/home-dark.png) | ![深色词条](docs/screenshots/word-dark.png) | ![搜索联想](docs/screenshots/search-suggestions.png) |
+| ![深色首页](docs/screenshots/home-dark.png) | ![深色词条](docs/screenshots/word-dark.png) | ![搜索](docs/screenshots/search.png) |
 |---|---|---|
-| 深色首页 | 深色词条页 | 搜索联想 |
+| 深色首页 | 深色词条页 | 搜索页（空态） |
+| ![搜索结果](docs/screenshots/search-results.png) | ![词表](docs/screenshots/lists.png) | ![空词表](docs/screenshots/lists-empty.png) |
+| 搜索结果 | 词表 | 空词表 |
 | ![同义词](docs/screenshots/synonyms.png) | ![词条页底部](docs/screenshots/word-bottom.png) | |
 | 同义词页 | 词族 / 复习进度 | |
 | ![图标](docs/screenshots/icons.png) |

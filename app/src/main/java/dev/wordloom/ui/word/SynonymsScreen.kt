@@ -169,13 +169,6 @@ fun SynonymsScreen(
                 }
             }
 
-            item {
-                Text(
-                    text = "同义词来自 ${loaded.sourceName}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = wl.inkMuted,
-                )
-            }
         }
     }
 }

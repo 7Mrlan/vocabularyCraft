@@ -44,7 +44,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
@@ -249,7 +248,6 @@ private fun WordContent(
     val visibleSenses = if (showAllSenses) entry.senses else entry.senses.take(4)
     val wl = WordloomTheme.colors
     val look = if (wl.isDark) DarkLook else LightLook
-    val uriHandler = LocalUriHandler.current
     val player = rememberAudioPlayer()
 
     LazyColumn(
@@ -601,26 +599,6 @@ private fun WordContent(
             }
         }
 
-        // 9. Source line
-        item {
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = "来源：${entry.sourceName}",
-                style = MaterialTheme.typography.bodySmall,
-                color = wl.inkMuted,
-            )
-            if (entry.sourceUrl.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = entry.sourceUrl,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = look.link,
-                    modifier = Modifier.clickable {
-                        runCatching { uriHandler.openUri(entry.sourceUrl) }
-                    },
-                )
-            }
-        }
     }
 
     if (showLists) {

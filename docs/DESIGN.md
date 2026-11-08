@@ -163,7 +163,6 @@ Other forms: quicker; quickest; quicks   ← #545454，词形加粗
    显示全部 8 个义项 · 全部同义词     ← 两个文字按钮
 Word family                        ← <vcom:wordfamily>，胶囊可点
 复习进度 [====----] 0/8            ← 只在已收藏时出现，FSRS 本地状态
-来源：Vocabulary.com / 原始链接
 ```
 
 - **义项对齐**靠固定列宽：序号列 26dp、词性胶囊列 86dp，胶囊用 1dp 同色 40% 描边，

@@ -54,7 +54,7 @@
 这两条失败时都退回 Wiktionary（`action=opensearch` / `list=random`）。
 
 词条正文（导读、释义、例句）由 Vocabulary.com 编辑撰写。本项目是个人自用，不打包正文、
-运行时按需取并在词条页底部标注来源与原始链接。若将来改成对外分发，把 `WordloomApp.kt` 里
+运行时按需取。词条页不摆来源行（个人自用，不需要那两行占用首屏）。若将来改成对外分发，把 `WordloomApp.kt` 里
 的默认实现换回 `WiktionarySource()` 即可。
 
 ### 换数据源
@@ -179,6 +179,6 @@ app/src/main/java/dev/wordloom/
 
 - 应用代码：MIT
 - 词典正文：**不随仓库分发**。默认 Vocabulary.com 源为个人自用，正文版权归 IXL Learning；
-  公开发布请切到 `WiktionarySource`（CC BY-SA 4.0，App 内已署名）
-- 音频：`audio.vocabulary.com`（Vocabulary.com 源）/ Wikimedia Commons（Wiktionary 源），
-  来源链接保留在词条页底部
+  公开发布请切到 `WiktionarySource`（CC BY-SA 4.0）
+- 音频：`audio.vocabulary.com`（Vocabulary.com 源）/ Wikimedia Commons（Wiktionary 源）
+- 词条页与同义词页都不再摆「来源」行；署名只留在本 README 与 `docs/`

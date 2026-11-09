@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -51,6 +52,7 @@ fun ReviewScreen(
     onBack: () -> Unit,
     onRate: (CardEntity, Rating) -> Unit,
     onOpenWord: (String) -> Unit,
+    onQuiz: () -> Unit,
 ) {
     val wl = WordloomTheme.colors
     var queue by remember { mutableStateOf<List<CardEntity>>(emptyList()) }
@@ -84,6 +86,20 @@ fun ReviewScreen(
                     )
                 }
                 Spacer(Modifier.weight(1f))
+                Surface(
+                    shape = CircleShape,
+                    color = Color.White.copy(alpha = 0.16f),
+                    modifier = Modifier
+                        .clickable(onClick = onQuiz)
+                        .padding(end = 10.dp),
+                ) {
+                    Text(
+                        text = "练习",
+                        style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.sp),
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 13.dp, vertical = 7.dp),
+                    )
+                }
                 Text(
                     text = "已复习 $reviewed",
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),

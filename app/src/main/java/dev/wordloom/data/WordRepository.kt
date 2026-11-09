@@ -70,6 +70,10 @@ class WordRepository(
     fun recentWords(): Flow<List<WordEntry>> =
         dao.recentWords().map { list -> list.mapNotNull { decode(it) } }
 
+    /** Cached entries for the quiz; capped so a long history never slows the screen. */
+    fun cachedEntries(limit: Int = 300): Flow<List<WordEntry>> =
+        dao.cachedWords(limit).map { list -> list.mapNotNull { decode(it) } }
+
     fun cards(): Flow<List<CardEntity>> = dao.cards()
 
     fun dueCards(): Flow<List<CardEntity>> =

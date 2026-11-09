@@ -15,6 +15,7 @@ import dev.wordloom.ui.home.HomeScreen
 import dev.wordloom.ui.lists.ListDetailScreen
 import dev.wordloom.ui.lists.ListsScreen
 import dev.wordloom.ui.map.MapScreen
+import dev.wordloom.ui.quiz.QuizScreen
 import dev.wordloom.ui.review.ReviewScreen
 import dev.wordloom.ui.search.SearchScreen
 import dev.wordloom.ui.word.SynonymsScreen
@@ -35,6 +36,7 @@ fun AppNav(viewModel: WordloomViewModel) {
     val dailyWord by viewModel.dailyWord.collectAsStateWithLifecycle()
     val lists by viewModel.lists.collectAsStateWithLifecycle()
     val listWords by viewModel.listWords.collectAsStateWithLifecycle()
+    val quiz by viewModel.quiz.collectAsStateWithLifecycle()
 
     fun openWord(term: String) {
         nav.navigate("word/${Uri.encode(term)}")
@@ -162,6 +164,16 @@ fun AppNav(viewModel: WordloomViewModel) {
                 onBack = { nav.popBackStack() },
                 onRate = { card, rating -> viewModel.review(card, rating) {} },
                 onOpenWord = ::openWord,
+                onQuiz = { nav.navigate("quiz") },
+            )
+        }
+
+        composable("quiz") {
+            LaunchedEffect(Unit) { viewModel.startQuiz() }
+            QuizScreen(
+                questions = quiz,
+                onBack = { nav.popBackStack() },
+                onRestart = viewModel::startQuiz,
             )
         }
     }

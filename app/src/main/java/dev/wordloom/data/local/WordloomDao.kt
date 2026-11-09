@@ -18,6 +18,10 @@ interface WordloomDao {
     @Query("SELECT * FROM cached_words WHERE recentAt > 0 ORDER BY recentAt DESC LIMIT :limit")
     fun recentWords(limit: Int = 12): Flow<List<CachedWordEntity>>
 
+    /** Everything cached, newest first — the pool the quiz draws questions from. */
+    @Query("SELECT * FROM cached_words ORDER BY fetchedAt DESC LIMIT :limit")
+    fun cachedWords(limit: Int): Flow<List<CachedWordEntity>>
+
     @Query("UPDATE cached_words SET recentAt = :at WHERE word = :word")
     suspend fun touchRecent(word: String, at: Long)
 

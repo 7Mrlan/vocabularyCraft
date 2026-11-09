@@ -3,6 +3,8 @@ package dev.wordloom.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.wordloom.data.ListWord
+import dev.wordloom.data.QuizBuilder
+import dev.wordloom.data.QuizQuestion
 import dev.wordloom.data.WordRepository
 import dev.wordloom.data.local.CardEntity
 import dev.wordloom.data.local.ListWithCount
@@ -18,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -64,6 +67,17 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
 
     val lists: StateFlow<List<ListWithCount>> = repo.lists()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _quiz = MutableStateFlow<List<QuizQuestion>>(emptyList())
+    val quiz: StateFlow<List<QuizQuestion>> = _quiz.asStateFlow()
+
+    /** One round of four-choice practice, built from the local cache only. */
+    fun startQuiz() {
+        viewModelScope.launch {
+            val entries = runCatching { repo.cachedEntries().first() }.getOrElse { emptyList() }
+            _quiz.value = QuizBuilder.build(entries)
+        }
+    }
 
     private val _listWords = MutableStateFlow<List<ListWord>>(emptyList())
     val listWords: StateFlow<List<ListWord>> = _listWords.asStateFlow()

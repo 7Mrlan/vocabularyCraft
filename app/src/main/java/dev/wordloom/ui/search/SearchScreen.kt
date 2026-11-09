@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -70,6 +71,13 @@ fun SearchScreen(
     onRandom: () -> Unit,
 ) {
     val wl = WordloomTheme.colors
+    val keyboard = LocalSoftwareKeyboardController.current
+    // Put the keyboard away before the page changes, otherwise the viewport
+    // shrinks mid-transition and reads as a jump.
+    val submit: (String) -> Unit = { term ->
+        keyboard?.hide()
+        onSubmit(term)
+    }
     var query by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
 
@@ -144,7 +152,7 @@ fun SearchScreen(
                     ),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = {
-                        if (query.isNotBlank()) onSubmit(query.trim())
+                        if (query.isNotBlank()) submit(query.trim())
                     }),
                 )
             }
@@ -155,7 +163,7 @@ fun SearchScreen(
         val phrases = suggestions.filter { it.word.contains(' ') }
 
         if (query.isBlank()) {
-            EmptyQuery(recent = recent, onPick = onSubmit, onRandom = onRandom)
+            EmptyQuery(recent = recent, onPick = submit, onRandom = onRandom)
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -166,7 +174,7 @@ fun SearchScreen(
                 if (words.isNotEmpty()) {
                     item { SectionLabel("匹配的词") }
                     items(words, key = { it.word }) { item ->
-                        ResultRow(item, Modifier.animateItem()) { onSubmit(item.word) }
+                        ResultRow(item, Modifier.animateItem()) { submit(item.word) }
                     }
                 }
                 if (phrases.isNotEmpty()) {
@@ -175,7 +183,7 @@ fun SearchScreen(
                         SectionLabel("短语")
                     }
                     items(phrases, key = { it.word }) { item ->
-                        ResultRow(item, Modifier.animateItem()) { onSubmit(item.word) }
+                        ResultRow(item, Modifier.animateItem()) { submit(item.word) }
                     }
                 }
                 if (suggestions.isEmpty() && searching) {
@@ -188,7 +196,7 @@ fun SearchScreen(
                         )
                     }
                 } else if (suggestions.isEmpty()) {
-                    item { NoResults(query) { onSubmit(query.trim()) } }
+                    item { NoResults(query) { submit(query.trim()) } }
                 }
             }
         }

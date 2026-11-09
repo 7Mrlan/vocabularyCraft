@@ -3,7 +3,6 @@ package dev.wordloom.ui.word
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -201,18 +200,21 @@ fun WordScreen(
         AnimatedContent(
             targetState = state,
                 contentKey = { it::class },
+                // Loading already draws the word at its final spot, so a plain
+                // crossfade is all that is needed; no extra travel, no flash.
                 transitionSpec = {
-                    (fadeIn(WlMotion.effectsFast) +
-                        slideInVertically(WlMotion.spatialDefaultOffset) { it / 40 })
-                        .togetherWith(fadeOut(WlMotion.effectsFast))
+                    fadeIn(WlMotion.spatialDefault)
+                        .togetherWith(fadeOut(WlMotion.spatialDefault))
                 },
                 label = "wordState",
                 modifier = Modifier.fillMaxSize(),
             ) { current ->
                 when (current) {
-                    is WordUiState.Loading -> CenterBox {
-                        CircularProgressIndicator(color = wl.primary)
-                    }
+                    is WordUiState.Loading -> WordLoading(
+                        term = current.term,
+                        look = if (wl.isDark) DarkLook else LightLook,
+                        wl = wl,
+                    )
 
                     is WordUiState.NotFound -> CenterBox {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -255,6 +257,14 @@ fun WordScreen(
     }
 }
 
+/** Long phrases shrink instead of wrapping; the title stays one line beside the chip. */
+private fun titleSizeFor(word: String) = when {
+    word.length <= 9 -> 36.sp
+    word.length <= 13 -> 30.sp
+    word.length <= 17 -> 26.sp
+    else -> 22.sp
+}
+
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun WordContent(
@@ -290,8 +300,11 @@ private fun WordContent(
                     text = entry.word,
                     fontFamily = SerifFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 36.sp,
+                    fontSize = titleSizeFor(entry.word),
                     color = look.headline,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 Spacer(Modifier.width(12.dp))
@@ -326,8 +339,11 @@ private fun WordContent(
         // 2. Pronunciations: US Flag + Audio + IPA / UK Flag + Audio + IPA
         if (entry.ipa.isNotEmpty() || entry.audio.isNotEmpty()) {
             item {
-                FlowRow(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                // A plain Row centres every group on one baseline. FlowRow could
+                // wrap, but it top-aligned the groups and a group without audio
+                // rode visibly higher than the one with it.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     // A region can carry more than one clip ("either" ships two US takes),
@@ -741,6 +757,58 @@ private fun ReviewProgress(
             color = look.synLabel,
         )
     }
+}
+
+/**
+ * The first frame of a word page is not a spinner on white: the title is already
+ * where it will end up, and two quiet bars hold the place of the text that is
+ * still being fetched. Navigation into a word then reads as one continuous page.
+ */
+@Composable
+private fun WordLoading(
+    term: String,
+    look: WordLook,
+    wl: dev.wordloom.ui.theme.WlColors,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp, vertical = 6.dp),
+    ) {
+        Text(
+            text = term,
+            fontFamily = SerifFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = titleSizeFor(term),
+            color = look.headline,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.height(14.dp))
+        SkeletonBar(width = 132.dp, height = 16.dp, color = wl.surfaceAlt)
+        Spacer(Modifier.height(18.dp))
+        SkeletonBar(modifier = Modifier.fillMaxWidth(), height = 14.dp, color = wl.surfaceAlt)
+        Spacer(Modifier.height(9.dp))
+        SkeletonBar(modifier = Modifier.fillMaxWidth(0.92f), height = 14.dp, color = wl.surfaceAlt)
+        Spacer(Modifier.height(9.dp))
+        SkeletonBar(modifier = Modifier.fillMaxWidth(0.6f), height = 14.dp, color = wl.surfaceAlt)
+    }
+}
+
+@Composable
+private fun SkeletonBar(
+    modifier: Modifier = Modifier,
+    width: androidx.compose.ui.unit.Dp? = null,
+    height: androidx.compose.ui.unit.Dp,
+    color: Color,
+) {
+    Box(
+        modifier = modifier
+            .then(if (width != null) Modifier.width(width) else Modifier)
+            .height(height)
+            .background(color, RoundedCornerShape(6.dp)),
+    )
 }
 
 @Composable

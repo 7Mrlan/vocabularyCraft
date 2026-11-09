@@ -53,21 +53,24 @@ fun AppNav(viewModel: WordloomViewModel) {
         // Shared-axis travel: the new page comes in from the right while the old
         // one steps back a little, and pop mirrors it. Only a fraction of the
         // width so long lists never look like they are being thrown around.
+        // Slide and fade share one spring: a faster fade than the slide is what
+        // made navigation look like a flash — the old page vanished before the
+        // new one had arrived. Alpha floors keep both pages visible throughout.
         enterTransition = {
-            slideInHorizontally(WlMotion.spatialDefaultOffset) { it / 7 } +
-                fadeIn(WlMotion.effectsFast)
+            slideInHorizontally(WlMotion.spatialDefaultOffset) { it / 10 } +
+                fadeIn(WlMotion.spatialDefault, initialAlpha = 0.55f)
         },
         exitTransition = {
-            slideOutHorizontally(WlMotion.spatialDefaultOffset) { -it / 14 } +
-                fadeOut(WlMotion.effectsFast)
+            slideOutHorizontally(WlMotion.spatialDefaultOffset) { -it / 16 } +
+                fadeOut(WlMotion.spatialDefault, targetAlpha = 0.75f)
         },
         popEnterTransition = {
-            slideInHorizontally(WlMotion.spatialDefaultOffset) { -it / 7 } +
-                fadeIn(WlMotion.effectsFast)
+            slideInHorizontally(WlMotion.spatialDefaultOffset) { -it / 10 } +
+                fadeIn(WlMotion.spatialDefault, initialAlpha = 0.55f)
         },
         popExitTransition = {
-            slideOutHorizontally(WlMotion.spatialDefaultOffset) { it / 7 } +
-                fadeOut(WlMotion.effectsFast)
+            slideOutHorizontally(WlMotion.spatialDefaultOffset) { it / 10 } +
+                fadeOut(WlMotion.spatialDefault, targetAlpha = 0.75f)
         },
     ) {
         composable("home") {

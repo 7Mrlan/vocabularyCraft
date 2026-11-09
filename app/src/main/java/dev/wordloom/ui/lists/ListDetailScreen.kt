@@ -133,6 +133,7 @@ fun ListDetailScreen(
                 items(words, key = { it.word }) { item ->
                     ListWordRow(
                         item = item,
+                        modifier = Modifier.animateItem(),
                         onClick = { onWord(item.word) },
                         onRemove = { onRemove(item.word) },
                     )
@@ -145,6 +146,7 @@ fun ListDetailScreen(
 @Composable
 private fun ListWordRow(
     item: ListWord,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
     onRemove: () -> Unit,
 ) {
@@ -152,7 +154,7 @@ private fun ListWordRow(
     val wordInk = if (wl.isDark) Color(0xFF7FCBEF) else Color(0xFF00578A)
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(vertical = 13.dp),

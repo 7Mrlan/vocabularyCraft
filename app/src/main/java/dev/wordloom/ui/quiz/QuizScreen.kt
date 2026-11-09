@@ -44,6 +44,7 @@ import dev.wordloom.R
 import dev.wordloom.data.QuizQuestion
 import dev.wordloom.ui.components.PoolHeader
 import dev.wordloom.ui.theme.SerifFamily
+import dev.wordloom.ui.components.pressable
 import dev.wordloom.ui.theme.WordloomTheme
 
 /**
@@ -272,7 +273,7 @@ private fun OptionRow(text: String, state: OptionState, onClick: () -> Unit) {
         border = BorderStroke(1.dp, border),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .pressable(onClick = onClick),
     ) {
         Text(
             text = text,

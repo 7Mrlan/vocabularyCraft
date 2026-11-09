@@ -41,6 +41,7 @@ import dev.wordloom.data.local.ListWithCount
 import dev.wordloom.ui.components.PoolHeader
 import dev.wordloom.ui.components.WlSheet
 import dev.wordloom.ui.theme.SerifFamily
+import dev.wordloom.ui.components.pressable
 import dev.wordloom.ui.theme.WordloomTheme
 
 /**
@@ -128,6 +129,7 @@ fun ListsScreen(
                     ListCard(
                         list = list,
                         index = index,
+                        modifier = Modifier.animateItem(),
                         onClick = { onOpen(list) },
                     )
                 }
@@ -179,6 +181,7 @@ fun ListsScreen(
 private fun ListCard(
     list: ListWithCount,
     index: Int,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val wl = WordloomTheme.colors
@@ -192,10 +195,10 @@ private fun ListCard(
     }
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .background(wl.surfaceAlt, RoundedCornerShape(18.dp))
-            .clickable(onClick = onClick)
+            .pressable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

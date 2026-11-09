@@ -1,5 +1,10 @@
 package dev.wordloom.ui.word
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -57,6 +62,7 @@ import dev.wordloom.ui.components.SpeakerButton
 import dev.wordloom.ui.components.rememberAudioPlayer
 import dev.wordloom.ui.theme.SansFamily
 import dev.wordloom.ui.theme.SerifFamily
+import dev.wordloom.ui.theme.WlMotion
 import dev.wordloom.ui.theme.WordloomTheme
 
 // Word-page palette from the site's own stylesheet and CSS variables
@@ -192,48 +198,60 @@ fun WordScreen(
             }
         }
 
-        when (state) {
-            is WordUiState.Loading -> CenterBox {
-                CircularProgressIndicator(color = wl.primary)
-            }
+        AnimatedContent(
+            targetState = state,
+                contentKey = { it::class },
+                transitionSpec = {
+                    (fadeIn(WlMotion.effectsFast) +
+                        slideInVertically(WlMotion.spatialDefaultOffset) { it / 40 })
+                        .togetherWith(fadeOut(WlMotion.effectsFast))
+                },
+                label = "wordState",
+                modifier = Modifier.fillMaxSize(),
+            ) { current ->
+                when (current) {
+                    is WordUiState.Loading -> CenterBox {
+                        CircularProgressIndicator(color = wl.primary)
+                    }
 
-            is WordUiState.NotFound -> CenterBox {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("没有找到 “${state.term}”", style = MaterialTheme.typography.titleMedium, color = wl.ink)
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "检查拼写，或换一个词形试试。",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = wl.inkMuted,
+                    is WordUiState.NotFound -> CenterBox {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("没有找到 “${current.term}”", style = MaterialTheme.typography.titleMedium, color = wl.ink)
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "检查拼写，或换一个词形试试。",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = wl.inkMuted,
+                            )
+                        }
+                    }
+
+                    is WordUiState.Failed -> CenterBox {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("查询失败", style = MaterialTheme.typography.titleMedium, color = wl.ink)
+                            Spacer(Modifier.height(8.dp))
+                            Text(current.message, style = MaterialTheme.typography.bodySmall, color = wl.inkMuted)
+                            Spacer(Modifier.height(16.dp))
+                            Button(onClick = onRetry) { Text("重试") }
+                        }
+                    }
+
+                    is WordUiState.Loaded -> WordContent(
+                        entry = current.entry,
+                        inDeck = current.inDeck,
+                        card = card,
+                        lists = lists,
+                        onAddToList = onAddToList,
+                        onCreateList = onCreateList,
+                        onWord = onWord,
+                        onOpenSynonyms = onOpenSynonyms,
                     )
+
+                    WordUiState.Idle -> CenterBox {
+                        Text("输入一个词开始", color = wl.inkMuted)
+                    }
                 }
             }
-
-            is WordUiState.Failed -> CenterBox {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("查询失败", style = MaterialTheme.typography.titleMedium, color = wl.ink)
-                    Spacer(Modifier.height(8.dp))
-                    Text(state.message, style = MaterialTheme.typography.bodySmall, color = wl.inkMuted)
-                    Spacer(Modifier.height(16.dp))
-                    Button(onClick = onRetry) { Text("重试") }
-                }
-            }
-
-            is WordUiState.Loaded -> WordContent(
-                entry = state.entry,
-                inDeck = state.inDeck,
-                card = card,
-                lists = lists,
-                onAddToList = onAddToList,
-                onCreateList = onCreateList,
-                onWord = onWord,
-                onOpenSynonyms = onOpenSynonyms,
-            )
-
-            WordUiState.Idle -> CenterBox {
-                Text("输入一个词开始", color = wl.inkMuted)
-            }
-        }
     }
 }
 

@@ -5,6 +5,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -19,6 +23,7 @@ import dev.wordloom.ui.quiz.QuizScreen
 import dev.wordloom.ui.review.ReviewScreen
 import dev.wordloom.ui.search.SearchScreen
 import dev.wordloom.ui.word.SynonymsScreen
+import dev.wordloom.ui.theme.WlMotion
 import dev.wordloom.ui.word.WordScreen
 
 @Composable
@@ -42,7 +47,29 @@ fun AppNav(viewModel: WordloomViewModel) {
         nav.navigate("word/${Uri.encode(term)}")
     }
 
-    NavHost(navController = nav, startDestination = "home") {
+    NavHost(
+        navController = nav,
+        startDestination = "home",
+        // Shared-axis travel: the new page comes in from the right while the old
+        // one steps back a little, and pop mirrors it. Only a fraction of the
+        // width so long lists never look like they are being thrown around.
+        enterTransition = {
+            slideInHorizontally(WlMotion.spatialDefaultOffset) { it / 7 } +
+                fadeIn(WlMotion.effectsFast)
+        },
+        exitTransition = {
+            slideOutHorizontally(WlMotion.spatialDefaultOffset) { -it / 14 } +
+                fadeOut(WlMotion.effectsFast)
+        },
+        popEnterTransition = {
+            slideInHorizontally(WlMotion.spatialDefaultOffset) { -it / 7 } +
+                fadeIn(WlMotion.effectsFast)
+        },
+        popExitTransition = {
+            slideOutHorizontally(WlMotion.spatialDefaultOffset) { it / 7 } +
+                fadeOut(WlMotion.effectsFast)
+        },
+    ) {
         composable("home") {
             HomeScreen(
                 dueCount = dueCount,

@@ -120,6 +120,32 @@ val SerifFamily = FontFamily(
 不需要 Mapbox 账号，也没有 token 泄漏风险。
 
 
+## 动效（2026-11 第一批）
+
+动效只用三个令牌，全部是弹簧，写在 `ui/theme/Motion.kt`：
+
+| 令牌 | 参数 | 用途 |
+|---|---|---|
+| `spatialFast` | damping 0.7 / stiffness 800 | 按压缩放、小元素 |
+| `spatialDefault` | damping 0.75 / stiffness 350 | 页面、卡片位移 |
+| `effectsFast` | damping 1.0 / stiffness 3800 | 透明度、颜色 |
+
+取值来自 M3 Expressive 的物理系统（expressive 方案），而不是旧的 easing/duration。
+Compose 会把它们乘上系统的动画缩放，所以"移除动画"开关天然生效。
+
+已落地：
+
+- **页面转场**：shared-axis —— 新页从右滑入 1/7 屏宽并淡入，旧页反向退 1/14；返回时镜像。
+- **词条页状态**：Loading / NotFound / Failed / Loaded 用 `AnimatedContent` 淡入 + 上移 8dp，
+  `contentKey = state::class`，所以收藏状态变化不会重播入场。
+- **列表**：词表、词表详情、搜索结果都加了 `Modifier.animateItem()`，增删有位移。
+- **按压**：首页卡片、词表卡、练习选项用 `Modifier.pressable()`——按下缩到 0.985，
+  松开弹回，水波纹保留。
+- **预测性返回**：manifest 已开 `enableOnBackInvokedCallback`，Navigation 2.8.5 支持。
+
+验证方法：把转场临时改成 5 秒 tween，1 秒后截图能明显看到整页右移约 100px，证明接线正确；
+再换回弹簧。注意 `screencap` 本身有 300ms 以上延迟，用"截屏看中间帧"验证短动画并不可靠。
+
 ## 图标（2026-11）
 
 全站不再使用 Material 默认图标。一套 15 个自绘矢量，统一 24 格网格：**浅色填充 + 1.2–1.5 描边 +

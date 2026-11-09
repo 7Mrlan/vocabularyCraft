@@ -166,7 +166,7 @@ fun SearchScreen(
                 if (words.isNotEmpty()) {
                     item { SectionLabel("匹配的词") }
                     items(words, key = { it.word }) { item ->
-                        ResultRow(item) { onSubmit(item.word) }
+                        ResultRow(item, Modifier.animateItem()) { onSubmit(item.word) }
                     }
                 }
                 if (phrases.isNotEmpty()) {
@@ -175,7 +175,7 @@ fun SearchScreen(
                         SectionLabel("短语")
                     }
                     items(phrases, key = { it.word }) { item ->
-                        ResultRow(item) { onSubmit(item.word) }
+                        ResultRow(item, Modifier.animateItem()) { onSubmit(item.word) }
                     }
                 }
                 if (suggestions.isEmpty() && searching) {
@@ -212,12 +212,16 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun ResultRow(item: Suggestion, onClick: () -> Unit) {
+private fun ResultRow(
+    item: Suggestion,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     val wl = WordloomTheme.colors
     val wordInk = if (wl.isDark) Color(0xFF7FCBEF) else Color(0xFF00578A)
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(vertical = 13.dp),

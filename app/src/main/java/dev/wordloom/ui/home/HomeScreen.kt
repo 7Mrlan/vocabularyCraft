@@ -65,6 +65,7 @@ import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
 import dev.wordloom.ui.backup.BackupSheet
 import kotlinx.coroutines.launch
+import dev.wordloom.ui.components.pressable
 import dev.wordloom.ui.theme.WordloomTheme
 
 private val HeroTop = Color(0xFF061B45)
@@ -429,7 +430,7 @@ private fun PrimaryActionCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .pressable(onClick = onClick),
         shape = RoundedCornerShape(18.dp),
         color = background,
     ) {
@@ -486,7 +487,7 @@ private fun ArrowCard(
     Surface(
         modifier = modifier
             .height(76.dp)
-            .clickable(onClick = onClick),
+            .pressable(onClick = onClick),
         shape = RoundedCornerShape(18.dp),
         color = background,
     ) {
@@ -546,7 +547,7 @@ private fun DailyWordCard(
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
             .padding(top = 16.dp)
-            .clickable(onClick = onOpen),
+            .pressable(onClick = onOpen),
         shape = RoundedCornerShape(22.dp),
         color = wl.surface,
         shadowElevation = 2.dp,

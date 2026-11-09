@@ -56,4 +56,6 @@ data class Sense(
     val examples: List<String> = emptyList(),
     val synonyms: List<SynonymGroup> = emptyList(),
     val synonymsList: List<String> = emptyList(),
+    /** Hypernyms from the site's "type of:" line, e.g. great → achiever, success. */
+    val hypernyms: List<String> = emptyList(),
 )

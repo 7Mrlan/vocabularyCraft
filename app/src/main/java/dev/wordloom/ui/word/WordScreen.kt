@@ -533,6 +533,28 @@ private fun WordContent(
                                 .clickable { onOpenSynonyms() },
                         )
                     }
+
+                    // Hypernyms stay quiet: they label the category, they are not
+                    // alternatives the way synonyms are.
+                    if (sense.hypernyms.isNotEmpty()) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = buildAnnotatedString {
+                                withStyle(
+                                    SpanStyle(
+                                        fontStyle = FontStyle.Italic,
+                                        fontSize = 13.sp,
+                                        color = look.synLabel,
+                                    ),
+                                ) { append("type of: ") }
+                                withStyle(
+                                    SpanStyle(fontSize = 14.sp, color = wl.inkMuted),
+                                ) { append(sense.hypernyms.joinToString(", ")) }
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(start = 34.dp),
+                        )
+                    }
                 }
             }
 

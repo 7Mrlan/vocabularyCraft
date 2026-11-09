@@ -153,8 +153,14 @@ class VocabularyComSource(
             if (defText.isEmpty()) return@mapNotNull null
 
             val examples = li.select(".example").map { it.text().trim() }
-            val synonyms = li.select(".instances")
+            val synonymGroups = li.select(".instances")
                 .filter { it.selectFirst(".detail")?.text()?.contains("synonym", ignoreCase = true) == true }
+            val synonyms = synonymGroups
+                .flatMap { inst -> inst.select("a.word").map { it.text().trim() } }
+                .distinct()
+            // "type of:" is the hypernym line the reference page also shows.
+            val hypernyms = li.select(".instances")
+                .filter { it.selectFirst(".detail")?.text()?.contains("type of", ignoreCase = true) == true }
                 .flatMap { inst -> inst.select("a.word").map { it.text().trim() } }
                 .distinct()
 
@@ -163,6 +169,7 @@ class VocabularyComSource(
                 definition = defText,
                 examples = examples,
                 synonymsList = synonyms,
+                hypernyms = hypernyms,
             )
         }
 

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -40,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import dev.wordloom.R
 import dev.wordloom.data.local.CardEntity
 import dev.wordloom.srs.Rating
+import dev.wordloom.ui.components.PoolHeader
 import dev.wordloom.ui.theme.SerifFamily
 import dev.wordloom.ui.theme.WordloomTheme
 
@@ -64,34 +66,53 @@ fun ReviewScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(wl.surface)
-            .statusBarsPadding(),
+            .navigationBarsPadding(),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    painter = painterResource(R.drawable.wl_back),
-                    contentDescription = "返回",
-                    tint = Color.Unspecified,
-                    modifier = Modifier.size(26.dp),
+        PoolHeader(height = 172.dp) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        painter = painterResource(R.drawable.wl_back_knockout),
+                        contentDescription = "返回",
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = "已复习 $reviewed",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    color = Color.White.copy(alpha = 0.72f),
+                    modifier = Modifier.padding(end = 20.dp),
                 )
             }
-            Text(
-                text = "复习",
-                style = MaterialTheme.typography.titleLarge,
-                color = wl.ink,
-            )
-            Spacer(Modifier.weight(1f))
-            Text(
-                text = "已复习 $reviewed",
-                style = MaterialTheme.typography.bodySmall,
-                color = wl.inkMuted,
-                modifier = Modifier.padding(end = 16.dp),
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Text(
+                    text = "复习",
+                    fontFamily = SerifFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 30.sp,
+                    color = Color.White,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = if (queue.isEmpty()) "今天清空" else "${queue.size} 个待复习",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    color = Color.White.copy(alpha = 0.72f),
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+            }
+            Spacer(Modifier.height(40.dp))
         }
 
         if (current == null) {

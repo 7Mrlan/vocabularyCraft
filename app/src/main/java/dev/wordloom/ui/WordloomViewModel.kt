@@ -2,6 +2,7 @@ package dev.wordloom.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.wordloom.data.ListWord
 import dev.wordloom.data.WordRepository
 import dev.wordloom.data.local.CardEntity
 import dev.wordloom.data.local.ListWithCount
@@ -64,8 +65,8 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
     val lists: StateFlow<List<ListWithCount>> = repo.lists()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private val _listWords = MutableStateFlow<List<String>>(emptyList())
-    val listWords: StateFlow<List<String>> = _listWords.asStateFlow()
+    private val _listWords = MutableStateFlow<List<ListWord>>(emptyList())
+    val listWords: StateFlow<List<ListWord>> = _listWords.asStateFlow()
 
     val counters: StateFlow<MapCounters> = cards
         .map { list ->

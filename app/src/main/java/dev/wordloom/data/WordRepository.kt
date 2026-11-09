@@ -3,6 +3,7 @@ package dev.wordloom.data
 import dev.wordloom.data.local.CachedWordEntity
 import dev.wordloom.data.local.ListWithCount
 import dev.wordloom.data.local.ListWordEntity
+import dev.wordloom.data.local.ListWordRow
 import dev.wordloom.data.local.WordListEntity
 import dev.wordloom.data.local.CardEntity
 import dev.wordloom.data.local.WordloomDao
@@ -132,8 +133,20 @@ class WordRepository(
 
     fun lists(): Flow<List<ListWithCount>> = dao.listsWithCount()
 
-    fun wordsInList(listId: Long): Flow<List<String>> =
-        dao.wordsInList(listId).map { rows -> rows.map { it.word } }
+    fun wordsInList(listId: Long): Flow<List<ListWord>> =
+        dao.listWordRows(listId).map { rows ->
+            rows.map { ListWord(it.word, glossOf(it.json)) }
+        }
+
+    /** A one-line gloss from the cache; empty when this word was never opened. */
+    private fun glossOf(jsonText: String?): String {
+        if (jsonText == null) return ""
+        val entry = runCatching {
+            json.decodeFromString(WordEntry.serializer(), jsonText)
+        }.getOrNull() ?: return ""
+        return entry.shortBlurb?.takeIf { it.isNotBlank() }
+            ?: entry.senses.firstOrNull()?.definition.orEmpty()
+    }
 
     suspend fun createList(name: String): Long =
         dao.insertList(WordListEntity(name = name.trim(), createdAt = System.currentTimeMillis()))
@@ -158,3 +171,9 @@ class WordRepository(
         const val TAG = "Wordloom"
     }
 }
+
+/** A word inside a list plus the gloss we already have cached for it. */
+data class ListWord(
+    val word: String,
+    val gloss: String,
+)

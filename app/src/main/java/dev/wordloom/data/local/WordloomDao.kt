@@ -63,6 +63,18 @@ interface WordloomDao {
     @Query("SELECT * FROM list_words WHERE listId = :id ORDER BY addedAt DESC")
     fun wordsInList(id: Long): Flow<List<ListWordEntity>>
 
+    /** List words joined with whatever we already cached, so rows can show a gloss. */
+    @Query(
+        """
+        SELECT lw.word AS word, cw.json AS json
+        FROM list_words lw
+        LEFT JOIN cached_words cw ON cw.word = lw.word
+        WHERE lw.listId = :id
+        ORDER BY lw.addedAt DESC
+        """,
+    )
+    fun listWordRows(id: Long): Flow<List<ListWordRow>>
+
     @Upsert
     suspend fun addToList(entry: ListWordEntity)
 

@@ -39,6 +39,12 @@ data class ListWordEntity(
     val addedAt: Long,
 )
 
+/** One row of a list with the cached entry JSON (null when never looked up). */
+data class ListWordRow(
+    val word: String,
+    val json: String?,
+)
+
 /** A list with its word count, for the lists overview. */
 data class ListWithCount(
     val id: Long,

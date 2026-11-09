@@ -24,6 +24,10 @@ object WlMotion {
     val spatialDefaultOffset: FiniteAnimationSpec<IntOffset> =
         spring(dampingRatio = 0.75f, stiffness = 350f)
 
+    /** Navigation: critically damped so a page never overshoots and bounces back. */
+    val navOffset: FiniteAnimationSpec<IntOffset> =
+        spring(dampingRatio = 1f, stiffness = 420f)
+
     /** Colour, alpha, cross-fades — critically damped, no overshoot. */
     val effectsFast: FiniteAnimationSpec<Float> =
         spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 3800f)

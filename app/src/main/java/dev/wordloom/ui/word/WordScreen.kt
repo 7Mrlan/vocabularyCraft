@@ -1,9 +1,5 @@
 package dev.wordloom.ui.word
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -57,8 +53,6 @@ import dev.wordloom.ui.WordUiState
 import dev.wordloom.data.local.CardEntity
 import dev.wordloom.srs.DAY_MS
 import dev.wordloom.ui.components.PlayAllChip
-import dev.wordloom.ui.nav.LocalNavVisibility
-import dev.wordloom.ui.nav.LocalSharedTransition
 import dev.wordloom.ui.components.SpeakerButton
 import dev.wordloom.ui.components.rememberAudioPlayer
 import dev.wordloom.ui.theme.SansFamily
@@ -141,7 +135,6 @@ private fun posColor(pos: String, dark: Boolean = false): Color {
     }
 }
 
-@OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
 @Composable
 fun WordScreen(
     state: WordUiState,
@@ -200,39 +193,15 @@ fun WordScreen(
             }
         }
 
-        AnimatedContent(
-            targetState = state,
-                contentKey = { it::class },
-                // Loading already draws the word at its final spot, so a plain
-                // crossfade is all that is needed; no extra travel, no flash.
-                transitionSpec = {
-                    fadeIn(WlMotion.spatialDefault)
-                        .togetherWith(fadeOut(WlMotion.spatialDefault))
-                },
-                label = "wordState",
-                modifier = Modifier.fillMaxSize(),
-            ) { current ->
-                when (current) {
-                    is WordUiState.Loading -> {
-                        val shared = LocalSharedTransition.current
-                        val visibility = LocalNavVisibility.current
-                        val sharedTitle = if (shared != null && visibility != null) {
-                            with(shared) {
-                                Modifier.sharedElement(
-                                    rememberSharedContentState("word-${current.term.lowercase()}"),
-                                    animatedVisibilityScope = visibility,
-                                )
-                            }
-                        } else {
-                            Modifier
-                        }
-                        WordLoading(
-                            term = current.term,
-                            look = if (wl.isDark) DarkLook else LightLook,
-                            wl = wl,
-                            titleModifier = sharedTitle,
-                        )
-                    }
+        // Skeleton and content share the title position, so the swap is invisible
+        // and needs no extra animated layer.
+        val current = state
+        when (current) {
+                    is WordUiState.Loading -> WordLoading(
+                        term = current.term,
+                        look = if (wl.isDark) DarkLook else LightLook,
+                        wl = wl,
+                    )
 
                     is WordUiState.NotFound -> CenterBox {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -271,7 +240,6 @@ fun WordScreen(
                         Text("输入一个词开始", color = wl.inkMuted)
                     }
                 }
-            }
     }
 }
 

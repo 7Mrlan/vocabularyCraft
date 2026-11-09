@@ -1,5 +1,6 @@
 package dev.wordloom.ui.components
 
+import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import androidx.compose.foundation.background
@@ -30,6 +31,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.wordloom.R
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.File
+import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
 import dev.wordloom.ui.theme.WordloomTheme
 
 @Composable
@@ -174,64 +187,92 @@ fun PlayAllChip(
 @Composable
 fun rememberAudioPlayer(): AudioPlayer {
     val context = LocalContext.current
-    val player = remember { AudioPlayer() }
+    val player = remember(context) { AudioPlayer(context.applicationContext) }
     DisposableEffect(player) {
         onDispose { player.release() }
     }
     return player
 }
 
-class AudioPlayer {
+class AudioPlayer(private val context: Context) {
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val client by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .build()
+    }
     private var mediaPlayer: MediaPlayer? = null
-    private var queue: List<String> = emptyList()
-    private var queueIndex = 0
+    private var job: Job? = null
 
     fun play(url: String) {
-        queue = emptyList()
-        start(url)
+        job?.cancel()
+        job = scope.launch { playOne(url) }
     }
 
     /** Plays the clips in order, one after the other (the "play all" button). */
     fun playAll(urls: List<String>) {
         if (urls.isEmpty()) return
-        queue = urls
-        queueIndex = 0
-        start(urls.first())
+        job?.cancel()
+        job = scope.launch { urls.forEach { playOne(it) } }
     }
 
-    private fun start(url: String) {
-        release()
-        mediaPlayer = runCatching {
-            MediaPlayer().apply {
-                setAudioAttributes(
+    /**
+     * MediaPlayer cannot open an http source on the main thread — setDataSource
+     * throws NetworkOnMainThreadException, which used to be swallowed and made the
+     * button look dead. Fetch to the cache first, then play a local file.
+     */
+    private suspend fun playOne(url: String) {
+        val file = runCatching { cache(url) }.getOrNull() ?: return
+        suspendCancellableCoroutine { continuation ->
+            releasePlayer()
+            val player = MediaPlayer()
+            mediaPlayer = player
+            val finish = {
+                runCatching { player.release() }
+                if (mediaPlayer === player) mediaPlayer = null
+                if (continuation.isActive) continuation.resume(Unit)
+            }
+            runCatching {
+                player.setAudioAttributes(
                     AudioAttributes.Builder()
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                         .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .build()
+                        .build(),
                 )
-                setDataSource(url)
-                setOnPreparedListener { it.start() }
-                setOnCompletionListener {
-                    it.release()
-                    if (mediaPlayer == it) mediaPlayer = null
-                    val next = queue.getOrNull(queueIndex + 1)
-                    if (next != null) {
-                        queueIndex += 1
-                        start(next)
-                    } else {
-                        queue = emptyList()
-                    }
-                }
-                setOnErrorListener { mp, _, _ ->
-                    mp.release()
-                    true
-                }
-                prepareAsync()
-            }
-        }.getOrNull()
+                player.setDataSource(file.absolutePath)
+                player.setOnPreparedListener { it.start() }
+                player.setOnCompletionListener { finish() }
+                player.setOnErrorListener { _, _, _ -> finish(); true }
+                player.prepareAsync()
+            }.onFailure { finish() }
+            continuation.invokeOnCancellation { runCatching { player.release() } }
+        }
+    }
+
+    private suspend fun cache(url: String): File = withContext(Dispatchers.IO) {
+        val dir = File(context.cacheDir, "audio").apply { mkdirs() }
+        val file = File(dir, url.hashCode().toString() + ".mp3")
+        if (file.length() > 0) return@withContext file
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "Mozilla/5.0")
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("audio ${response.code}")
+            val body = response.body ?: error("empty audio body")
+            file.outputStream().use { out -> body.byteStream().copyTo(out) }
+        }
+        file
     }
 
     fun release() {
+        job?.cancel()
+        releasePlayer()
+    }
+
+    private fun releasePlayer() {
         runCatching { mediaPlayer?.release() }
         mediaPlayer = null
     }

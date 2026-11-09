@@ -2,14 +2,9 @@ package dev.wordloom.ui
 
 import android.net.Uri
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.NavType
@@ -22,8 +17,6 @@ import dev.wordloom.ui.home.HomeScreen
 import dev.wordloom.ui.lists.ListDetailScreen
 import dev.wordloom.ui.lists.ListsScreen
 import dev.wordloom.ui.map.MapScreen
-import dev.wordloom.ui.nav.LocalNavVisibility
-import dev.wordloom.ui.nav.LocalSharedTransition
 import dev.wordloom.ui.quiz.QuizScreen
 import dev.wordloom.ui.review.ReviewScreen
 import dev.wordloom.ui.search.SearchScreen
@@ -53,32 +46,23 @@ fun AppNav(viewModel: WordloomViewModel) {
         nav.navigate("word/${Uri.encode(term)}")
     }
 
-    SharedTransitionLayout {
-        CompositionLocalProvider(LocalSharedTransition provides this) {
     NavHost(
         navController = nav,
         startDestination = "home",
-        // Shared-axis travel: the new page comes in from the right while the old
-        // one steps back a little, and pop mirrors it. Only a fraction of the
-        // width so long lists never look like they are being thrown around.
-        // Slide and fade share one spring: a faster fade than the slide is what
-        // made navigation look like a flash — the old page vanished before the
-        // new one had arrived. Alpha floors keep both pages visible throughout.
+        // Pure slide: both pages stay fully opaque, so nothing shows through and
+        // there is no alpha layer to composite. The offset spring is critically
+        // damped — a bouncing page reads as stutter, not smoothness.
         enterTransition = {
-            slideInHorizontally(WlMotion.spatialDefaultOffset) { it / 10 } +
-                fadeIn(WlMotion.spatialDefault, initialAlpha = 0.55f)
+            slideInHorizontally(WlMotion.navOffset) { it / 6 }
         },
         exitTransition = {
-            slideOutHorizontally(WlMotion.spatialDefaultOffset) { -it / 16 } +
-                fadeOut(WlMotion.spatialDefault, targetAlpha = 0.75f)
+            slideOutHorizontally(WlMotion.navOffset) { -it / 12 }
         },
         popEnterTransition = {
-            slideInHorizontally(WlMotion.spatialDefaultOffset) { -it / 10 } +
-                fadeIn(WlMotion.spatialDefault, initialAlpha = 0.55f)
+            slideInHorizontally(WlMotion.navOffset) { -it / 6 }
         },
         popExitTransition = {
-            slideOutHorizontally(WlMotion.spatialDefaultOffset) { it / 10 } +
-                fadeOut(WlMotion.spatialDefault, targetAlpha = 0.75f)
+            slideOutHorizontally(WlMotion.navOffset) { it / 6 }
         },
     ) {
         composable("home") {
@@ -101,8 +85,6 @@ fun AppNav(viewModel: WordloomViewModel) {
         }
 
         composable("search") {
-            val visibility = this
-            CompositionLocalProvider(LocalNavVisibility provides visibility) {
             SearchScreen(
                 suggestions = suggestions,
                 searching = searching,
@@ -115,7 +97,6 @@ fun AppNav(viewModel: WordloomViewModel) {
                 onBack = { nav.popBackStack() },
                 onRandom = { viewModel.randomWord(::openWord) },
             )
-            }
         }
 
         composable(
@@ -123,9 +104,7 @@ fun AppNav(viewModel: WordloomViewModel) {
             arguments = listOf(navArgument("term") { type = NavType.StringType }),
         ) { entry ->
             val term = Uri.decode(entry.arguments?.getString("term").orEmpty())
-            val visibility = this
             LaunchedEffect(term) { viewModel.loadWord(term) }
-            CompositionLocalProvider(LocalNavVisibility provides visibility) {
             WordScreen(
                 state = wordState,
                 card = cards.firstOrNull { it.word == term.lowercase() },
@@ -144,7 +123,6 @@ fun AppNav(viewModel: WordloomViewModel) {
                     }
                 },
             )
-            }
         }
 
         composable(
@@ -221,8 +199,6 @@ fun AppNav(viewModel: WordloomViewModel) {
                 onBack = { nav.popBackStack() },
                 onRestart = viewModel::startQuiz,
             )
-        }
-    }
         }
     }
 }

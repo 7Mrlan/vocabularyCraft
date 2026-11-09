@@ -1,5 +1,11 @@
 package dev.wordloom.ui.review
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -30,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -49,6 +56,7 @@ import dev.wordloom.srs.Rating
 import dev.wordloom.ui.components.PoolHeader
 import dev.wordloom.ui.feedback.rememberAppFeedback
 import dev.wordloom.ui.theme.SerifFamily
+import dev.wordloom.ui.theme.WlMotion
 import dev.wordloom.ui.theme.WordloomTheme
 
 @Composable
@@ -156,7 +164,10 @@ fun ReviewScreen(
             return@Column
         }
 
-        var revealed by remember(current.word) { mutableStateOf(false) }
+        // Revealed state is per word, so a card that was flipped stays flipped
+        // while it slides out after rating.
+        val revealedWords = remember { mutableStateListOf<String>() }
+        val revealed = current.word in revealedWords
 
         Column(
             modifier = Modifier
@@ -166,19 +177,33 @@ fun ReviewScreen(
         ) {
             Spacer(Modifier.height(12.dp))
             val view = LocalView.current
+            AnimatedContent(
+                targetState = current,
+                contentKey = { it.word },
+                transitionSpec = {
+                    slideInHorizontally(WlMotion.spatialDefaultOffset) { it / 3 }
+                        .togetherWith(
+                            slideOutHorizontally(WlMotion.spatialDefaultOffset) { -it / 3 },
+                        )
+                },
+                label = "reviewCard",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+            ) { card ->
+            val cardRevealed = card.word in revealedWords
             val rotation by animateFloatAsState(
-                targetValue = if (revealed) 180f else 0f,
+                targetValue = if (cardRevealed) 180f else 0f,
                 animationSpec = spring(dampingRatio = 0.8f, stiffness = 260f),
                 label = "cardFlip",
             )
 
             Surface(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
+                    .fillMaxSize()
                     .clickable {
-                        if (!revealed) {
-                            revealed = true
+                        if (!cardRevealed) {
+                            revealedWords.add(card.word)
                             feedback.reveal(view)
                         }
                     },
@@ -200,7 +225,7 @@ fun ReviewScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Text(
-                                text = current.word,
+                                text = card.word,
                                 fontFamily = SerifFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 40.sp,
@@ -223,26 +248,28 @@ fun ReviewScreen(
                             verticalArrangement = Arrangement.Center,
                         ) {
                             Text(
-                                text = current.word,
+                                text = card.word,
                                 fontFamily = SerifFamily,
                                 fontSize = 20.sp,
                                 color = wl.inkMuted,
                             )
                             Spacer(Modifier.height(14.dp))
                             Text(
-                                text = current.preview.ifBlank { "（这个条目没有缓存释义，点下方查看词条）" },
+                                text = card.preview.ifBlank { "（这个条目没有缓存释义，点下方查看词条）" },
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = wl.ink,
                                 textAlign = TextAlign.Center,
                             )
                             Spacer(Modifier.height(12.dp))
-                            TextButton(onClick = { onOpenWord(current.word) }) {
+                            TextButton(onClick = { onOpenWord(card.word) }) {
                                 Text("查看完整词条", color = wl.primary)
                             }
                         }
                     }
                 }
             }
+            }
+
             Spacer(Modifier.height(20.dp))
 
             Row(
@@ -257,6 +284,7 @@ fun ReviewScreen(
                     contentColor = wl.coral,
                     enabled = revealed,
                     onClick = {
+                        feedback.commit(view)
                         onRate(current, Rating.Again)
                         queue = queue.drop(1); reviewed += 1
                     },
@@ -269,6 +297,7 @@ fun ReviewScreen(
                     contentColor = wl.ink,
                     enabled = revealed,
                     onClick = {
+                        feedback.commit(view)
                         onRate(current, Rating.Hard)
                         queue = queue.drop(1); reviewed += 1
                     },

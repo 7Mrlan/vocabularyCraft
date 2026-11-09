@@ -40,6 +40,11 @@ class AppFeedback(context: Context) {
         view.haptic(HapticFeedbackConstants.REJECT)
     }
 
+    /** Committing a choice: the same weight as a system confirmation, no sound. */
+    fun commit(view: View?) {
+        view.haptic(HapticFeedbackConstants.CONFIRM)
+    }
+
     /** A page turned: lighter than a confirmation, heavier than a tick. */
     fun reveal(view: View?) {
         view.haptic(HapticFeedbackConstants.CLOCK_TICK)

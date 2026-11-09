@@ -168,11 +168,9 @@ fun QuizScreen(
                 AnimatedContent(
                     targetState = index,
                     transitionSpec = {
-                        (slideInHorizontally(WlMotion.spatialDefaultOffset) { it / 4 } +
-                            fadeIn(WlMotion.effectsFast))
+                        slideInHorizontally(WlMotion.spatialDefaultOffset) { it / 4 }
                             .togetherWith(
-                                slideOutHorizontally(WlMotion.spatialDefaultOffset) { -it / 4 } +
-                                    fadeOut(WlMotion.effectsFast),
+                                slideOutHorizontally(WlMotion.spatialDefaultOffset) { -it / 4 },
                             )
                     },
                     label = "quizQuestion",

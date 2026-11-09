@@ -40,6 +40,7 @@ fun AppNav(viewModel: WordloomViewModel) {
     val lists by viewModel.lists.collectAsStateWithLifecycle()
     val listWords by viewModel.listWords.collectAsStateWithLifecycle()
     val quiz by viewModel.quiz.collectAsStateWithLifecycle()
+    val mapWords by viewModel.mapWords.collectAsStateWithLifecycle()
 
     fun openWord(term: String) {
         nav.navigate("word/${Uri.encode(term)}")
@@ -168,7 +169,12 @@ fun AppNav(viewModel: WordloomViewModel) {
         composable("map") {
             MapScreen(
                 counters = counters,
-                words = cards.map { it.word to it.preview },
+                words = mapWords.map { entry ->
+                    entry.word to (
+                        entry.shortBlurb?.takeIf { it.isNotBlank() }
+                            ?: entry.senses.firstOrNull()?.definition.orEmpty()
+                        )
+                },
                 onBack = { nav.popBackStack() },
                 onRandomWord = { viewModel.randomWord(::openWord) },
             )

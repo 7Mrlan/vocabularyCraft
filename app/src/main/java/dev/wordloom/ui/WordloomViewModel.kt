@@ -52,6 +52,10 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
     val recent = repo.recentWords()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Map card pool: words the person opened (daily word excluded until tapped). */
+    val mapWords = repo.openedWords()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     val cards: StateFlow<List<CardEntity>> = repo.cards()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 

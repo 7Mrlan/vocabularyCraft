@@ -72,6 +72,13 @@ class WordRepository(
     fun recentWords(): Flow<List<WordEntry>> =
         dao.recentWords().map { list -> list.mapNotNull { decode(it) } }
 
+    /**
+     * Every word the person actually opened, newest first. Background fetches
+     * (the daily word) write recentAt = 0, so they stay out until tapped.
+     */
+    fun openedWords(limit: Int = 400): Flow<List<WordEntry>> =
+        dao.recentWords(limit).map { list -> list.mapNotNull { decode(it) } }
+
     /** Cached entries for the quiz; capped so a long history never slows the screen. */
     fun cachedEntries(limit: Int = 300): Flow<List<WordEntry>> =
         dao.cachedWords(limit).map { list -> list.mapNotNull { decode(it) } }

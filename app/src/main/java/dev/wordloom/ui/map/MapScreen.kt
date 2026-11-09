@@ -166,7 +166,7 @@ fun MapScreen(
                     }
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        text = "${counters.saved} 个收藏 · 按到期顺序复习",
+                        text = "${words.size} 个查过的词 · 镜头每到一处换一张",
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                         color = wl.primary,
                     )

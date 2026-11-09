@@ -143,6 +143,15 @@ Compose 会把它们乘上系统的动画缩放，所以"移除动画"开关天�
   松开弹回，水波纹保留。
 - **预测性返回**：manifest 已开 `enableOnBackInvokedCallback`，Navigation 2.8.5 支持。
 
+第二批：
+
+- **练习**：选对 → 系统 `CONFIRM` 触感 + 两声上行的和弦（`res/raw/quiz_correct.wav`，C6→E6，
+  0.55 秒，SoundPool 播放）；选错 → `REJECT` 触感，不发声（错误音效只会让人烦躁）。
+- **题目过场**：`AnimatedContent` 按题号滑动 1/4 屏宽并淡入，答案配色跟着题目一起走
+  （答案按题号存 map，退场帧仍保留自己的高亮）。
+- **复习翻牌**：Y 轴 0→180°（damping 0.8 / stiffness 260），正面是词，背面是释义；
+  翻面时给 `CLOCK_TICK` 轻触感。
+
 验证方法：把转场临时改成 5 秒 tween，1 秒后截图能明显看到整页右移约 100px，证明接线正确；
 再换回弹簧。注意 `screencap` 本身有 300ms 以上延迟，用"截屏看中间帧"验证短动画并不可靠。
 

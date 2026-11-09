@@ -1,5 +1,11 @@
 package dev.wordloom.ui.quiz
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -35,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -44,7 +51,9 @@ import dev.wordloom.R
 import dev.wordloom.data.QuizQuestion
 import dev.wordloom.ui.components.PoolHeader
 import dev.wordloom.ui.theme.SerifFamily
+import dev.wordloom.ui.theme.WlMotion
 import dev.wordloom.ui.components.pressable
+import dev.wordloom.ui.feedback.rememberAppFeedback
 import dev.wordloom.ui.theme.WordloomTheme
 
 /**
@@ -59,9 +68,11 @@ fun QuizScreen(
     onRestart: () -> Unit,
 ) {
     val wl = WordloomTheme.colors
+    val feedback = rememberAppFeedback()
+    val view = LocalView.current
     var queue by remember(questions) { mutableStateOf(questions) }
     var index by remember(questions) { mutableIntStateOf(0) }
-    var selected by remember(questions, index) { mutableStateOf<Int?>(null) }
+    var answers by remember(questions) { mutableStateOf<Map<Int, Int>>(emptyMap()) }
     var correctCount by remember(questions) { mutableIntStateOf(0) }
     var wrong by remember(questions) { mutableStateOf<List<QuizQuestion>>(emptyList()) }
     var finished by remember(questions) { mutableStateOf(false) }
@@ -135,7 +146,7 @@ fun QuizScreen(
                     if (wrong.isNotEmpty()) {
                         queue = wrong
                         index = 0
-                        selected = null
+                        answers = emptyMap()
                         correctCount = 0
                         wrong = emptyList()
                         finished = false
@@ -145,7 +156,7 @@ fun QuizScreen(
                     onRestart()
                     queue = emptyList()
                     index = 0
-                    selected = null
+                    answers = emptyMap()
                     correctCount = 0
                     wrong = emptyList()
                     finished = false
@@ -154,81 +165,101 @@ fun QuizScreen(
             )
 
             current != null -> {
-                val answered = selected != null
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 20.dp),
-                ) {
-                    Spacer(Modifier.height(6.dp))
-                    Surface(
-                        shape = RoundedCornerShape(24.dp),
-                        color = wl.surfaceAlt,
+                AnimatedContent(
+                    targetState = index,
+                    transitionSpec = {
+                        (slideInHorizontally(WlMotion.spatialDefaultOffset) { it / 4 } +
+                            fadeIn(WlMotion.effectsFast))
+                            .togetherWith(
+                                slideOutHorizontally(WlMotion.spatialDefaultOffset) { -it / 4 } +
+                                    fadeOut(WlMotion.effectsFast),
+                            )
+                    },
+                    label = "quizQuestion",
+                    modifier = Modifier.fillMaxSize(),
+                ) { i ->
+                    val q = queue.getOrNull(i) ?: return@AnimatedContent
+                    val chosen = answers[i]
+                    val answered = chosen != null
+
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(168.dp),
+                            .fillMaxSize()
+                            .padding(horizontal = 20.dp),
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            Text(
-                                text = current.word,
-                                fontFamily = SerifFamily,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 36.sp,
-                                color = if (wl.isDark) Color(0xFF7FCBEF) else Color(0xFF00578A),
-                                textAlign = TextAlign.Center,
-                            )
-                            Spacer(Modifier.height(10.dp))
-                            Text(
-                                text = "选一个正确的释义",
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                                color = wl.inkMuted,
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(18.dp))
-
-                    current.options.forEachIndexed { i, option ->
-                        OptionRow(
-                            text = option,
-                            state = optionState(i, current.answerIndex, selected),
-                            onClick = { if (selected == null) selected = i },
-                        )
-                        Spacer(Modifier.height(10.dp))
-                    }
-
-                    Spacer(Modifier.weight(1f))
-
-                    if (answered) {
-                        val isCorrect = selected == current.answerIndex
+                        Spacer(Modifier.height(6.dp))
                         Surface(
-                            shape = CircleShape,
-                            color = wl.primary,
+                            shape = RoundedCornerShape(24.dp),
+                            color = wl.surfaceAlt,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable {
-                                    if (isCorrect) correctCount += 1 else wrong = wrong + current
-                                    if (index + 1 >= queue.size) finished = true else {
-                                        index += 1
-                                        selected = null
+                                .height(168.dp),
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                            ) {
+                                Text(
+                                    text = q.word,
+                                    fontFamily = SerifFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 36.sp,
+                                    color = if (wl.isDark) Color(0xFF7FCBEF) else Color(0xFF00578A),
+                                    textAlign = TextAlign.Center,
+                                )
+                                Spacer(Modifier.height(10.dp))
+                                Text(
+                                    text = "选一个正确的释义",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                    color = wl.inkMuted,
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(18.dp))
+
+                        q.options.forEachIndexed { oi, option ->
+                            OptionRow(
+                                text = option,
+                                state = optionState(oi, q.answerIndex, chosen),
+                                onClick = {
+                                    if (chosen == null) {
+                                        answers = answers + (i to oi)
+                                        if (oi == q.answerIndex) feedback.correct(view)
+                                        else feedback.wrong(view)
                                     }
                                 },
-                        ) {
-                            Text(
-                                text = if (index + 1 >= queue.size) "看结果" else "下一题",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = wl.onPrimary,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(vertical = 14.dp),
                             )
+                            Spacer(Modifier.height(10.dp))
                         }
-                        Spacer(Modifier.height(20.dp))
-                    } else {
-                        Spacer(Modifier.height(20.dp))
+
+                        Spacer(Modifier.weight(1f))
+
+                        if (answered) {
+                            Surface(
+                                shape = CircleShape,
+                                color = wl.primary,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        if (chosen == q.answerIndex) correctCount += 1
+                                        else wrong = wrong + q
+                                        if (i + 1 >= queue.size) finished = true else index = i + 1
+                                    },
+                            ) {
+                                Text(
+                                    text = if (i + 1 >= queue.size) "看结果" else "下一题",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = wl.onPrimary,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(vertical = 14.dp),
+                                )
+                            }
+                            Spacer(Modifier.height(20.dp))
+                        } else {
+                            Spacer(Modifier.height(20.dp))
+                        }
                     }
                 }
             }

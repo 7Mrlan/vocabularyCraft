@@ -51,6 +51,8 @@ import androidx.compose.ui.unit.sp
 import dev.wordloom.R
 import dev.wordloom.data.model.Suggestion
 import dev.wordloom.ui.components.PoolHeader
+import dev.wordloom.ui.nav.LocalNavVisibility
+import dev.wordloom.ui.nav.LocalSharedTransition
 import dev.wordloom.ui.theme.SansFamily
 import dev.wordloom.ui.theme.SerifFamily
 import dev.wordloom.ui.theme.WordloomTheme
@@ -219,6 +221,7 @@ private fun SectionLabel(text: String) {
     )
 }
 
+@OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
 @Composable
 private fun ResultRow(
     item: Suggestion,
@@ -227,6 +230,20 @@ private fun ResultRow(
 ) {
     val wl = WordloomTheme.colors
     val wordInk = if (wl.isDark) Color(0xFF7FCBEF) else Color(0xFF00578A)
+    // The word itself travels into the entry page, so the two screens read as
+    // one surface rather than two slides.
+    val shared = LocalSharedTransition.current
+    val visibility = LocalNavVisibility.current
+    val sharedWord = if (shared != null && visibility != null) {
+        with(shared) {
+            Modifier.sharedElement(
+                rememberSharedContentState("word-${item.word.lowercase()}"),
+                animatedVisibilityScope = visibility,
+            )
+        }
+    } else {
+        Modifier
+    }
 
     Row(
         modifier = modifier
@@ -244,6 +261,7 @@ private fun ResultRow(
                 color = wordInk,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = sharedWord,
             )
             if (item.definition.isNotBlank()) {
                 Spacer(Modifier.height(3.dp))

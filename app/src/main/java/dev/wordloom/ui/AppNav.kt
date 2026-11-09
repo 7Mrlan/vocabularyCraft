@@ -2,9 +2,12 @@ package dev.wordloom.ui
 
 import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -19,6 +22,8 @@ import dev.wordloom.ui.home.HomeScreen
 import dev.wordloom.ui.lists.ListDetailScreen
 import dev.wordloom.ui.lists.ListsScreen
 import dev.wordloom.ui.map.MapScreen
+import dev.wordloom.ui.nav.LocalNavVisibility
+import dev.wordloom.ui.nav.LocalSharedTransition
 import dev.wordloom.ui.quiz.QuizScreen
 import dev.wordloom.ui.review.ReviewScreen
 import dev.wordloom.ui.search.SearchScreen
@@ -26,6 +31,7 @@ import dev.wordloom.ui.word.SynonymsScreen
 import dev.wordloom.ui.theme.WlMotion
 import dev.wordloom.ui.word.WordScreen
 
+@OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
 @Composable
 fun AppNav(viewModel: WordloomViewModel) {
     val nav = rememberNavController()
@@ -47,6 +53,8 @@ fun AppNav(viewModel: WordloomViewModel) {
         nav.navigate("word/${Uri.encode(term)}")
     }
 
+    SharedTransitionLayout {
+        CompositionLocalProvider(LocalSharedTransition provides this) {
     NavHost(
         navController = nav,
         startDestination = "home",
@@ -93,6 +101,8 @@ fun AppNav(viewModel: WordloomViewModel) {
         }
 
         composable("search") {
+            val visibility = this
+            CompositionLocalProvider(LocalNavVisibility provides visibility) {
             SearchScreen(
                 suggestions = suggestions,
                 searching = searching,
@@ -105,6 +115,7 @@ fun AppNav(viewModel: WordloomViewModel) {
                 onBack = { nav.popBackStack() },
                 onRandom = { viewModel.randomWord(::openWord) },
             )
+            }
         }
 
         composable(
@@ -112,7 +123,9 @@ fun AppNav(viewModel: WordloomViewModel) {
             arguments = listOf(navArgument("term") { type = NavType.StringType }),
         ) { entry ->
             val term = Uri.decode(entry.arguments?.getString("term").orEmpty())
+            val visibility = this
             LaunchedEffect(term) { viewModel.loadWord(term) }
+            CompositionLocalProvider(LocalNavVisibility provides visibility) {
             WordScreen(
                 state = wordState,
                 card = cards.firstOrNull { it.word == term.lowercase() },
@@ -131,6 +144,7 @@ fun AppNav(viewModel: WordloomViewModel) {
                     }
                 },
             )
+            }
         }
 
         composable(
@@ -207,6 +221,8 @@ fun AppNav(viewModel: WordloomViewModel) {
                 onBack = { nav.popBackStack() },
                 onRestart = viewModel::startQuiz,
             )
+        }
+    }
         }
     }
 }

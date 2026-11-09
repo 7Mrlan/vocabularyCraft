@@ -57,6 +57,8 @@ import dev.wordloom.ui.WordUiState
 import dev.wordloom.data.local.CardEntity
 import dev.wordloom.srs.DAY_MS
 import dev.wordloom.ui.components.PlayAllChip
+import dev.wordloom.ui.nav.LocalNavVisibility
+import dev.wordloom.ui.nav.LocalSharedTransition
 import dev.wordloom.ui.components.SpeakerButton
 import dev.wordloom.ui.components.rememberAudioPlayer
 import dev.wordloom.ui.theme.SansFamily
@@ -139,6 +141,7 @@ private fun posColor(pos: String, dark: Boolean = false): Color {
     }
 }
 
+@OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
 @Composable
 fun WordScreen(
     state: WordUiState,
@@ -210,11 +213,26 @@ fun WordScreen(
                 modifier = Modifier.fillMaxSize(),
             ) { current ->
                 when (current) {
-                    is WordUiState.Loading -> WordLoading(
-                        term = current.term,
-                        look = if (wl.isDark) DarkLook else LightLook,
-                        wl = wl,
-                    )
+                    is WordUiState.Loading -> {
+                        val shared = LocalSharedTransition.current
+                        val visibility = LocalNavVisibility.current
+                        val sharedTitle = if (shared != null && visibility != null) {
+                            with(shared) {
+                                Modifier.sharedElement(
+                                    rememberSharedContentState("word-${current.term.lowercase()}"),
+                                    animatedVisibilityScope = visibility,
+                                )
+                            }
+                        } else {
+                            Modifier
+                        }
+                        WordLoading(
+                            term = current.term,
+                            look = if (wl.isDark) DarkLook else LightLook,
+                            wl = wl,
+                            titleModifier = sharedTitle,
+                        )
+                    }
 
                     is WordUiState.NotFound -> CenterBox {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -265,7 +283,10 @@ private fun titleSizeFor(word: String) = when {
     else -> 22.sp
 }
 
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@OptIn(
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
+    androidx.compose.animation.ExperimentalSharedTransitionApi::class,
+)
 @Composable
 private fun WordContent(
     entry: WordEntry,
@@ -769,6 +790,7 @@ private fun WordLoading(
     term: String,
     look: WordLook,
     wl: dev.wordloom.ui.theme.WlColors,
+    titleModifier: Modifier = Modifier,
 ) {
     Column(
         modifier = Modifier
@@ -784,6 +806,7 @@ private fun WordLoading(
             maxLines = 1,
             softWrap = false,
             overflow = TextOverflow.Ellipsis,
+            modifier = titleModifier,
         )
         Spacer(Modifier.height(14.dp))
         SkeletonBar(width = 132.dp, height = 16.dp, color = wl.surfaceAlt)

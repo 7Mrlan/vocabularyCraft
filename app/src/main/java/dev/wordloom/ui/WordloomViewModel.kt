@@ -71,6 +71,10 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
     private val _quiz = MutableStateFlow<List<QuizQuestion>>(emptyList())
     val quiz: StateFlow<List<QuizQuestion>> = _quiz.asStateFlow()
 
+    suspend fun exportBackup(): String = repo.exportBackup()
+
+    suspend fun importBackup(text: String): Result<Int> = repo.importBackup(text)
+
     /** One round of four-choice practice, built from the local cache only. */
     fun startQuiz() {
         viewModelScope.launch {

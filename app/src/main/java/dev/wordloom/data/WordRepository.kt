@@ -1,11 +1,11 @@
 package dev.wordloom.data
 
 import dev.wordloom.data.local.CachedWordEntity
+import dev.wordloom.data.local.CardEntity
+import dev.wordloom.data.local.WordListEntity
 import dev.wordloom.data.local.ListWithCount
 import dev.wordloom.data.local.ListWordEntity
 import dev.wordloom.data.local.ListWordRow
-import dev.wordloom.data.local.WordListEntity
-import dev.wordloom.data.local.CardEntity
 import dev.wordloom.data.local.WordloomDao
 import dev.wordloom.data.model.Suggestion
 import dev.wordloom.data.model.WordEntry
@@ -16,7 +16,9 @@ import dev.wordloom.srs.Rating
 import dev.wordloom.srs.ReviewOutcome
 import dev.wordloom.srs.Scheduler
 import android.util.Log
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 
@@ -73,6 +75,46 @@ class WordRepository(
     /** Cached entries for the quiz; capped so a long history never slows the screen. */
     fun cachedEntries(limit: Int = 300): Flow<List<WordEntry>> =
         dao.cachedWords(limit).map { list -> list.mapNotNull { decode(it) } }
+
+    // ---- backup ----
+
+    suspend fun exportBackup(): String = withContext(Dispatchers.IO) {
+        val file = BackupFile(
+            exportedAt = System.currentTimeMillis(),
+            cards = dao.allCards(),
+            lists = dao.allLists(),
+            listWords = dao.allListWords(),
+            words = dao.allCachedWords(),
+        )
+        json.encodeToString(BackupFile.serializer(), file)
+    }
+
+    /**
+     * Merge, never wipe: cards and words are upserted by key; lists are matched by
+     * name + createdAt so importing the same file twice does not duplicate them.
+     */
+    suspend fun importBackup(text: String): Result<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            val file = json.decodeFromString(BackupFile.serializer(), text)
+            require(file.version <= 1) { "备份文件版本过新" }
+
+            file.words.forEach { dao.putWord(it) }
+            file.cards.forEach { dao.putCard(it) }
+
+            val existing = dao.allLists().associateBy { it.name to it.createdAt }
+            val idMap = mutableMapOf<Long, Long>()
+            file.lists.forEach { list ->
+                val match = existing[list.name to list.createdAt]
+                val newId = match?.id ?: dao.putListRaw(list.copy(id = 0))
+                idMap[list.id] = newId
+            }
+            file.listWords.forEach { row ->
+                val target = idMap[row.listId] ?: return@forEach
+                dao.addToList(row.copy(listId = target))
+            }
+            file.cards.size + file.lists.size
+        }
+    }
 
     fun cards(): Flow<List<CardEntity>> = dao.cards()
 

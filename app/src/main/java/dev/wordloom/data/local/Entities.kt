@@ -2,7 +2,9 @@ package dev.wordloom.data.local
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
+@Serializable
 @Entity(tableName = "cached_words")
 data class CachedWordEntity(
     @PrimaryKey val word: String,
@@ -12,6 +14,7 @@ data class CachedWordEntity(
     val recentAt: Long = 0L,
 )
 
+@Serializable
 @Entity(tableName = "cards")
 data class CardEntity(
     @PrimaryKey val word: String,
@@ -25,6 +28,7 @@ data class CardEntity(
     val preview: String,
 )
 
+@Serializable
 @Entity(tableName = "lists")
 data class WordListEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -32,6 +36,7 @@ data class WordListEntity(
     val createdAt: Long,
 )
 
+@Serializable
 @Entity(tableName = "list_words", primaryKeys = ["listId", "word"])
 data class ListWordEntity(
     val listId: Long,

@@ -57,6 +57,8 @@ fun AppNav(viewModel: WordloomViewModel) {
                 onWord = ::openWord,
                 onOpenMap = { nav.navigate("map") },
                 onOpenLists = { nav.navigate("lists") },
+                onExportBackup = viewModel::exportBackup,
+                onImportBackup = viewModel::importBackup,
             )
         }
 

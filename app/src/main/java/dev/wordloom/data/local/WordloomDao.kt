@@ -2,6 +2,7 @@ package dev.wordloom.data.local
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
@@ -84,4 +85,22 @@ interface WordloomDao {
 
     @Query("DELETE FROM list_words WHERE listId = :id AND word = :word")
     suspend fun removeFromList(id: Long, word: String)
+
+    // ---- backup ----
+
+    @Query("SELECT * FROM cached_words")
+    suspend fun allCachedWords(): List<CachedWordEntity>
+
+    @Query("SELECT * FROM cards")
+    suspend fun allCards(): List<CardEntity>
+
+    @Query("SELECT * FROM lists")
+    suspend fun allLists(): List<WordListEntity>
+
+    @Query("SELECT * FROM list_words")
+    suspend fun allListWords(): List<ListWordEntity>
+
+    /** Import keeps the id we hand it, so list words can be re-pointed after a merge. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun putListRaw(list: WordListEntity): Long
 }

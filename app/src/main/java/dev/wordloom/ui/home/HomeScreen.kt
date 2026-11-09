@@ -58,6 +58,13 @@ import dev.wordloom.ui.components.SearchPill
 import dev.wordloom.ui.components.SpeakerButton
 import dev.wordloom.ui.components.WaveDivider
 import dev.wordloom.ui.theme.SerifFamily
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import dev.wordloom.ui.backup.BackupSheet
+import kotlinx.coroutines.launch
 import dev.wordloom.ui.theme.WordloomTheme
 
 private val HeroTop = Color(0xFF061B45)
@@ -78,9 +85,64 @@ fun HomeScreen(
     onWord: (String) -> Unit,
     onOpenMap: () -> Unit,
     onOpenLists: () -> Unit,
+    onExportBackup: suspend () -> String,
+    onImportBackup: suspend (String) -> Result<Int>,
 ) {
     val wl = WordloomTheme.colors
     val band = wl.primaryBright
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var showBackup by remember { mutableStateOf(false) }
+    var backupBusy by remember { mutableStateOf(false) }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            backupBusy = true
+            val text = runCatching { onExportBackup() }.getOrNull()
+            // "wt" truncates: some providers hand back a stream that ignores a
+            // plain "w" and leaves the document at zero bytes.
+            val ok = text != null && runCatching {
+                val stream = context.contentResolver.openOutputStream(uri, "wt")
+                    ?: error("无法写入")
+                stream.use { it.write(text.toByteArray()) }
+            }.isSuccess
+            backupBusy = false
+            showBackup = false
+            Toast.makeText(
+                context,
+                if (ok) "已导出备份" else "导出失败",
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            backupBusy = true
+            val text = runCatching {
+                context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            }.getOrNull()
+            val result = if (text == null) Result.failure(IllegalStateException("读不到文件"))
+            else onImportBackup(text)
+            backupBusy = false
+            showBackup = false
+            Toast.makeText(
+                context,
+                result.fold(
+                    onSuccess = { "已恢复 $it 条记录" },
+                    onFailure = { "恢复失败：${it.message}" },
+                ),
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -111,7 +173,11 @@ fun HomeScreen(
                         .padding(horizontal = 20.dp)
                         .padding(top = 18.dp, bottom = 44.dp),
                 ) {
-                    BrandRow(onOpenMap = onOpenMap, onOpenLists = onOpenLists)
+                    BrandRow(
+                        onOpenMap = onOpenMap,
+                        onOpenLists = onOpenLists,
+                        onOpenBackup = { showBackup = true },
+                    )
                     Spacer(Modifier.height(22.dp))
                     SearchPill(
                         placeholder = "搜索单词、释义或用法",
@@ -262,10 +328,23 @@ fun HomeScreen(
             }
         }
     }
+
+    if (showBackup) {
+        BackupSheet(
+            busy = backupBusy,
+            onDismiss = { showBackup = false },
+            onExport = { exportLauncher.launch("wordloom-backup.json") },
+            onImport = { importLauncher.launch(arrayOf("application/json")) },
+        )
+    }
 }
 
 @Composable
-private fun BrandRow(onOpenMap: () -> Unit, onOpenLists: () -> Unit) {
+private fun BrandRow(
+    onOpenMap: () -> Unit,
+    onOpenLists: () -> Unit,
+    onOpenBackup: () -> Unit,
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Canvas(modifier = Modifier.size(26.dp)) {
             val stroke = Stroke(width = 2.2f * density)
@@ -316,6 +395,21 @@ private fun BrandRow(onOpenMap: () -> Unit, onOpenLists: () -> Unit) {
             Icon(
                 painter = painterResource(R.drawable.wl_pin_knockout),
                 contentDescription = "打开学习地图",
+                tint = Color.Unspecified,
+                modifier = Modifier.size(19.dp),
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .background(Color.White.copy(alpha = 0.14f), CircleShape)
+                .clickable(onClick = onOpenBackup),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.wl_archive_knockout),
+                contentDescription = "备份与恢复",
                 tint = Color.Unspecified,
                 modifier = Modifier.size(19.dp),
             )

@@ -1,11 +1,5 @@
 package dev.wordloom.ui.quiz
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -51,7 +45,6 @@ import dev.wordloom.R
 import dev.wordloom.data.QuizQuestion
 import dev.wordloom.ui.components.PoolHeader
 import dev.wordloom.ui.theme.SerifFamily
-import dev.wordloom.ui.theme.WlMotion
 import dev.wordloom.ui.components.pressable
 import dev.wordloom.ui.feedback.rememberAppFeedback
 import dev.wordloom.ui.theme.WordloomTheme
@@ -165,18 +158,9 @@ fun QuizScreen(
             )
 
             current != null -> {
-                AnimatedContent(
-                    targetState = index,
-                    transitionSpec = {
-                        slideInHorizontally(WlMotion.spatialDefaultOffset) { it / 4 }
-                            .togetherWith(
-                                slideOutHorizontally(WlMotion.spatialDefaultOffset) { -it / 4 },
-                            )
-                    },
-                    label = "quizQuestion",
-                    modifier = Modifier.fillMaxSize(),
-                ) { i ->
-                    val q = queue.getOrNull(i) ?: return@AnimatedContent
+                val i = index
+                val q = queue.getOrNull(i)
+                if (q != null) {
                     val chosen = answers[i]
                     val answered = chosen != null
 

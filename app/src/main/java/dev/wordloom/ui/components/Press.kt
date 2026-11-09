@@ -26,7 +26,7 @@ fun Modifier.pressable(
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (pressed) 0.985f else 1f,
-        animationSpec = WlMotion.spatialFast,
+        animationSpec = WlMotion.press,
         label = "pressScale",
     )
     return this

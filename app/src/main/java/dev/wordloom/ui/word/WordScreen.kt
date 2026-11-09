@@ -57,7 +57,6 @@ import dev.wordloom.ui.components.SpeakerButton
 import dev.wordloom.ui.components.rememberAudioPlayer
 import dev.wordloom.ui.theme.SansFamily
 import dev.wordloom.ui.theme.SerifFamily
-import dev.wordloom.ui.theme.WlMotion
 import dev.wordloom.ui.theme.WordloomTheme
 
 // Word-page palette from the site's own stylesheet and CSS variables

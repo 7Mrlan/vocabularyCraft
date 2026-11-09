@@ -1,11 +1,5 @@
 package dev.wordloom.ui.review
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -56,7 +50,6 @@ import dev.wordloom.srs.Rating
 import dev.wordloom.ui.components.PoolHeader
 import dev.wordloom.ui.feedback.rememberAppFeedback
 import dev.wordloom.ui.theme.SerifFamily
-import dev.wordloom.ui.theme.WlMotion
 import dev.wordloom.ui.theme.WordloomTheme
 
 @Composable
@@ -177,20 +170,7 @@ fun ReviewScreen(
         ) {
             Spacer(Modifier.height(12.dp))
             val view = LocalView.current
-            AnimatedContent(
-                targetState = current,
-                contentKey = { it.word },
-                transitionSpec = {
-                    slideInHorizontally(WlMotion.spatialDefaultOffset) { it / 3 }
-                        .togetherWith(
-                            slideOutHorizontally(WlMotion.spatialDefaultOffset) { -it / 3 },
-                        )
-                },
-                label = "reviewCard",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            ) { card ->
+            val card = current
             val cardRevealed = card.word in revealedWords
             val rotation by animateFloatAsState(
                 targetValue = if (cardRevealed) 180f else 0f,
@@ -200,7 +180,8 @@ fun ReviewScreen(
 
             Surface(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .weight(1f)
                     .clickable {
                         if (!cardRevealed) {
                             revealedWords.add(card.word)
@@ -267,7 +248,6 @@ fun ReviewScreen(
                         }
                     }
                 }
-            }
             }
 
             Spacer(Modifier.height(20.dp))

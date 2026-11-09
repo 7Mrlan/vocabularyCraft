@@ -180,6 +180,13 @@ app/src/main/java/dev/wordloom/
     └── WordloomViewModel.kt           单一状态源
 ```
 
+## 发布
+
+1. 改 `app/build.gradle.kts`：`versionCode` +1，`versionName` 升一个补丁位（0.1.1 → 0.1.2）
+2. `./gradlew :app:assembleRelease`（签名读 `local.properties`，缺省回退 debug 签名）
+3. `gh release create v<versionName> app/build/outputs/apk/release/app-release.apk`
+4. 若只是替换已有版本的资产：`gh release upload v<versionName> <apk> --clobber`
+
 ## 路线图
 
 1. **CSV 导入词表**：粘贴 / 选文件导入，去重后批量落库

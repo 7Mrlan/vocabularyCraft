@@ -1,12 +1,12 @@
 package dev.wordloom.ui
 
 import android.net.Uri
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -21,7 +21,6 @@ import dev.wordloom.ui.quiz.QuizScreen
 import dev.wordloom.ui.review.ReviewScreen
 import dev.wordloom.ui.search.SearchScreen
 import dev.wordloom.ui.word.SynonymsScreen
-import dev.wordloom.ui.theme.WlMotion
 import dev.wordloom.ui.word.WordScreen
 
 @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
@@ -49,21 +48,13 @@ fun AppNav(viewModel: WordloomViewModel) {
     NavHost(
         navController = nav,
         startDestination = "home",
-        // Pure slide: both pages stay fully opaque, so nothing shows through and
-        // there is no alpha layer to composite. The offset spring is critically
-        // damped — a bouncing page reads as stutter, not smoothness.
-        enterTransition = {
-            slideInHorizontally(WlMotion.navOffset) { it / 6 }
-        },
-        exitTransition = {
-            slideOutHorizontally(WlMotion.navOffset) { -it / 12 }
-        },
-        popEnterTransition = {
-            slideInHorizontally(WlMotion.navOffset) { -it / 6 }
-        },
-        popExitTransition = {
-            slideOutHorizontally(WlMotion.navOffset) { it / 6 }
-        },
+        // No page transition at all. A full-screen slide cost a frame here and
+        // there on real hardware and read as a hitch; switching instantly is
+        // smoother than a transition that stutters.
+        enterTransition = { EnterTransition.None },
+        exitTransition = { ExitTransition.None },
+        popEnterTransition = { EnterTransition.None },
+        popExitTransition = { ExitTransition.None },
     ) {
         composable("home") {
             HomeScreen(

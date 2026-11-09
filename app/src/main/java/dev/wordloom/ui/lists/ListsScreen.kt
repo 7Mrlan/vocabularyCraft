@@ -18,14 +18,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import dev.wordloom.R
 import dev.wordloom.data.local.ListWithCount
 import dev.wordloom.ui.components.PoolHeader
+import dev.wordloom.ui.components.WlSheet
 import dev.wordloom.ui.theme.SerifFamily
 import dev.wordloom.ui.theme.WordloomTheme
 
@@ -139,31 +137,41 @@ fun ListsScreen(
 
     if (showCreate) {
         var name by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { showCreate = false },
-            title = { Text("新建词表") },
-            text = {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    singleLine = true,
-                    placeholder = { Text("例如：GRE 高频") },
-                )
-            },
-            confirmButton = {
-                TextButton(
+        WlSheet(onDismiss = { showCreate = false }) {
+            Text(
+                text = "新建词表",
+                fontFamily = SerifFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 22.sp,
+                color = wl.ink,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "给这组词起个名字，之后随时往里加。",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                color = wl.inkMuted,
+            )
+            Spacer(Modifier.height(16.dp))
+            WlNameField(
+                value = name,
+                onValueChange = { name = it },
+                placeholder = "例如：GRE 高频",
+            )
+            Spacer(Modifier.height(14.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                WlPillButton(
+                    label = "创建",
+                    enabled = name.isNotBlank(),
                     onClick = {
-                        if (name.isNotBlank()) {
-                            onCreate(name)
-                            showCreate = false
-                        }
+                        onCreate(name.trim())
+                        showCreate = false
                     },
-                ) { Text("创建") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCreate = false }) { Text("取消") }
-            },
-        )
+                )
+            }
+        }
     }
 }
 

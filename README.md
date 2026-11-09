@@ -147,6 +147,10 @@ adb shell settings put global http_proxy 10.0.2.2:7890   # 换成你的代理端
 | 搜索结果 | 词表 | 空词表 |
 | ![同义词](docs/screenshots/synonyms.png) | ![词条页底部](docs/screenshots/word-bottom.png) | |
 | 同义词页 | 词族 / 复习进度 | |
+| ![加入词表](docs/screenshots/add-to-list.png) | ![新建词表](docs/screenshots/new-list-sheet.png) |
+|---|---|
+| 加入词表（底部抽屉） | 新建词表 |
+
 | ![图标](docs/screenshots/icons.png) |
 |---|
 | 图标全集（浅 / 深） |

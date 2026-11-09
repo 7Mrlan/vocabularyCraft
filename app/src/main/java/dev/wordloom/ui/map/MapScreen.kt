@@ -22,9 +22,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -38,7 +38,6 @@ import androidx.compose.ui.unit.sp
 import dev.wordloom.R
 import dev.wordloom.ui.theme.SerifFamily
 import dev.wordloom.ui.theme.WordloomTheme
-import kotlinx.coroutines.delay
 import org.maplibre.android.geometry.LatLng
 
 @Composable
@@ -51,22 +50,20 @@ fun MapScreen(
     val wl = WordloomTheme.colors
     var index by remember(words.size) { mutableIntStateOf(0) }
 
-    LaunchedEffect(words.size) {
-        if (words.size > 1) {
-            while (true) {
-                delay(5_000)
-                index = (index + 1) % words.size
-            }
-        }
+    // The card advances with the camera, not on its own clock.
+    fun nextWord() {
+        if (words.size > 1) index = (index + 1) % words.size
     }
 
     Box(modifier = Modifier.fillMaxSize().background(wl.primaryDeep)) {
         WorldMap(
             modifier = Modifier.fillMaxSize(),
+            styleUrl = BasemapStyle.POSITRON,
             zoom = 1.2,
             target = LatLng(28.0, 18.0),
             tour = true,
             tourZoom = 3.2,
+            onTourStop = { nextWord() },
         )
         MapTint(modifier = Modifier.fillMaxSize())
 

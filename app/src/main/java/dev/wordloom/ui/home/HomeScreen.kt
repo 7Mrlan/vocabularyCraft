@@ -88,6 +88,7 @@ fun HomeScreen(
     onOpenLists: () -> Unit,
     onExportBackup: suspend () -> String,
     onImportBackup: suspend (String) -> Result<Int>,
+    onQuiz: () -> Unit,
 ) {
     val wl = WordloomTheme.colors
     val band = wl.primaryBright
@@ -188,22 +189,47 @@ fun HomeScreen(
                         },
                     )
                     Spacer(Modifier.height(14.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable(onClick = onRandom),
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.wl_spark_knockout),
-                            contentDescription = null,
-                            tint = Color.Unspecified,
-                            modifier = Modifier.size(19.dp),
-                        )
-                        Spacer(Modifier.width(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable(onClick = onRandom),
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.wl_spark_knockout),
+                                contentDescription = null,
+                                tint = Color.Unspecified,
+                                modifier = Modifier.size(19.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "随机一个词",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = Color.White.copy(alpha = 0.9f),
+                            )
+                        }
+                        Spacer(Modifier.width(18.dp))
                         Text(
-                            text = "随机一个词",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = Color.White.copy(alpha = 0.9f),
+                            text = "·",
+                            color = Color.White.copy(alpha = 0.4f),
                         )
+                        Spacer(Modifier.width(18.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable(onClick = onQuiz),
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.wl_book_knockout),
+                                contentDescription = null,
+                                tint = Color.Unspecified,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(7.dp))
+                            Text(
+                                text = "四选一练习",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = Color.White.copy(alpha = 0.9f),
+                            )
+                        }
                     }
                 }
 

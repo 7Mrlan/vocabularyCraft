@@ -6,6 +6,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -56,9 +57,14 @@ fun WorldMap(
     tour: Boolean = false,
     tourZoom: Double = 2.6,
     onMapReady: (MapLibreMap) -> Unit = {},
+    onTourStop: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    // The tour loop outlives recompositions; without this it would keep calling
+    // the callback captured on the first composition (when the word list was
+    // still empty), so the card would never change.
+    val tourStop by rememberUpdatedState(onTourStop)
     var loadedMap by remember { mutableStateOf<MapLibreMap?>(null) }
 
     val mapView = remember(interactive) {
@@ -123,6 +129,8 @@ fun WorldMap(
         while (true) {
             delay(1_500)
             val (lat, lng) = TourStops[index % TourStops.size]
+            // One word per move: the card changes exactly when the camera leaves.
+            tourStop()
             map.animateCamera(
                 CameraUpdateFactory.newCameraPosition(
                     CameraPosition.Builder()

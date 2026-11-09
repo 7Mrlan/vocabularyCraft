@@ -72,6 +72,7 @@ fun AppNav(viewModel: WordloomViewModel) {
                 onOpenLists = { nav.navigate("lists") },
                 onExportBackup = viewModel::exportBackup,
                 onImportBackup = viewModel::importBackup,
+                onQuiz = { nav.navigate("quiz") },
             )
         }
 

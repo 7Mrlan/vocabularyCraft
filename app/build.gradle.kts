@@ -1,9 +1,18 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+}
+
+// Signing credentials live in local.properties (git-ignored). Without them a
+// release build falls back to the debug key so the project still builds.
+val localProps = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
 }
 
 android {
@@ -18,10 +27,27 @@ android {
         versionName = "0.1.0"
     }
 
+    signingConfigs {
+        create("release") {
+            val storePath = localProps.getProperty("wordloom.storeFile")
+            if (storePath != null) {
+                storeFile = rootProject.file(storePath)
+                storePassword = localProps.getProperty("wordloom.storePassword")
+                keyAlias = localProps.getProperty("wordloom.keyAlias")
+                keyPassword = localProps.getProperty("wordloom.keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = if (localProps.getProperty("wordloom.storeFile") != null) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 

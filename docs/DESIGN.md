@@ -228,6 +228,25 @@ val SerifFamily = FontFamily(
 重复导入同一份文件不会产生重复词表。导出用 `openOutputStream(uri, "wt")`：某些 provider
 对普通 `"w"` 会留下 0 字节文件。
 
+### 长按选词与翻译
+
+词条页的导读、释义、例句都换成了 `SelectableText`：长按落在哪个词就选中哪个词（系统
+`LONG_PRESS` 触感），横向拖动按词扩展（每跨过一个词给一次 `CLOCK_TICK`），松手后在选区
+旁边浮出一张玻璃卡，自动避开屏幕边缘。
+
+没有用 Compose 的 `SelectionContainer`：它不给选中文本，也不给自定义动作，系统工具条里
+塞不进「翻译」。自己算词边界（字母/数字/连字符/撇号算词内），代价是选择粒度是词而不是字符
+——对"选词和短语翻译"正好。
+
+翻译先用 **有道**：单词走 `dict.youdao.com` 词典接口（返回原生词性行，词性单独成列），
+短语和句子走 `aidemo.youdao.com`；无网络或接口异常时回退 **ML Kit 端上模型**（en→zh，
+首次下载约 30MB，之后离线）。`TranslationService.translate` 是唯一入口，
+换 DeepL / 云翻译只改这一层。
+
+卡片是 Haze 磨砂玻璃：`hazeSource` 在词页、`hazeEffect` 在卡片，先 `clip(shape)` 再取景，
+所以圆角只有一层、不会露出直角；底部只有「EN 复制原文 / 译 复制译文」两个动作，点卡片外
+关闭。
+
 ### 练习（Quiz）
 
 四选一释义题，题目全部来自本地缓存（最多 300 条），**不新增任何网络请求**。

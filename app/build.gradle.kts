@@ -23,8 +23,8 @@ android {
         applicationId = "dev.wordloom"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.1.3"
+        versionCode = 5
+        versionName = "0.2.0"
     }
 
     signingConfigs {
@@ -99,4 +99,9 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.jsoup)
     implementation(libs.maplibre)
+    implementation(libs.mlkit.translate)
+    implementation(libs.play.services.tasks)
+    implementation(libs.haze)
+    implementation(libs.haze.materials)
+    implementation(libs.compose.shimmer)
 }

@@ -142,9 +142,28 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
         viewModelScope.launch { repo.addToDeck(entry) }
     }
 
+    /** Seeds the page from an entry we already hold, so it opens without a spinner. */
+    fun showWord(entry: WordEntry) {
+        _wordState.value = WordUiState.Loaded(entry, false)
+        viewModelScope.launch {
+            val inDeck = runCatching { repo.isInDeck(entry.word) }.getOrDefault(false)
+            val state = _wordState.value
+            if (state is WordUiState.Loaded && state.entry.word.equals(entry.word, ignoreCase = true)) {
+                _wordState.value = state.copy(inDeck = inDeck)
+            }
+        }
+    }
+
     fun loadWord(term: String, forceRefresh: Boolean = false) {
         val cleaned = term.trim()
         if (cleaned.isEmpty()) return
+        // Already showing this word: a second pass would only flash the skeleton.
+        val current = _wordState.value
+        if (!forceRefresh && current is WordUiState.Loaded &&
+            current.entry.word.equals(cleaned, ignoreCase = true)
+        ) {
+            return
+        }
         _wordState.value = WordUiState.Loading(cleaned)
         viewModelScope.launch {
             runCatching { repo.lookup(cleaned, forceRefresh) }

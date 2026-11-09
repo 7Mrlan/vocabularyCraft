@@ -46,6 +46,7 @@ fun MapScreen(
     words: List<Pair<String, String>>,
     onBack: () -> Unit,
     onRandomWord: () -> Unit,
+    onOpenWord: (String) -> Unit,
 ) {
     val wl = WordloomTheme.colors
     var index by remember(words.size) { mutableIntStateOf(0) }
@@ -118,12 +119,12 @@ fun MapScreen(
             )
             Spacer(Modifier.height(14.dp))
 
-            // The counters sit in their own blue card, the way the reference
-            // floats its season clock over the map.
+            // Ink, not blue: the numbers are the only bright thing on a pale map,
+            // and the card reads as a slate laid over it.
             Surface(
                 shape = RoundedCornerShape(18.dp),
-                color = wl.primary.copy(alpha = 0.88f),
-                shadowElevation = 12.dp,
+                color = Color(0xFF102438).copy(alpha = 0.90f),
+                shadowElevation = 14.dp,
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -137,39 +138,52 @@ fun MapScreen(
             }
         }
 
-        // Callout card, bottom-right, cycling through saved words.
+        // Callout card, cycling through saved words. The whole card opens the
+        // entry; the word is already in the local cache, so it opens at once.
         words.getOrNull(index)?.let { (word, preview) ->
             Surface(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 16.dp)
-                    .widthIn(max = 230.dp),
-                shape = RoundedCornerShape(6.dp),
-                color = Color.White,
-                shadowElevation = 14.dp,
+                    .widthIn(max = 236.dp)
+                    .clickable(onClick = { onOpenWord(word) }),
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xFFFDFCF9),
+                shadowElevation = 16.dp,
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
                     Text(
                         text = word,
                         fontFamily = SerifFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 30.sp,
+                        fontSize = 26.sp,
+                        lineHeight = 30.sp,
                         color = wl.ink,
                     )
                     if (preview.isNotBlank()) {
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(7.dp))
                         Text(
                             text = preview.take(80) + if (preview.length > 80) "…" else "",
-                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 12.5.sp,
+                            lineHeight = 19.sp,
                             color = wl.inkMuted,
                         )
                     }
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = "${words.size} 个查过的词 · 镜头每到一处换一张",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                        color = wl.primary,
-                    )
+                    Spacer(Modifier.height(9.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "点开词条",
+                            fontSize = 11.5.sp,
+                            color = wl.primary,
+                        )
+                        Spacer(Modifier.width(3.dp))
+                        Icon(
+                            painter = painterResource(R.drawable.wl_chevron),
+                            contentDescription = null,
+                            tint = wl.primary.copy(alpha = 0.7f),
+                            modifier = Modifier.size(11.dp),
+                        )
+                    }
                 }
             }
         }

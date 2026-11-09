@@ -5,6 +5,7 @@ import dev.wordloom.data.WordRepository
 import dev.wordloom.data.local.WordloomDb
 import dev.wordloom.data.remote.DictionarySource
 import dev.wordloom.data.remote.VocabularyComSource
+import dev.wordloom.data.translate.TranslationService
 
 class AppContainer(app: Application) {
     private val db = WordloomDb.build(app)
@@ -22,5 +23,6 @@ class WordloomApp : Application() {
         super.onCreate()
         // MapLibre must be initialised once, before any MapView is created.
         runCatching { org.maplibre.android.MapLibre.getInstance(this) }
+        TranslationService.init()
     }
 }

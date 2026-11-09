@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -29,9 +30,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.Brush
+import com.valentinilk.shimmer.shimmer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -40,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -56,6 +67,23 @@ import dev.wordloom.ui.components.PlayAllChip
 import dev.wordloom.ui.components.SpeakerButton
 import dev.wordloom.ui.components.rememberAudioPlayer
 import dev.wordloom.ui.theme.SansFamily
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import dev.wordloom.data.translate.TranslationService
 import dev.wordloom.ui.theme.SerifFamily
 import dev.wordloom.ui.theme.WordloomTheme
 
@@ -271,9 +299,40 @@ private fun WordContent(
     val wl = WordloomTheme.colors
     val look = if (wl.isDark) DarkLook else LightLook
     val player = rememberAudioPlayer()
+    val clipboard = LocalClipboardManager.current
+    val density = LocalDensity.current.density
+    var resetKey by remember { mutableLongStateOf(0L) }
+    var selected by remember { mutableStateOf<Pair<String, androidx.compose.ui.geometry.Rect>?>(null) }
+    var translating by remember { mutableStateOf(false) }
+    var translation by remember { mutableStateOf<String?>(null) }
+    var failure by remember { mutableStateOf<String?>(null) }
+    var containerSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    var boxOrigin by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    var cardSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    val hazeState = remember { HazeState() }
 
+    LaunchedEffect(selected?.first) {
+        val chosen = selected?.first ?: return@LaunchedEffect
+        translating = true
+        translation = null
+        failure = null
+        TranslationService.translate(chosen).fold(
+            onSuccess = { translation = it },
+            onFailure = { failure = it.message ?: "翻译失败" },
+        )
+        translating = false
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { boxOrigin = it.positionInRoot() }
+            .onSizeChanged { containerSize = it },
+    ) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .hazeSource(hazeState),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
             start = 24.dp, end = 24.dp, top = 6.dp, bottom = 40.dp,
         ),
@@ -408,12 +467,16 @@ private fun WordContent(
         // 4. The Blurb (Short & Long story-like paragraphs)
         if (!entry.shortBlurb.isNullOrBlank()) {
             item {
-                Text(
-                    text = entry.shortBlurb,
-                    fontFamily = SerifFamily,
-                    fontSize = 17.sp,
-                    lineHeight = 28.sp,
+                SelectableText(
+                    text = entry.shortBlurb.orEmpty(),
+                    style = TextStyle(
+                        fontFamily = SerifFamily,
+                        fontSize = 17.sp,
+                        lineHeight = 28.sp,
+                    ),
                     color = look.lead,
+                onSelection = { t, r -> selected = t to r },
+                resetKey = resetKey,
                 )
                 Spacer(Modifier.height(12.dp))
             }
@@ -421,12 +484,16 @@ private fun WordContent(
 
         if (!entry.longBlurb.isNullOrBlank()) {
             item {
-                Text(
-                    text = entry.longBlurb,
-                    fontFamily = SansFamily,
-                    fontSize = 15.sp,
-                    lineHeight = 25.sp,
+                SelectableText(
+                    text = entry.longBlurb.orEmpty(),
+                    style = TextStyle(
+                        fontFamily = SansFamily,
+                        fontSize = 15.sp,
+                        lineHeight = 25.sp,
+                    ),
                     color = look.body,
+                onSelection = { t, r -> selected = t to r },
+                resetKey = resetKey,
                 )
                 Spacer(Modifier.height(24.dp))
             }
@@ -437,13 +504,17 @@ private fun WordContent(
             val fallback = entry.etymology ?: entry.senses.firstOrNull()?.definition
             if (!fallback.isNullOrBlank()) {
                 item {
-                    Text(
+                    SelectableText(
                         text = fallback,
-                        fontFamily = SerifFamily,
-                        fontSize = 17.sp,
-                        lineHeight = 28.sp,
+                        style = TextStyle(
+                            fontFamily = SerifFamily,
+                            fontSize = 17.sp,
+                            lineHeight = 28.sp,
+                        ),
                         color = look.lead,
-                    )
+                        onSelection = { t, r -> selected = t to r },
+                        resetKey = resetKey,
+                        )
                     Spacer(Modifier.height(24.dp))
                 }
             }
@@ -505,13 +576,15 @@ private fun WordContent(
                             )
                         }
                         Spacer(Modifier.width(10.dp))
-                        Text(
+                        SelectableText(
                             text = sense.definition,
                             style = MaterialTheme.typography.bodyLarge.copy(
                                 fontSize = 16.sp,
                                 lineHeight = 24.sp,
                             ),
                             color = look.lead,
+                            onSelection = { t, r -> selected = t to r },
+                            resetKey = resetKey,
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -519,7 +592,7 @@ private fun WordContent(
                     // Example
                     sense.examples.forEach { example ->
                         Spacer(Modifier.height(6.dp))
-                        Text(
+                        SelectableText(
                             text = example,
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontStyle = FontStyle.Italic,
@@ -527,6 +600,8 @@ private fun WordContent(
                                 lineHeight = 20.sp,
                             ),
                             color = look.example,
+                            onSelection = { t, r -> selected = t to r },
+                            resetKey = resetKey,
                             modifier = Modifier.padding(start = 34.dp),
                         )
                     }
@@ -649,6 +724,40 @@ private fun WordContent(
             }
         }
 
+    }
+
+    selected?.let { (chosen, rect) ->
+        // A scrim only for dismissal: tapping anywhere else closes the card.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) {
+                    selected = null
+                    resetKey++
+                },
+        )
+        GlassTranslateCard(
+            source = chosen,
+            translation = translation,
+            failure = failure,
+            loading = translating,
+            hazeState = hazeState,
+            onCopy = { translation?.let { clipboard.setText(AnnotatedString(it)) } },
+            onCopySource = { clipboard.setText(AnnotatedString(chosen)) },
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .offset { selectionOffset(rect.translate(-boxOrigin.x, -boxOrigin.y), cardSize, containerSize, density) }
+                .alpha(if (cardSize.width > 0) 1f else 0f)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) { }
+                .onSizeChanged { cardSize = it },
+        )
+    }
     }
 
     if (showLists) {
@@ -776,13 +885,21 @@ private fun WordLoading(
             modifier = titleModifier,
         )
         Spacer(Modifier.height(14.dp))
-        SkeletonBar(width = 132.dp, height = 16.dp, color = wl.surfaceAlt)
-        Spacer(Modifier.height(18.dp))
-        SkeletonBar(modifier = Modifier.fillMaxWidth(), height = 14.dp, color = wl.surfaceAlt)
-        Spacer(Modifier.height(9.dp))
-        SkeletonBar(modifier = Modifier.fillMaxWidth(0.92f), height = 14.dp, color = wl.surfaceAlt)
-        Spacer(Modifier.height(9.dp))
-        SkeletonBar(modifier = Modifier.fillMaxWidth(0.6f), height = 14.dp, color = wl.surfaceAlt)
+        // Only the bars shimmer; the word itself stays solid, so a slow lookup
+        // never dims what the reader is looking at.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .shimmer(),
+        ) {
+            SkeletonBar(width = 132.dp, height = 16.dp, color = wl.surfaceAlt)
+            Spacer(Modifier.height(18.dp))
+            SkeletonBar(modifier = Modifier.fillMaxWidth(), height = 14.dp, color = wl.surfaceAlt)
+            Spacer(Modifier.height(9.dp))
+            SkeletonBar(modifier = Modifier.fillMaxWidth(0.92f), height = 14.dp, color = wl.surfaceAlt)
+            Spacer(Modifier.height(9.dp))
+            SkeletonBar(modifier = Modifier.fillMaxWidth(0.6f), height = 14.dp, color = wl.surfaceAlt)
+        }
     }
 }
 
@@ -799,6 +916,7 @@ private fun SkeletonBar(
             .height(height)
             .background(color, RoundedCornerShape(6.dp)),
     )
+
 }
 
 @Composable
@@ -807,4 +925,23 @@ private fun CenterBox(content: @Composable () -> Unit) {
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) { content() }
+}
+
+/** Places the glass card above the selected words, or below when there is no room. */
+private fun selectionOffset(
+    anchor: Rect,
+    card: IntSize,
+    container: IntSize,
+    density: Float,
+): IntOffset {
+    if (card == IntSize.Zero) return IntOffset.Zero
+    val gap = 8 * density
+    val margin = 24 * density
+    val maxX = (container.width - card.width - margin).coerceAtLeast(margin)
+    val x = (anchor.center.x - card.width / 2f).coerceIn(margin, maxX).toInt()
+    val above = anchor.top - card.height - gap > margin
+    val maxY = (container.height - card.height - margin).coerceAtLeast(margin)
+    val y = (if (above) anchor.top - card.height - gap else anchor.bottom + gap)
+        .coerceIn(margin, maxY)
+    return IntOffset(x, y.toInt())
 }

@@ -25,7 +25,10 @@ import dev.wordloom.ui.word.WordScreen
 
 @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
 @Composable
-fun AppNav(viewModel: WordloomViewModel) {
+fun AppNav(
+    viewModel: WordloomViewModel,
+    onToggleTheme: () -> Unit,
+) {
     val nav = rememberNavController()
 
     val wordState by viewModel.wordState.collectAsStateWithLifecycle()
@@ -44,6 +47,13 @@ fun AppNav(viewModel: WordloomViewModel) {
 
     fun openWord(term: String) {
         nav.navigate("word/${Uri.encode(term)}")
+    }
+
+    /** The map already holds the full entry; hand it to the page before routing. */
+    fun openMappedWord(term: String) {
+        mapWords.firstOrNull { it.word.equals(term, ignoreCase = true) }
+            ?.let(viewModel::showWord)
+        openWord(term)
     }
 
     NavHost(
@@ -74,6 +84,7 @@ fun AppNav(viewModel: WordloomViewModel) {
                 onExportBackup = viewModel::exportBackup,
                 onImportBackup = viewModel::importBackup,
                 onQuiz = { nav.navigate("quiz") },
+                onToggleTheme = onToggleTheme,
             )
         }
 
@@ -177,6 +188,7 @@ fun AppNav(viewModel: WordloomViewModel) {
                 },
                 onBack = { nav.popBackStack() },
                 onRandomWord = { viewModel.randomWord(::openWord) },
+                onOpenWord = ::openMappedWord,
             )
         }
 

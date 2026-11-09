@@ -33,6 +33,7 @@ import dev.wordloom.R
 import dev.wordloom.ui.components.drawSearchRipples
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
@@ -89,6 +90,7 @@ fun HomeScreen(
     onExportBackup: suspend () -> String,
     onImportBackup: suspend (String) -> Result<Int>,
     onQuiz: () -> Unit,
+    onToggleTheme: () -> Unit,
 ) {
     val wl = WordloomTheme.colors
     val band = wl.primaryBright
@@ -179,6 +181,7 @@ fun HomeScreen(
                         onOpenMap = onOpenMap,
                         onOpenLists = onOpenLists,
                         onOpenBackup = { showBackup = true },
+                        onToggleTheme = onToggleTheme,
                     )
                     Spacer(Modifier.height(22.dp))
                     SearchPill(
@@ -371,8 +374,17 @@ private fun BrandRow(
     onOpenMap: () -> Unit,
     onOpenLists: () -> Unit,
     onOpenBackup: () -> Unit,
+    onToggleTheme: () -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
+        // The mark itself flips the palette: same icon, one more job.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .clickable(onClickLabel = "切换深浅色", onClick = onToggleTheme)
+                .padding(end = 6.dp, top = 2.dp, bottom = 2.dp),
+        ) {
         Canvas(modifier = Modifier.size(26.dp)) {
             val stroke = Stroke(width = 2.2f * density)
             drawCircle(color = Color.White, radius = size.minDimension / 2.6f, style = stroke)
@@ -396,6 +408,7 @@ private fun BrandRow(
             fontSize = 22.sp,
             color = Color.White,
         )
+        }
         Spacer(Modifier.weight(1f))
         Box(
             modifier = Modifier

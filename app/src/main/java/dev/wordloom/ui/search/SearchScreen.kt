@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,9 +41,11 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,6 +87,7 @@ fun SearchScreen(
     recent: List<String>,
     onQueryChange: (String) -> Unit,
     onSubmit: (String) -> Unit,
+    onRetrySuggest: () -> Unit,
     onBack: () -> Unit,
     onRandom: () -> Unit,
 ) {
@@ -97,7 +99,7 @@ fun SearchScreen(
         keyboard?.hide()
         onSubmit(term)
     }
-    var query by remember { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
 
     // One source of truth for what the page is doing. "No match" is a finished
@@ -106,7 +108,13 @@ fun SearchScreen(
     val empty = suggest.phase == SuggestPhase.Empty
     val failed = suggest.phase == SuggestPhase.Error
 
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+        // The field survives process death via rememberSaveable, but the
+        // ViewModel's suggestion state does not: re-ask for the restored text
+        // instead of leaving an empty results area.
+        if (query.isNotBlank() && suggest.phase == SuggestPhase.Idle) onQueryChange(query)
+    }
 
     Column(
         modifier = Modifier
@@ -194,8 +202,9 @@ fun SearchScreen(
             Spacer(Modifier.height(12.dp))
         }
 
-        val words = suggest.items.filter { !it.word.contains(' ') }
-        val phrases = suggest.items.filter { it.word.contains(' ') }
+        // Two rows with the same word would collide in the LazyColumn key.
+        val words = suggest.items.filter { !it.word.contains(' ') }.distinctBy { it.word }
+        val phrases = suggest.items.filter { it.word.contains(' ') }.distinctBy { it.word }
 
         if (query.isBlank()) {
             EmptyQuery(recent = recent, onPick = submit, onRandom = onRandom)
@@ -242,10 +251,10 @@ fun SearchScreen(
                                 color = wl.coral,
                                 modifier = Modifier
                                     .padding(top = 22.dp)
-                                    .clickable { submit(query.trim()) },
+                                    .clickable(onClick = onRetrySuggest),
                             )
                         }
-                        empty -> item { NoResults(query) { submit(query.trim()) } }
+                        empty -> item { NoResults(suggest.query) { submit(suggest.query) } }
                     }
                 }
             }
@@ -261,7 +270,12 @@ fun SearchScreen(
 @Composable
 private fun Waterline(active: Boolean, modifier: Modifier = Modifier) {
     val reduceMotion = remember { !ValueAnimator.areAnimatorsEnabled() }
-    val phase = if (active && !reduceMotion) {
+    val moving = active && !reduceMotion
+
+    // Keep the wave where it was when motion stopped. Dropping the phase back to
+    // zero makes the line jump sideways while the amplitude is still fading out.
+    val lastPhase = remember { PhaseMemory() }
+    val phase = if (moving) {
         val transition = rememberInfiniteTransition(label = "waterline")
         val value by transition.animateFloat(
             initialValue = 0f,
@@ -269,12 +283,13 @@ private fun Waterline(active: Boolean, modifier: Modifier = Modifier) {
             animationSpec = infiniteRepeatable(tween(2000, easing = LinearEasing)),
             label = "waterlinePhase",
         )
+        SideEffect { lastPhase.value = value }
         value
     } else {
-        0f
+        lastPhase.value
     }
     val amplitude by animateFloatAsState(
-        targetValue = if (active && !reduceMotion) 1f else 0f,
+        targetValue = if (moving) 1f else 0f,
         animationSpec = tween(420),
         label = "waterlineAmplitude",
     )
@@ -303,6 +318,9 @@ private fun Waterline(active: Boolean, modifier: Modifier = Modifier) {
     }
 }
 
+/** Plain holder: the wave position must outlive the transition without being snapshot state. */
+private class PhaseMemory(var value: Float = 0f)
+
 /** Results rise out of that waterline, a beat apart, instead of popping in. */
 @Composable
 private fun Surfaced(
@@ -311,7 +329,9 @@ private fun Surfaced(
     content: @Composable () -> Unit,
 ) {
     val reduceMotion = remember { !ValueAnimator.areAnimatorsEnabled() }
-    var visible by remember { mutableStateOf(reduceMotion) }
+    // rememberSaveable rides the LazyColumn item's saveable state, so a row that
+    // scrolls out and back in does not replay its entrance.
+    var visible by rememberSaveable { mutableStateOf(reduceMotion) }
     LaunchedEffect(Unit) {
         if (!visible) {
             delay(30L * index.coerceAtMost(8))

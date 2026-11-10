@@ -1,6 +1,8 @@
 package dev.wordloom
 
 import android.content.Context
+import android.content.res.Configuration
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -10,7 +12,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -22,20 +23,30 @@ import dev.wordloom.ui.theme.WordloomTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val prefs = getSharedPreferences("wordloom", Context.MODE_PRIVATE)
+        val savedMode = prefs.getString("theme_mode", "system") ?: "system"
+        val dark = when (savedMode) {
+            "dark" -> true
+            "light" -> false
+            else -> (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                Configuration.UI_MODE_NIGHT_YES
+        }
+        // The platform window paints before Compose does (first frame, rotation,
+        // process restore). Match the reader's saved mode, not just the system's,
+        // so the fallback never flashes the opposite colour.
+        window.setBackgroundDrawable(
+            ColorDrawable(if (dark) 0xFF0B1320.toInt() else 0xFFFFFFFF.toInt()),
+        )
+
         enableEdgeToEdge()
 
         val repository = (application as WordloomApp).container.repository
 
         setContent {
-            val context = LocalContext.current
             // The brand mark in the header toggles this. "system" is only the
             // starting point; once the reader picks a side, we remember it.
-            val prefs = remember {
-                context.getSharedPreferences("wordloom", Context.MODE_PRIVATE)
-            }
-            var mode by remember {
-                mutableStateOf(prefs.getString("theme_mode", "system") ?: "system")
-            }
+            var mode by remember { mutableStateOf(savedMode) }
             val dark = when (mode) {
                 "dark" -> true
                 "light" -> false

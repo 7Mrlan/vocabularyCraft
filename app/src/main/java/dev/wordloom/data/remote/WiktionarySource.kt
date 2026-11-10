@@ -18,6 +18,7 @@ import okhttp3.Request
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -43,22 +44,34 @@ class WiktionarySource(
         if (cleaned.isEmpty()) return@withContext null
 
         android.util.Log.d("Wordloom", "wiktionary: senses for $cleaned")
-        val senses = runCatching { fetchSenses(cleaned) }
-            .onFailure { android.util.Log.w("Wordloom", "senses failed: ${it.javaClass.simpleName}: ${it.message}") }
-            .getOrElse { emptyList() }
+        val sensesResult = attempt { fetchSenses(cleaned) }
+        sensesResult.exceptionOrNull()?.let {
+            android.util.Log.w("Wordloom", "senses failed: ${it.javaClass.simpleName}: ${it.message}")
+        }
+        val senses = sensesResult.getOrDefault(emptyList())
         android.util.Log.d("Wordloom", "wiktionary: ${senses.size} senses")
 
         // Pronunciation is best-effort: a missing page must not hide the senses.
         android.util.Log.d("Wordloom", "wiktionary: fetching page html")
-        val page = runCatching { fetchPageHtml(cleaned) }
-            .onFailure { android.util.Log.w("Wordloom", "parse failed: ${it.javaClass.simpleName}: ${it.message}") }
-            .getOrNull()
+        val pageResult = attempt { fetchPageHtml(cleaned) }
+        pageResult.exceptionOrNull()?.let {
+            android.util.Log.w("Wordloom", "parse failed: ${it.javaClass.simpleName}: ${it.message}")
+        }
+        val page = pageResult.getOrNull()
         val ipa = page?.let { extractIpa(it) }.orEmpty()
         val audio = page?.let { extractAudio(it) }.orEmpty()
         val etymology = page?.let { extractEtymology(it) }
         android.util.Log.d("Wordloom", "wiktionary: ipa=${ipa.size} audio=${audio.size} html=${page?.length ?: 0}")
 
-        if (senses.isEmpty() && ipa.isEmpty() && audio.isEmpty()) return@withContext null
+        if (senses.isEmpty() && ipa.isEmpty() && audio.isEmpty()) {
+            // A 404 is the site saying "no such word"; a transport error means we
+            // never got an answer at all. Surface the latter so the caller can
+            // offer a retry instead of claiming the word does not exist.
+            listOfNotNull(sensesResult.exceptionOrNull(), pageResult.exceptionOrNull())
+                .firstOrNull { it is IOException || (it is HttpStatusException && it.code != 404) }
+                ?.let { throw it }
+            return@withContext null
+        }
 
         val sensesWithSyn = attachSynonyms(page.orEmpty(), senses)
         android.util.Log.d(
@@ -87,11 +100,11 @@ class WiktionarySource(
             .addQueryParameter("namespace", "0")
             .addQueryParameter("format", "json")
             .build()
-        runCatching {
-            val body = get(url.toString())
-            val root = json.parseToJsonElement(body).jsonArray
-            root.getOrNull(1)?.jsonArray?.map { Suggestion(it.jsonPrimitive.content) } ?: emptyList()
-        }.getOrElse { emptyList() }
+        // Let IO/HTTP/parse failures propagate: the caller needs to know the
+        // difference between "no matches" and "the request failed".
+        val body = get(url.toString())
+        val root = json.parseToJsonElement(body).jsonArray
+        root.getOrNull(1)?.jsonArray?.map { Suggestion(it.jsonPrimitive.content) } ?: emptyList()
     }
 
     override suspend fun random(): String? = withContext(Dispatchers.IO) {
@@ -103,13 +116,13 @@ class WiktionarySource(
                 .addQueryParameter("rnlimit", "10")
                 .addQueryParameter("format", "json")
                 .build()
-            val candidates = runCatching {
+            val candidates = attempt {
                 json.parseToJsonElement(get(url.toString()))
                     .jsonObject["query"]?.jsonObject
                     ?.get("random")?.jsonArray
                     ?.mapNotNull { it.jsonObject["title"]?.jsonPrimitive?.content }
                     ?: emptyList()
-            }.getOrElse { emptyList() }
+            }.getOrDefault(emptyList())
 
             candidates.firstOrNull { it.matches(Regex("^[a-z][a-z-]{3,}$")) }?.let { return@withContext it }
         }
@@ -373,6 +386,15 @@ class WiktionarySource(
         else -> src
     }
 
+    /** [runCatching] without swallowing cancellation. */
+    private inline fun <T> attempt(block: () -> T): Result<T> = try {
+        Result.success(block())
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+        throw cancelled
+    } catch (error: Throwable) {
+        Result.failure(error)
+    }
+
     private fun get(url: String): String {
         val request = Request.Builder()
             .url(url)
@@ -380,17 +402,20 @@ class WiktionarySource(
             .header("Accept", "application/json")
             .build()
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) error("HTTP ${response.code} for $url")
+            if (!response.isSuccessful) throw HttpStatusException(response.code, url)
             return response.body?.string().orEmpty()
         }
     }
+
+    private class HttpStatusException(val code: Int, url: String) :
+        RuntimeException("HTTP $code for $url")
 
     private fun kotlinx.serialization.json.JsonPrimitive.contentOrNullSafe(): String? =
         runCatching { content }.getOrNull()?.takeIf { it.isNotBlank() }
 
     companion object {
         private const val USER_AGENT =
-            "Wordloom/0.1 (open-source dictionary client; https://github.com/) OkHttp"
+            "Wordloom/0.2.1 (https://github.com/7Mrlan/vocabularyCraft-) OkHttp"
 
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)

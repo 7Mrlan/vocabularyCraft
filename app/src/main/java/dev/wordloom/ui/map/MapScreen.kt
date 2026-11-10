@@ -24,7 +24,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -140,6 +139,9 @@ fun MapScreen(
 
         // Callout card, cycling through saved words. The whole card opens the
         // entry; the word is already in the local cache, so it opens at once.
+        // The card stays paper-white over the pale map in both themes, so its
+        // inks are fixed to the light-mode values: the dark tokens would turn
+        // into white-on-white here.
         words.getOrNull(index)?.let { (word, preview) ->
             Surface(
                 modifier = Modifier
@@ -158,7 +160,7 @@ fun MapScreen(
                         fontWeight = FontWeight.Bold,
                         fontSize = 26.sp,
                         lineHeight = 30.sp,
-                        color = wl.ink,
+                        color = Color(0xFF162941),
                     )
                     if (preview.isNotBlank()) {
                         Spacer(Modifier.height(7.dp))
@@ -166,7 +168,7 @@ fun MapScreen(
                             text = preview.take(80) + if (preview.length > 80) "…" else "",
                             fontSize = 12.5.sp,
                             lineHeight = 19.sp,
-                            color = wl.inkMuted,
+                            color = Color(0xFF5B6B82),
                         )
                     }
                     Spacer(Modifier.height(9.dp))
@@ -174,13 +176,13 @@ fun MapScreen(
                         Text(
                             text = "点开词条",
                             fontSize = 11.5.sp,
-                            color = wl.primary,
+                            color = Color(0xFF005AFB),
                         )
                         Spacer(Modifier.width(3.dp))
                         Icon(
                             painter = painterResource(R.drawable.wl_chevron),
                             contentDescription = null,
-                            tint = wl.primary.copy(alpha = 0.7f),
+                            tint = Color(0xFF005AFB).copy(alpha = 0.7f),
                             modifier = Modifier.size(11.dp),
                         )
                     }
@@ -209,7 +211,8 @@ fun MapScreen(
                     Text(
                         text = "随机一个词",
                         style = MaterialTheme.typography.labelLarge,
-                        color = Color.White,
+                        // Dark mode's lime action (#61C42A) is too bright for white ink.
+                        color = if (wl.isDark) Color(0xFF04101F) else Color.White,
                         modifier = Modifier
                             .clickable(onClick = onRandomWord)
                             .padding(horizontal = 14.dp, vertical = 8.dp),

@@ -26,8 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.wordloom.R
@@ -41,6 +39,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import dev.wordloom.ui.theme.WordloomTheme
@@ -72,67 +71,14 @@ fun SearchPill(
             )
             Text(
                 text = placeholder,
-                color = WordloomTheme.colors.inkMuted,
+                // The pill stays white in both themes, so this is the light-mode
+                // muted ink: the dark token would be nearly invisible here.
+                color = Color(0xFF5B6B82),
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.weight(1f),
             )
         }
     }
-}
-
-@Composable
-fun PosChip(text: String) {
-    val wl = WordloomTheme.colors
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = wl.surfaceAlt,
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.SemiBold,
-            color = wl.primaryDeep,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-        )
-    }
-}
-
-@Composable
-fun SectionTitle(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        color = WordloomTheme.colors.ink,
-        modifier = modifier.padding(bottom = 10.dp),
-    )
-}
-
-@Composable
-fun DefinitionText(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyLarge.copy(
-            fontStyle = FontStyle.Italic,
-            fontSize = 17.sp,
-            lineHeight = 27.sp,
-        ),
-        color = WordloomTheme.colors.ink,
-        modifier = modifier,
-    )
-}
-
-@Composable
-fun ExampleText(
-    text: String,
-    modifier: Modifier = Modifier,
-    color: Color = WordloomTheme.colors.inkMuted,
-) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = color,
-        modifier = modifier,
-    )
 }
 
 @Composable
@@ -247,14 +193,28 @@ class AudioPlayer(private val context: Context) {
                 player.setOnErrorListener { _, _, _ -> finish(); true }
                 player.prepareAsync()
             }.onFailure { finish() }
-            continuation.invokeOnCancellation { runCatching { player.release() } }
+            continuation.invokeOnCancellation {
+                runCatching { player.release() }
+                if (mediaPlayer === player) mediaPlayer = null
+            }
         }
     }
 
     private suspend fun cache(url: String): File = withContext(Dispatchers.IO) {
         val dir = File(context.cacheDir, "audio").apply { mkdirs() }
-        val file = File(dir, url.hashCode().toString() + ".mp3")
+        // A 32-bit hashCode can collide across a large vocabulary and could mix up
+        // an .ogg fallback with an .mp3; keep the extension and use a real digest.
+        val ext = url.substringBefore('?').substringAfterLast('.', "mp3")
+            .lowercase()
+            .takeIf { it in setOf("mp3", "ogg", "oga", "wav", "m4a") }
+            ?: "mp3"
+        val key = MessageDigest.getInstance("SHA-256")
+            .digest(url.toByteArray())
+            .take(16)
+            .joinToString("") { "%02x".format(it) }
+        val file = File(dir, "$key.$ext")
         if (file.length() > 0) return@withContext file
+        val temp = File(dir, "$key.$ext.part")
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", "Mozilla/5.0")
@@ -262,7 +222,11 @@ class AudioPlayer(private val context: Context) {
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) error("audio ${response.code}")
             val body = response.body ?: error("empty audio body")
-            file.outputStream().use { out -> body.byteStream().copyTo(out) }
+            temp.outputStream().use { out -> body.byteStream().copyTo(out) }
+        }
+        if (!temp.renameTo(file)) {
+            temp.copyTo(file, overwrite = true)
+            temp.delete()
         }
         file
     }

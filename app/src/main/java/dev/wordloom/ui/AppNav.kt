@@ -1,11 +1,15 @@
 package dev.wordloom.ui
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -23,13 +27,13 @@ import dev.wordloom.ui.search.SearchScreen
 import dev.wordloom.ui.word.SynonymsScreen
 import dev.wordloom.ui.word.WordScreen
 
-@OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
 @Composable
 fun AppNav(
     viewModel: WordloomViewModel,
     onToggleTheme: () -> Unit,
 ) {
     val nav = rememberNavController()
+    val context = LocalContext.current
 
     val wordState by viewModel.wordState.collectAsStateWithLifecycle()
     val suggest by viewModel.suggest.collectAsStateWithLifecycle()
@@ -46,6 +50,15 @@ fun AppNav(
 
     fun openWord(term: String) {
         nav.navigate("word/${Uri.encode(term)}")
+    }
+
+    fun pickRandomWord() {
+        viewModel.randomWord(
+            onReady = ::openWord,
+            onFailed = {
+                Toast.makeText(context, "暂时抽不到随机词，检查网络后重试", Toast.LENGTH_SHORT).show()
+            },
+        )
     }
 
     /** The map already holds the full entry; hand it to the page before routing. */
@@ -75,7 +88,7 @@ fun AppNav(
                 dailyInDeck = dailyWord?.let { entry -> cards.any { it.word == entry.word.lowercase() } } == true,
                 onAddDaily = viewModel::addDailyToDeck,
                 onSearch = { nav.navigate("search") },
-                onRandom = { viewModel.randomWord(::openWord) },
+                onRandom = ::pickRandomWord,
                 onReview = { nav.navigate("review") },
                 onWord = ::openWord,
                 onOpenMap = { nav.navigate("map") },
@@ -96,8 +109,9 @@ fun AppNav(
                     viewModel.loadWord(term)
                     openWord(term)
                 },
+                onRetrySuggest = viewModel::retrySuggest,
                 onBack = { nav.popBackStack() },
-                onRandom = { viewModel.randomWord(::openWord) },
+                onRandom = ::pickRandomWord,
             )
         }
 
@@ -106,10 +120,15 @@ fun AppNav(
             arguments = listOf(navArgument("term") { type = NavType.StringType }),
         ) { entry ->
             val term = Uri.decode(entry.arguments?.getString("term").orEmpty())
+            val loadedWord = (wordState as? WordUiState.Loaded)?.entry?.word
             LaunchedEffect(term) { viewModel.loadWord(term) }
             WordScreen(
+                term = term,
                 state = wordState,
-                card = cards.firstOrNull { it.word == term.lowercase() },
+                card = cards.firstOrNull {
+                    it.word.equals(term.trim(), ignoreCase = true) ||
+                        (loadedWord != null && it.word.equals(loadedWord, ignoreCase = true))
+                },
                 lists = lists,
                 onBack = { nav.popBackStack() },
                 onRetry = { viewModel.loadWord(term, forceRefresh = true) },
@@ -140,8 +159,13 @@ fun AppNav(
                 }
             }
             SynonymsScreen(
-                entry = (wordState as? WordUiState.Loaded)?.entry
-                    ?.takeIf { it.word.equals(term, ignoreCase = true) },
+                entry = (wordState as? WordUiState.Loaded)
+                    ?.takeIf {
+                        it.entry.word.equals(term.trim(), ignoreCase = true) ||
+                            it.requestedTerm.equals(term.trim(), ignoreCase = true)
+                    }
+                    ?.entry,
+                loading = wordState is WordUiState.Loading,
                 onBack = { nav.popBackStack() },
                 onWord = ::openWord,
             )
@@ -166,6 +190,9 @@ fun AppNav(
             val id = entry.arguments?.getLong("id") ?: 0L
             val name = Uri.decode(entry.arguments?.getString("name").orEmpty())
             LaunchedEffect(id) { viewModel.openList(id) }
+            // Not keyed on id: this destination is one back-stack entry, so the
+            // observer only needs to stop when the screen itself leaves.
+            DisposableEffect(Unit) { onDispose { viewModel.closeList() } }
             ListDetailScreen(
                 name = name,
                 words = listWords,
@@ -176,16 +203,21 @@ fun AppNav(
         }
 
         composable("map") {
-            MapScreen(
-                counters = counters,
-                words = mapWords.map { entry ->
+            // Decoding and mapping up to 400 cached entries is too much to redo
+            // on every AppNav recomposition; key it on the list itself.
+            val words = remember(mapWords) {
+                mapWords.map { entry ->
                     entry.word to (
                         entry.shortBlurb?.takeIf { it.isNotBlank() }
                             ?: entry.senses.firstOrNull()?.definition.orEmpty()
                         )
-                },
+                }
+            }
+            MapScreen(
+                counters = counters,
+                words = words,
                 onBack = { nav.popBackStack() },
-                onRandomWord = { viewModel.randomWord(::openWord) },
+                onRandomWord = ::pickRandomWord,
                 onOpenWord = ::openMappedWord,
             )
         }
@@ -203,7 +235,8 @@ fun AppNav(
         composable("quiz") {
             LaunchedEffect(Unit) { viewModel.startQuiz() }
             QuizScreen(
-                questions = quiz,
+                questions = quiz.questions,
+                round = quiz.round,
                 onBack = { nav.popBackStack() },
                 onRestart = viewModel::startQuiz,
             )

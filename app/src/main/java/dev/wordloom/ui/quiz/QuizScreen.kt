@@ -57,18 +57,22 @@ import dev.wordloom.ui.theme.WordloomTheme
 @Composable
 fun QuizScreen(
     questions: List<QuizQuestion>,
+    round: Int,
     onBack: () -> Unit,
     onRestart: () -> Unit,
 ) {
     val wl = WordloomTheme.colors
     val feedback = rememberAppFeedback()
     val view = LocalView.current
-    var queue by remember(questions) { mutableStateOf(questions) }
-    var index by remember(questions) { mutableIntStateOf(0) }
-    var answers by remember(questions) { mutableStateOf<Map<Int, Int>>(emptyMap()) }
-    var correctCount by remember(questions) { mutableIntStateOf(0) }
-    var wrong by remember(questions) { mutableStateOf<List<QuizQuestion>>(emptyList()) }
-    var finished by remember(questions) { mutableStateOf(false) }
+    // Keyed on the round, not the question list: a new round may draw the same
+    // questions, and it still has to reset. It also keeps the old round on
+    // screen while the next one is being built, instead of flashing empty.
+    var queue by remember(round) { mutableStateOf(questions) }
+    var index by remember(round) { mutableIntStateOf(0) }
+    var answers by remember(round) { mutableStateOf<Map<Int, Int>>(emptyMap()) }
+    var correctCount by remember(round) { mutableIntStateOf(0) }
+    var wrong by remember(round) { mutableStateOf<List<QuizQuestion>>(emptyList()) }
+    var finished by remember(round) { mutableStateOf(false) }
 
     val current = queue.getOrNull(index)
 
@@ -130,6 +134,9 @@ fun QuizScreen(
         }
 
         when {
+            // Round 0 is the first load; showing the "not enough words" state
+            // before the cache has answered would be a lie.
+            round == 0 -> QuizLoading()
             questions.isEmpty() -> InsufficientPool()
             finished -> Summary(
                 correct = correctCount,
@@ -145,15 +152,7 @@ fun QuizScreen(
                         finished = false
                     }
                 },
-                onRestart = {
-                    onRestart()
-                    queue = emptyList()
-                    index = 0
-                    answers = emptyMap()
-                    correctCount = 0
-                    wrong = emptyList()
-                    finished = false
-                },
+                onRestart = onRestart,
                 onBack = onBack,
             )
 
@@ -298,6 +297,18 @@ private fun OptionRow(text: String, state: OptionState, onClick: () -> Unit) {
 }
 
 @Composable
+private fun QuizLoading() {
+    val wl = WordloomTheme.colors
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(
+            text = "正在出题…",
+            style = MaterialTheme.typography.bodyMedium,
+            color = wl.inkMuted,
+        )
+    }
+}
+
+@Composable
 private fun InsufficientPool() {
     val wl = WordloomTheme.colors
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -427,7 +438,7 @@ private fun Summary(
             }
             Spacer(Modifier.height(10.dp))
             Text(
-                text = "返回复习",
+                text = "返回",
                 style = MaterialTheme.typography.labelLarge,
                 color = wl.inkMuted,
                 textAlign = TextAlign.Center,

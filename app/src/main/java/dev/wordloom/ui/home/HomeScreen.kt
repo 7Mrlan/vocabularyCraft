@@ -12,16 +12,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -45,11 +41,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -158,7 +150,6 @@ fun HomeScreen(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 28.dp),
     ) {
         item {
-            val word = recent.firstOrNull()?.word
             var pillCenterY by remember { mutableStateOf(0f) }
             Box(
                 modifier = Modifier
@@ -258,7 +249,9 @@ fun HomeScreen(
                 // carries the hierarchy, and the two quiet ones sit below it.
                 PrimaryActionCard(
                     background = Color.White,
-                    contentColor = wl.primary,
+                    // The card is white in both themes; the dark-mode primary is
+                    // tuned for dark surfaces and would wash out on it.
+                    contentColor = if (wl.isDark) wl.primaryDeep else wl.primary,
                     iconRes = R.drawable.wl_book_light,
                     title = "查一个词",
                     subtitle = "英英释义 · 音标 · 发音",
@@ -649,7 +642,7 @@ private fun DailyWordCard(
                     Text(
                         text = if (inDeck) "已在复习队列" else "加入复习",
                         style = MaterialTheme.typography.labelLarge,
-                        color = if (inDeck) wl.inkMuted else Color.White,
+                        color = if (inDeck) wl.inkMuted else wl.onPrimary,
                         modifier = Modifier
                             .clickable(enabled = !inDeck, onClick = onAdd)
                             .padding(horizontal = 16.dp, vertical = 9.dp),

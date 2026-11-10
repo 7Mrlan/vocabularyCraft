@@ -19,7 +19,6 @@ abstract class WordloomDb : RoomDatabase() {
         fun build(context: Context): WordloomDb =
             Room.databaseBuilder(context.applicationContext, WordloomDb::class.java, "wordloom.db")
                 .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
-                .fallbackToDestructiveMigration()
                 .build()
 
         private val MIGRATION_1_2 = object : Migration(1, 2) {

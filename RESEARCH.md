@@ -1,5 +1,9 @@
 # 把 vocabulary.com 逆向成安卓 App — 可行性研究与实施方案
 
+> **存档说明（2026-11-09）**：这是一份按日期保留的侦察记录，不是当前架构文档。
+> 文中的网关方案尚未实现；App 现在由 `VocabularyComSource` 直接解析，失败时回退
+> `WiktionarySource`。当前行为以 README 与 `docs/DESIGN.md` 为准。
+
 > 侦察时间：2026-11-08　目标：https://www.vocabulary.com/
 > 工具组合：`morluto/rea`（侦察 / 证据层） + `storytold/craft-anything`（生成 / 复刻层）
 

@@ -26,7 +26,7 @@
 
 参考站用 **Open Sans**（正文）+ **Merriweather**（标题）+ **SSStandard**（图标字体）。
 
-本项目 v0.1 用平台字体族（`SansSerif` / `Serif`）起步，保证任何设备都能构建和渲染。
+本项目 v0.2 用平台字体族（`SansSerif` / `Serif`）起步，保证任何设备都能构建和渲染。
 要 1:1 复刻：
 
 1. 从 Google Fonts 下载 Open Sans / Merriweather 的 **可变字体或静态 TTF**（两者都是 OFL，可随 App 分发）
@@ -58,15 +58,16 @@ val SerifFamily = FontFamily(
 
 ```
 ┌ 渐变 hero（deep → primary → bright）────────────┐
-│  wordmark · 一句话 tagline                       │
+│  wordmark · 词表 / 地图 / 备份                    │
 │  [ 搜索胶囊 ]                                    │
-│  ↻ 随机一个词                                     │
-│         ～～～ 波浪过渡（Canvas 贝塞尔）～～～      │
+│  ↻ 随机一个词 · 四选一练习                        │
+│  ～～～ 波浪过渡（正弦采样）～～～                  │
 ├ 青色带 ─────────────────────────────────────────┤
-│  [查词] [复习] [随机]  三张卡（蓝 / 珊瑚 / 薄荷）  │
+│  [查一个词] 主卡（白底蓝字）                       │
+│  [复习] [最近] 两张并排卡（珊瑚 / 薄荷）           │
 └──────────────────────────────────────────────────┘
-  今日复习卡（计数 + 进度）
-  最近查过的词（横向 chips）
+  今日复习摘要卡（待复习数 + 收藏总数）
+  每日一词卡（可加入复习 / 打开词条）
 ```
 
 ## 首页 hero（2026-11 改版）
@@ -75,9 +76,7 @@ val SerifFamily = FontFamily(
 把「随机一个词」推到离输入框很远的地方。所以 hero 改由**排版**承担识别度，不再放背景插画：
 
 ```
-品牌行 ································ (地图入口)
-查一个词，
-记住一辈子。        ← 衬线粗体 26/36
+品牌行 ································ (地图 / 词表 / 备份)
 [ 搜索胶囊 56dp ]
 ↻ 随机一个词        ← 距输入框 14dp
 ～～～ 波浪 ～～～
@@ -92,7 +91,7 @@ val SerifFamily = FontFamily(
 参考站的地图不是自然底图，而是**整片蓝色调**：陆地被压成浅蓝灰，水面是高饱和蓝，
 标签本身也是蓝的，再叠一层上浅下深的渐变融进蓝色分区。我们复刻的是这套读法：
 
-- **底图**：MapLibre Native + OpenFreeMap `liberty` 样式（OSM 数据，无需 token）
+- **底图**：MapLibre Native + OpenFreeMap `positron` 样式（OSM 数据，无需 token）
 - **双色调**：`MapTint` 在瓦片之上盖一层 4 段蓝色渐变（alpha 0.24–0.42），
   让陆地、水面、标签统一进蓝色系统，同时保留地名可读性
 - **标签**：运行时把所有 symbol 图层的 `text-field` 改成
@@ -103,13 +102,14 @@ val SerifFamily = FontFamily(
   （词 + 释义摘要）。词池是 `recentAt > 0` 的全部缓存词，后台抓取的每日一词
   `recentAt = 0`，所以除非你点进去看过，它不会出现在地图上。
   回调用 `rememberUpdatedState` 传进常驻协程，否则会一直调用首次组合时的空词表闭包
-- **底图**：`positron` 样式（比 liberty 轻），MapLibre 的 ambient cache 让第二次打开几乎瞬时
 
 > 原作 Bowl 地图上的学校名与词数是服务端按赛季下发的内容，页面里不存在、也无法从
 > 前端反推。我们只复刻它的**行为**（自动巡航、数字滚动、轮播卡片），数据源换成用户
 > 自己的收藏 —— 有意义的动画，而不是伪造的地理数据。
 
 ## 地图（早期方案存档）
+
+> 存档：这是改版前的设想，不是当前实现。当前行为见上面的「地图（已实现）」。
 
 参考站首页那张地图是 **Mapbox GL JS**：可拖动、可缩放、国家名 + 城市点、计数器滚动。
 安卓端计划：
@@ -138,38 +138,44 @@ val SerifFamily = FontFamily(
 
 | 场景 | 动效 | 为什么必要 |
 |---|---|---|
-| 页面进入/返回 | 纯水平滑动（1/6 屏宽，临界阻尼弹簧） | 交代方向；两页全程不透明，无 alpha 层 |
-| 卡片按压 | 缩到 0.985 | 触摸反馈，单层 transform |
+| 页面进入/返回 | 无转场，硬切（`EnterTransition.None`） | 全屏滑动在真机上会掉帧，硬切反而更稳 |
+| 卡片按压 | 缩到 0.985（`WlMotion.press`） | 触摸反馈，单层 transform |
 | 列表增删 | `animateItem` | 交代行的空间关系 |
-| 练习换题 | 水平滑动 1/4 | 交代进度 |
-| 复习换卡 | 水平滑动 1/3 | 交代队列前进 |
+| 搜索结果 | 逐条上浮（`Surfaced`） | 让结果从水线里长出来，而不是突然出现 |
+| 词条内容到达 | 140ms 淡入（`ContentFade`） | 标题与骨架同位置，正文安静浮现，无布局跳动 |
+| 练习换题 | 硬切 | 题目之间没有空间关系可交代 |
+| 复习换卡 | 水平滑动 1/10 + 淡出 | 交代队列前进 |
 | 复习翻牌 | Y 轴旋转 | 翻面本身 |
 | 底部抽屉 | Material 默认 | 系统一致 |
 
 **已删除**：导航淡入淡出、共享元素转场、词条页 Loading/Content 的 AnimatedContent、
-练习与复习里的透明度过渡。骨架页与内容页标题同位置，硬切即可，不需要动画层。
+练习里的过渡。骨架页与内容页标题同位置，内容就绪后只做 140ms 淡入（`ContentFade`），不触发布局重算。
 
-令牌仍是三个弹簧（`WlMotion`），导航额外用 `navOffset`（damping 1.0，不反弹）。
+动效令牌只有一个弹簧 `WlMotion.press`（damping 0.7 / stiffness 800）；没有页面转场令牌。
 
 ## 图标（2026-11）
 
-全站不再使用 Material 默认图标。一套 15 个自绘矢量，统一 24 格网格：**浅色填充 + 1.2–1.5 描边 +
-一颗珊瑚色线结**。线结是全套的签名——每个图标在"线头收尾"的地方留一个小圆点，像织布时打的结。
+全站不再使用 Material 默认图标。一套 24 个自绘矢量（不含启动图标），统一 24 格网格：
+**浅色填充 + 1.2–1.5 描边 + 一颗珊瑚色线结**。线结是全套的签名——每个图标在
+"线头收尾"的地方留一个小圆点，像织布时打的结。
 
 | 图标 | 文件 | 用在哪 |
 |---|---|---|
-| 斜置长剑 | `wl_back` | 所有页面的返回（剑柄朝右下、剑尖朝左上） |
-| 放大镜 | `wl_search` | 首页搜索胶囊、搜索页输入框 |
+| 斜置长剑 | `wl_back` / `wl_back_knockout` | 所有页面的返回（主题色 / 蓝底蚀刻） |
+| 放大镜 | `wl_search` / `wl_search_light` | 搜索入口（当前页面用 `_light`，主题色版本留给纸面） |
 | 书签（空 / 实） | `wl_bookmark` / `wl_bookmark_on` | 词条页收藏 |
 | 环形箭头 | `wl_refresh` | 词条页刷新 |
 | 喇叭 | `wl_volume` | 发音、全部连读 |
-| 卡片夹 | `wl_list` | Add to list、品牌行 |
-| 图钉 | `wl_pin` | 学习地图入口 |
-| 线箭头 | `wl_forward` | 卡片里的前进箭头（单色，可 tint） |
+| 卡片夹 | `wl_list` / `wl_list_knockout` | Add to list、品牌行 |
+| 图钉 | `wl_pin` / `wl_pin_knockout` | 学习地图入口（当前用 `_knockout`） |
+| 线箭头 | `wl_forward` | 卡片里的前进箭头 |
 | 弯箭头 | `wl_chevron` | 列表行尾部 |
 | 交叉线 | `wl_close` | 从词表移除 |
-| 摊开的书 | `wl_book` | 「查一个词」卡 |
-| 四角星 | `wl_spark` | 「随机一个词」 |
+| 摊开的书 | `wl_book` / `wl_book_knockout` / `wl_book_light` | 「查一个词」卡（三种底色各一版） |
+| 四角星 | `wl_spark` / `wl_spark_knockout` | 「随机一个词」、练习结果 |
+| 归档箱 | `wl_archive` / `wl_archive_knockout` | 备份导出 |
+| 回复箭头 | `wl_restore` | 备份导入 |
+| 加号 | `wl_plus` | 新建词表 |
 
 颜色不走 tint，而是走资源限定符：`values/icon_colors.xml` 与 `values-night/icon_colors.xml`
 各一套 `wl_icon_ink / fill / fill2 / accent`，矢量里直接引用，夜间模式自动换色，Compose 侧
@@ -254,7 +260,7 @@ val SerifFamily = FontFamily(
 
 - 题干用衬线藏蓝 36sp 放在浅底卡上，选项 15sp 圆角 16dp
 - 选中后：正确项转绿（描边 + 12% 底），错选项转珊瑚，其余降透明度
-- 结果页给「再练这 N 个 / 再来一轮 / 返回复习」，错词以衬线胶囊列出
+- 结果页给「再练这 N 个 / 再来一轮 / 返回」，错词以衬线胶囊列出
 - 缓存不足 4 个词时不出题，直接说明原因
 
 ## 词条页（2026-11，按原站 CSS 复刻）
@@ -263,15 +269,16 @@ val SerifFamily = FontFamily(
 这是踩过坑之后的规则：**颜色一律以样式表为准**——截图里同一处文字边缘会因为抗锯齿混出
 `#14243A`、`#2D4D80` 之类的假色，和真值能差出 20 多个亮度级。
 
-| 常量（`ui/word/WordScreen.kt`） | 值 | 对应原站 |
+| `WordLook` 字段（`ui/word/WordScreen.kt`） | 值 | 对应原站 |
 |---|---|---|
-| `RefHeadline` | `#00578A` | `.word-area h1` / `.span-replace-h3`（标题、音标） |
-| `RefLink` | `#0090E3` | 描边按钮、链接 |
-| `RefLead` | `#444444` | `.blurb` 正文 |
-| `RefForms` | `#545454` | `p.word-forms` |
-| `RefExample` | `#666666` | 例句 |
-| `RefPanel` | `#EDF7FC` | 浅蓝底块 |
-| `RefBanner` | `#BE6DCF` | `Definitions of …` 紫色横幅 |
+| `headline` | `#00578A` | `.word-area h1` / `.span-replace-h3`（标题、音标） |
+| `link` | `#0090E3` | 描边按钮、链接 |
+| `lead` | `#222222` | `.blurb.short` 短导读 |
+| `body` | `#444444` | `.blurb.long` 长导读 |
+| `forms` | `#545454` | `p.word-forms` |
+| `example` | `#666666` | 例句 |
+| `panel` | `#EDF7FC` | 浅蓝底块 |
+| `banner` | `#BE6DCF` | `Definitions of …` 紫色横幅 |
 
 词性色沿用原站 `--pos-color-*`：
 
@@ -295,7 +302,7 @@ Other forms: quicker; quickest; quicks   ← #545454，词形加粗
 如果……                             ← 短导读（衬线 17/28）
 这段词还有一层意思……                 ← 长导读（无衬线 15/25 #444）
 ▛ Definitions of quick ▟          ← 紫色斜角横幅，白字斜体词名
-1. (adjective)  moving quickly…    ← 编号列 26dp + 词性胶囊列 86dp + 正文
+1. (adjective) moving quickly…    ← 编号 24dp + 词性胶囊 + 正文
    "quick of foot"                 ← 斜体例句
    synonyms: agile, nimble, spry   ← 藏蓝，整行可点进同义词页
    显示全部 8 个义项 · 全部同义词     ← 两个文字按钮
@@ -303,9 +310,8 @@ Word family                        ← <vcom:wordfamily>，胶囊可点
 复习进度 [====----] 0/8            ← 只在已收藏时出现，FSRS 本地状态
 ```
 
-- **义项对齐**靠固定列宽：序号列 26dp、词性胶囊列 86dp，胶囊用 1dp 同色 40% 描边，
-  这样「(adjective)」不会把正文推成参差的左边缘
-- **收藏态**：书签为实心时用首页亮蓝 `#005AFB`（`wl.primary`），未收藏用 `inkMuted`
+- **义项行**：序号 24dp + 词性胶囊（10% 同色底 + 1dp 40% 同色描边）+ 正文
+- **收藏态**：已收藏用亮蓝填充书签（`#005AFB` + 白结），未收藏用主题双色书签（`wl_icon_fill` + 珊瑚结）
 - 正文默认只显示 4 条义项，与参考站折叠行为一致
 - **不再有底部双按钮**：加词表走标题旁的 `Add to list`，加复习走右上书签，
   底部重复一次只是把同一动作说两遍，还占掉半屏

@@ -9,7 +9,7 @@
 
 ---
 
-## 现在能做什么（v0.1）
+## 现在能做什么（v0.2）
 
 | 功能 | 状态 |
 |---|---|
@@ -35,7 +35,7 @@
 | 离线包 / CSV 导入 | ⬜ 路线图 |
 
 **没有登录、没有账号、没有服务端。** 所有数据都在设备本地（Room + 30 天词典缓存），
-换设备时导出数据库即可。
+换设备时从「备份与恢复」导出一份 JSON 文件即可。
 
 ---
 
@@ -70,7 +70,7 @@ interface DictionarySource {
     val id: String
     val displayName: String
     suspend fun lookup(term: String): WordEntry?
-    suspend fun suggest(prefix: String): List<String>
+    suspend fun suggest(prefix: String): List<Suggestion>
     suspend fun random(): String?
 }
 ```
@@ -95,11 +95,18 @@ Vocabulary.com 的 VocabTrainer、词表进度、Bowl 排名都在**服务端按
 
 ## 构建
 
-需要 JDK 17+ 与 Android SDK（compileSdk 35）。本机已用 Android Studio 自带的 JBR 验证：
+需要 JDK 17+ 与 Android SDK（compileSdk 35）。可以直接用 Android Studio 自带的 JBR：
 
 ```bash
+# macOS / Linux
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 ./gradlew :app:assembleDebug
+```
+
+```powershell
+# Windows PowerShell
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+.\gradlew.bat :app:assembleDebug
 ```
 
 产物：`app/build/outputs/apk/debug/app-debug.apk`
@@ -119,7 +126,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell settings put global http_proxy 10.0.2.2:7890   # 换成你的代理端口
 ```
 
-真机不需要这一步；只要设备本身能访问 `en.wiktionary.org` 即可。
+真机不需要这一步；只要设备本身能访问 `www.vocabulary.com` 与 `en.wiktionary.org` 即可。
 
 ---
 
@@ -177,13 +184,13 @@ app/src/main/java/dev/wordloom/
     ├── components/Waves.kt            波浪分割 / 搜索波纹
     ├── home/ search/ word/ review/    主流程界面
     ├── lists/                         词表列表 / 详情 / 加词弹窗
-    ├── map/                           可拖拽世界地图 + 自动巡航（PassiveMapView）
+    ├── map/                           可拖拽世界地图 + 自动巡航（MapLibre）
     └── WordloomViewModel.kt           单一状态源
 ```
 
 ## 发布
 
-1. 改 `app/build.gradle.kts`：`versionCode` +1，`versionName` 升一个补丁位（0.1.1 → 0.1.2）
+1. 改 `app/build.gradle.kts`：`versionCode` +1，`versionName` 升一个补丁位（0.2.0 → 0.2.1）
 2. `./gradlew :app:assembleRelease`（签名读 `local.properties`，缺省回退 debug 签名）
 3. `gh release create v<versionName> app/build/outputs/apk/release/app-release.apk`
 4. 若只是替换已有版本的资产：`gh release upload v<versionName> <apk> --clobber`
@@ -192,8 +199,7 @@ app/src/main/java/dev/wordloom/
 
 1. **CSV 导入词表**：粘贴 / 选文件导入，去重后批量落库
 2. **离线包**：预打包 WordNet 子集（约 10 万词），无网可查
-3. **导出/导入备份**：JSON 备份 Room 三张表，方便换机
-4. **发布准备**：`git init`、LICENSE、切回 Wiktionary 数据源、隐私说明（无采集）
+3. **发布准备**：补充 LICENSE、切回 Wiktionary 数据源、隐私说明（无采集）
 
 ## 许可
 
@@ -201,4 +207,5 @@ app/src/main/java/dev/wordloom/
 - 词典正文：**不随仓库分发**。默认 Vocabulary.com 源为个人自用，正文版权归 IXL Learning；
   公开发布请切到 `WiktionarySource`（CC BY-SA 4.0）
 - 音频：`audio.vocabulary.com`（Vocabulary.com 源）/ Wikimedia Commons（Wiktionary 源）
-- 词条页与同义词页都不再摆「来源」行；署名只留在本 README 与 `docs/`
+- 当前为个人自用，词条页与同义词页不显示「来源」行。若对外分发并切到
+  `WiktionarySource`，需在词条页恢复来源链接与 CC BY-SA 4.0 署名。

@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -71,8 +70,12 @@ fun ReviewScreen(
     val feedback = rememberAppFeedback()
     var queue by remember { mutableStateOf<List<CardEntity>>(emptyList()) }
     var reviewed by remember { mutableIntStateOf(0) }
+    // The flow starts as an empty list, so "no cards" and "not read yet" look
+    // identical until the first emission lands.
+    var loaded by remember { mutableStateOf(false) }
 
     LaunchedEffect(dueCards) {
+        loaded = true
         if (queue.isEmpty() && dueCards.isNotEmpty()) queue = dueCards
     }
 
@@ -136,7 +139,11 @@ fun ReviewScreen(
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
-                    text = if (queue.isEmpty()) "今天清空" else "${queue.size} 个待复习",
+                    text = when {
+                        !loaded -> "读取中…"
+                        queue.isEmpty() -> "今天清空"
+                        else -> "${queue.size} 个待复习"
+                    },
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                     color = Color.White.copy(alpha = 0.72f),
                     modifier = Modifier.padding(bottom = 4.dp),
@@ -147,18 +154,26 @@ fun ReviewScreen(
 
         if (current == null) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                if (!loaded) {
                     Text(
-                        text = "今天的复习完成了",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = wl.ink,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = "去查几个新词，或者回来再看一遍收藏夹。",
+                        text = "正在载入今日卡片…",
                         style = MaterialTheme.typography.bodyMedium,
                         color = wl.inkMuted,
                     )
+                } else {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "今天的复习完成了",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = wl.ink,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = "去查几个新词，或者回来再看一遍收藏夹。",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = wl.inkMuted,
+                        )
+                    }
                 }
             }
             return@Column
@@ -178,9 +193,9 @@ fun ReviewScreen(
             Spacer(Modifier.height(12.dp))
             val view = LocalView.current
 
-            // A rated card slides out the way the thumb moved and the next one
-            // arrives a beat behind it; both live inside a fixed-height box, so
-            // nothing below them re-measures.
+            // A rated card slides out to the left and the next one arrives from
+            // the right; both live inside a fixed-height box, so nothing below
+            // them re-measures.
             AnimatedContent(
                 targetState = current,
                 modifier = Modifier
@@ -309,9 +324,10 @@ fun ReviewScreen(
                     label = "良好",
                     hint = "记得",
                     background = wl.primary,
-                    contentColor = Color.White,
+                    contentColor = wl.onPrimary,
                     enabled = revealed,
                     onClick = {
+                        feedback.commit(view)
                         onRate(current, Rating.Good)
                         queue = queue.drop(1); reviewed += 1
                     },
@@ -324,6 +340,7 @@ fun ReviewScreen(
                     contentColor = wl.mintInk,
                     enabled = revealed,
                     onClick = {
+                        feedback.commit(view)
                         onRate(current, Rating.Easy)
                         queue = queue.drop(1); reviewed += 1
                     },

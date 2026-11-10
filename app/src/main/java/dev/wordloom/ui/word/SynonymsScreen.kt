@@ -44,6 +44,7 @@ import dev.wordloom.ui.theme.WordloomTheme
 @Composable
 fun SynonymsScreen(
     entry: WordEntry?,
+    loading: Boolean,
     onBack: () -> Unit,
     onWord: (String) -> Unit,
 ) {
@@ -88,7 +89,13 @@ fun SynonymsScreen(
         val loaded = entry
         if (loaded == null || groups.isEmpty()) {
             Text(
-                text = if (loaded == null) "正在读取词条…" else "这个词暂时没有收录同义词。",
+                text = when {
+                    loaded != null -> "这个词暂时没有收录同义词。"
+                    loading -> "正在读取词条…"
+                    // The load finished without an entry: the word page will show
+                    // the actual error; here we must not pretend to still be busy.
+                    else -> "没能读到这个词的词条，返回词页重试。"
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = wl.inkMuted,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),

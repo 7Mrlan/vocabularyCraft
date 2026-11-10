@@ -37,6 +37,8 @@ object YoudaoTranslator {
             val word = query.split(Regex("\\s+")).size == 1 && query.all { it.isLetter() || it == '-' }
             val result = if (word) dictionary(query) ?: sentence(query) else sentence(query)
             result?.takeIf { it.isNotBlank() } ?: error("有道没有返回译文")
+        }.onFailure { error ->
+            if (error is kotlinx.coroutines.CancellationException) throw error
         }
     }
 

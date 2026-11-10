@@ -32,17 +32,11 @@ interface WordloomDao {
     @Query("SELECT * FROM cards WHERE word = :word LIMIT 1")
     suspend fun card(word: String): CardEntity?
 
-    @Query("SELECT * FROM cards WHERE dueAt <= :now ORDER BY dueAt ASC LIMIT 40")
-    suspend fun dueCards(now: Long): List<CardEntity>
-
     @Upsert
     suspend fun putCard(entity: CardEntity)
 
     @Query("DELETE FROM cards WHERE word = :word")
     suspend fun deleteCard(word: String)
-
-    @Query("SELECT COUNT(*) FROM cards")
-    suspend fun cardCount(): Int
 
     @Query("DELETE FROM cached_words WHERE fetchedAt < :before")
     suspend fun trimCache(before: Long)
@@ -58,15 +52,6 @@ interface WordloomDao {
 
     @Insert
     suspend fun insertList(list: WordListEntity): Long
-
-    @Query("DELETE FROM lists WHERE id = :id")
-    suspend fun deleteList(id: Long)
-
-    @Query("DELETE FROM list_words WHERE listId = :id")
-    suspend fun clearListWords(id: Long)
-
-    @Query("SELECT * FROM list_words WHERE listId = :id ORDER BY addedAt DESC")
-    fun wordsInList(id: Long): Flow<List<ListWordEntity>>
 
     /** List words joined with whatever we already cached, so rows can show a gloss. */
     @Query(

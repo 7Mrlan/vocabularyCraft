@@ -33,7 +33,6 @@ import org.maplibre.android.style.layers.SymbolLayer
  */
 object BasemapStyle {
     const val POSITRON = "https://tiles.openfreemap.org/styles/positron"
-    const val BRIGHT = "https://tiles.openfreemap.org/styles/bright"
     const val LIBERTY = "https://tiles.openfreemap.org/styles/liberty"
 }
 
@@ -53,10 +52,8 @@ fun WorldMap(
     styleUrl: String = BasemapStyle.LIBERTY,
     target: LatLng = LatLng(24.0, 12.0),
     zoom: Double = 1.4,
-    interactive: Boolean = true,
     tour: Boolean = false,
     tourZoom: Double = 2.6,
-    onMapReady: (MapLibreMap) -> Unit = {},
     onTourStop: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -67,11 +64,8 @@ fun WorldMap(
     val tourStop by rememberUpdatedState(onTourStop)
     var loadedMap by remember { mutableStateOf<MapLibreMap?>(null) }
 
-    val mapView = remember(interactive) {
-        // MapView consumes every touch even with gestures off, which would freeze
-        // the feed it sits in. In passive mode we drop touches before the map sees them.
-        val view: MapView = if (interactive) MapView(context) else PassiveMapView(context)
-        view.apply {
+    val mapView = remember {
+        MapView(context).apply {
             onCreate(null)
             isFocusable = false
         }
@@ -93,9 +87,9 @@ fun WorldMap(
             map.uiSettings.apply {
                 isRotateGesturesEnabled = false
                 isTiltGesturesEnabled = false
-                isZoomGesturesEnabled = interactive
-                isScrollGesturesEnabled = interactive
-                isDoubleTapGesturesEnabled = interactive
+                isZoomGesturesEnabled = true
+                isScrollGesturesEnabled = true
+                isDoubleTapGesturesEnabled = true
                 isAttributionEnabled = true
                 isCompassEnabled = false
                 isLogoEnabled = false
@@ -108,7 +102,6 @@ fun WorldMap(
             map.setStyle(Style.Builder().fromUri(styleUrl)) { style ->
                 style.preferEnglishLabels()
                 loadedMap = map
-                onMapReady(map)
             }
         }
 
@@ -160,19 +153,4 @@ private fun Style.preferEnglishLabels() {
     layers.filterIsInstance<SymbolLayer>().forEach { layer ->
         layer.setProperties(PropertyFactory.textField(english))
     }
-}
-
-/**
- * A MapView that never takes touch input. Used for the decorative card on the
- * home feed, where the parent list must keep scrolling.
- */
-private class PassiveMapView(context: android.content.Context) : MapView(context) {
-    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean = false
-}
-
-fun MapLibreMap.flyTo(target: LatLng, zoom: Double = 2.0) {
-    cameraPosition = CameraPosition.Builder()
-        .target(target)
-        .zoom(zoom)
-        .build()
 }

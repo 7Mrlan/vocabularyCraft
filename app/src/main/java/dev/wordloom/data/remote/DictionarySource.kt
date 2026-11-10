@@ -16,6 +16,11 @@ interface DictionarySource {
 
     suspend fun lookup(term: String): WordEntry?
 
+    /**
+     * Returns an empty list for a legitimate "nothing matched". Throws when the
+     * lookup itself failed, so the UI can tell "no match" apart from "no answer"
+     * and offer a retry.
+     */
     suspend fun suggest(prefix: String): List<Suggestion>
 
     suspend fun random(): String?

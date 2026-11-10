@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
@@ -127,8 +128,10 @@ private fun BackupRow(
             Icon(
                 painter = painterResource(iconRes),
                 contentDescription = null,
-                tint = if (enabled) Color.Unspecified else Color.Unspecified.copy(alpha = 0.4f),
-                modifier = Modifier.size(19.dp),
+                tint = Color.Unspecified,
+                modifier = Modifier
+                    .size(19.dp)
+                    .alpha(if (enabled) 1f else 0.4f),
             )
         }
         Spacer(Modifier.width(12.dp))

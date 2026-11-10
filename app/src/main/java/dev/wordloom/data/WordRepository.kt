@@ -5,7 +5,6 @@ import dev.wordloom.data.local.CardEntity
 import dev.wordloom.data.local.WordListEntity
 import dev.wordloom.data.local.ListWithCount
 import dev.wordloom.data.local.ListWordEntity
-import dev.wordloom.data.local.ListWordRow
 import dev.wordloom.data.local.WordloomDao
 import dev.wordloom.data.model.Suggestion
 import dev.wordloom.data.model.WordEntry
@@ -38,20 +37,41 @@ class WordRepository(
         if (cleaned.isEmpty()) return null
         val key = cleaned.lowercase()
 
-        if (!forceRefresh) {
-            dao.cachedWord(key)?.let { cached ->
-                if (System.currentTimeMillis() - cached.fetchedAt < cacheTtl) {
-                    decode(cached)?.let { entry ->
-                        if (markRecent) dao.touchRecent(key, System.currentTimeMillis())
-                        return entry
-                    }
-                }
+        // Keep the last good copy even when it is past its freshness window: if
+        // the network is down, a stale definition beats an error page. A forced
+        // refresh skips the read above but still keeps this copy as a fallback.
+        val cached = dao.cachedWord(key)
+        if (!forceRefresh && cached != null &&
+            System.currentTimeMillis() - cached.fetchedAt < cacheTtl
+        ) {
+            decode(cached)?.let { entry ->
+                if (markRecent) dao.touchRecent(key, System.currentTimeMillis())
+                return entry
             }
         }
+        val stale = cached?.let(::decode)
 
         Log.d(TAG, "cache miss for $key, hitting ${source.id}")
         val started = System.currentTimeMillis()
-        val entry = source.lookup(cleaned) ?: return null
+        val fetched = try {
+            source.lookup(cleaned)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            if (stale != null) {
+                Log.w(TAG, "source failed for $key, serving stale cache", error)
+                if (markRecent) dao.touchRecent(key, System.currentTimeMillis())
+                return stale
+            }
+            throw error
+        }
+        if (fetched == null) {
+            // "Not found" for a word we had on disk is almost always a failed
+            // request; the cached copy is still the best answer we have.
+            if (stale != null && markRecent) dao.touchRecent(key, System.currentTimeMillis())
+            return stale
+        }
+        val entry = fetched
         Log.d(TAG, "source returned '${entry.word}' in ${System.currentTimeMillis() - started}ms")
         dao.putWord(
             CachedWordEntity(
@@ -64,6 +84,11 @@ class WordRepository(
         return entry
     }
 
+    /**
+     * Suggestions for [prefix]. Returns an empty list when nothing matched and
+     * throws when the lookup could not be completed, so the caller can show a
+     * retry instead of a false "no match".
+     */
     suspend fun suggest(prefix: String): List<Suggestion> =
         if (prefix.isBlank()) emptyList() else source.suggest(prefix)
 
@@ -101,7 +126,7 @@ class WordRepository(
      * name + createdAt so importing the same file twice does not duplicate them.
      */
     suspend fun importBackup(text: String): Result<Int> = withContext(Dispatchers.IO) {
-        runCatching {
+        try {
             val file = json.decodeFromString(BackupFile.serializer(), text)
             require(file.version <= 1) { "备份文件版本过新" }
 
@@ -119,7 +144,11 @@ class WordRepository(
                 val target = idMap[row.listId] ?: return@forEach
                 dao.addToList(row.copy(listId = target))
             }
-            file.cards.size + file.lists.size
+            Result.success(file.cards.size + file.lists.size)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            Result.failure(error)
         }
     }
 
@@ -209,11 +238,6 @@ class WordRepository(
     }
 
     suspend fun removeFromList(listId: Long, word: String) = dao.removeFromList(listId, word)
-
-    suspend fun deleteList(listId: Long) {
-        dao.clearListWords(listId)
-        dao.deleteList(listId)
-    }
 
     suspend fun trimOldCache() = dao.trimCache(System.currentTimeMillis() - 90 * DAY_MS)
 

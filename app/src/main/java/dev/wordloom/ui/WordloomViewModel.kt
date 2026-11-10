@@ -28,7 +28,11 @@ import kotlinx.coroutines.launch
 sealed interface WordUiState {
     data object Idle : WordUiState
     data class Loading(val term: String) : WordUiState
-    data class Loaded(val entry: WordEntry, val inDeck: Boolean) : WordUiState
+    data class Loaded(
+        val entry: WordEntry,
+        val inDeck: Boolean,
+        val requestedTerm: String = entry.word,
+    ) : WordUiState
     data class NotFound(val term: String) : WordUiState
     data class Failed(val term: String, val message: String) : WordUiState
 }
@@ -43,6 +47,12 @@ data class SuggestUiState(
     val items: List<Suggestion> = emptyList(),
 )
 
+/** Questions plus a round number, so a repeat round still resets the screen. */
+data class QuizState(
+    val questions: List<QuizQuestion> = emptyList(),
+    val round: Int = 0,
+)
+
 class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
 
     private val _wordState = MutableStateFlow<WordUiState>(WordUiState.Idle)
@@ -51,9 +61,8 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
     private val _suggest = MutableStateFlow(SuggestUiState())
     val suggest: StateFlow<SuggestUiState> = _suggest.asStateFlow()
 
-    private val _randomRequest = MutableStateFlow(0)
-
     private var suggestJob: Job? = null
+    private var wordJob: Job? = null
 
     val recent = repo.recentWords()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -78,8 +87,10 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
     val lists: StateFlow<List<ListWithCount>> = repo.lists()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private val _quiz = MutableStateFlow<List<QuizQuestion>>(emptyList())
-    val quiz: StateFlow<List<QuizQuestion>> = _quiz.asStateFlow()
+    private val _quiz = MutableStateFlow(QuizState())
+    val quiz: StateFlow<QuizState> = _quiz.asStateFlow()
+
+    private var quizLoading = false
 
     suspend fun exportBackup(): String = repo.exportBackup()
 
@@ -87,9 +98,17 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
 
     /** One round of four-choice practice, built from the local cache only. */
     fun startQuiz() {
+        // A tap during the previous round's load must not queue a second one.
+        if (quizLoading) return
+        quizLoading = true
         viewModelScope.launch {
-            val entries = runCatching { repo.cachedEntries().first() }.getOrElse { emptyList() }
-            _quiz.value = QuizBuilder.build(entries)
+            try {
+                val entries = runCatching { repo.cachedEntries().first() }.getOrElse { emptyList() }
+                val previous = _quiz.value
+                _quiz.value = QuizState(QuizBuilder.build(entries), previous.round + 1)
+            } finally {
+                quizLoading = false
+            }
         }
     }
 
@@ -109,6 +128,9 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
 
     init {
         loadDailyWord()
+        // Entries past the 30-day freshness window are refetched anyway; keep
+        // the cache bounded without touching cards or lists.
+        trimCache()
     }
 
     fun loadDailyWord() {
@@ -131,15 +153,17 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
         viewModelScope.launch { repo.removeFromList(listId, word) }
     }
 
-    fun deleteList(listId: Long) {
-        viewModelScope.launch { repo.deleteList(listId) }
-    }
-
     fun openList(listId: Long) {
         listJob?.cancel()
         listJob = viewModelScope.launch {
             repo.wordsInList(listId).collect { _listWords.value = it }
         }
+    }
+
+    /** Stop observing list rows once the detail screen is gone. */
+    fun closeList() {
+        listJob?.cancel()
+        listJob = null
     }
 
     private var listJob: Job? = null
@@ -150,9 +174,10 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
 
     /** Seeds the page from an entry we already hold, so it opens without a spinner. */
     fun showWord(entry: WordEntry) {
-        _wordState.value = WordUiState.Loaded(entry, false)
+        val knownInDeck = cards.value.any { it.word.equals(entry.word, ignoreCase = true) }
+        _wordState.value = WordUiState.Loaded(entry, knownInDeck, entry.word)
         viewModelScope.launch {
-            val inDeck = runCatching { repo.isInDeck(entry.word) }.getOrDefault(false)
+            val inDeck = runCatching { repo.isInDeck(entry.word) }.getOrDefault(knownInDeck)
             val state = _wordState.value
             if (state is WordUiState.Loaded && state.entry.word.equals(entry.word, ignoreCase = true)) {
                 _wordState.value = state.copy(inDeck = inDeck)
@@ -163,26 +188,39 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
     fun loadWord(term: String, forceRefresh: Boolean = false) {
         val cleaned = term.trim()
         if (cleaned.isEmpty()) return
-        // Already showing this word: a second pass would only flash the skeleton.
+        // Already showing or already fetching this word: a second pass would only
+        // flash the skeleton (or cancel the request the first tap started).
         val current = _wordState.value
-        if (!forceRefresh && current is WordUiState.Loaded &&
-            current.entry.word.equals(cleaned, ignoreCase = true)
-        ) {
-            return
+        if (!forceRefresh) {
+            if (current is WordUiState.Loaded &&
+                (current.entry.word.equals(cleaned, ignoreCase = true) ||
+                    current.requestedTerm.equals(cleaned, ignoreCase = true))
+            ) return
+            if (current is WordUiState.Loading && current.term.equals(cleaned, ignoreCase = true)) return
         }
+        wordJob?.cancel()
         _wordState.value = WordUiState.Loading(cleaned)
-        viewModelScope.launch {
-            runCatching { repo.lookup(cleaned, forceRefresh) }
-                .onSuccess { entry ->
-                    _wordState.value = if (entry == null || !entry.hasContent && entry.ipa.isEmpty()) {
-                        WordUiState.NotFound(cleaned)
-                    } else {
-                        WordUiState.Loaded(entry, repo.isInDeck(entry.word))
-                    }
+        wordJob = viewModelScope.launch {
+            val result = try {
+                Result.success(repo.lookup(cleaned, forceRefresh))
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                Result.failure(error)
+            }
+            // A newer request owns the screen now; this answer is stale.
+            val state = _wordState.value
+            if (state !is WordUiState.Loading || state.term != cleaned) return@launch
+            result.onSuccess { entry ->
+                _wordState.value = if (entry == null || (!entry.hasContent && entry.ipa.isEmpty())) {
+                    WordUiState.NotFound(cleaned)
+                } else {
+                    val inDeck = runCatching { repo.isInDeck(entry.word) }.getOrDefault(false)
+                    WordUiState.Loaded(entry, inDeck, cleaned)
                 }
-                .onFailure { error ->
-                    _wordState.value = WordUiState.Failed(cleaned, error.message ?: "查询失败")
-                }
+            }.onFailure { error ->
+                _wordState.value = WordUiState.Failed(cleaned, error.message ?: "查询失败")
+            }
         }
     }
 
@@ -198,6 +236,7 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
         _suggest.value = SuggestUiState(query, SuggestPhase.Typing, _suggest.value.items)
         suggestJob = viewModelScope.launch {
             delay(250)
+            if (_suggest.value.query != query) return@launch
             _suggest.value = _suggest.value.copy(phase = SuggestPhase.Loading)
             val items = try {
                 repo.suggest(query)
@@ -205,7 +244,9 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
                 throw cancelled
             } catch (_: Throwable) {
                 if (_suggest.value.query == query) {
-                    _suggest.value = _suggest.value.copy(phase = SuggestPhase.Error)
+                    // The old rows belong to an earlier query; keeping them would
+                    // hide the failure behind results the person no longer asked for.
+                    _suggest.value = SuggestUiState(query, SuggestPhase.Error)
                 }
                 return@launch
             }
@@ -219,10 +260,22 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
         }
     }
 
-    fun randomWord(onReady: (String) -> Unit) {
+    /** Re-runs the current suggestion request after a failure. */
+    fun retrySuggest() {
+        val query = _suggest.value.query
+        if (query.isNotEmpty()) onQueryChanged(query)
+    }
+
+    fun randomWord(onReady: (String) -> Unit, onFailed: () -> Unit = {}) {
         viewModelScope.launch {
-            val word = repo.randomWord()
-            if (word != null) onReady(word)
+            val word = try {
+                repo.randomWord()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                null
+            }
+            if (word != null) onReady(word) else onFailed()
         }
     }
 

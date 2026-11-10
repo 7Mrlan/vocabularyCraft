@@ -9,7 +9,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -62,7 +61,12 @@ fun WordloomTheme(
         val context = LocalContext.current
         SideEffect {
             val window = (context as? Activity)?.window ?: return@SideEffect
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !darkTheme
+                // The in-app toggle can disagree with the system theme, so the
+                // bar icons must follow the app's choice, not the system's.
+                isAppearanceLightNavigationBars = !darkTheme
+            }
         }
     }
 
@@ -74,5 +78,3 @@ fun WordloomTheme(
         )
     }
 }
-
-val Transparent = Color(0x00000000)

@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -66,6 +65,5 @@ private fun Counter(label: String, value: Int, contentColor: Color, compact: Boo
             style = MaterialTheme.typography.bodySmall,
             color = contentColor.copy(alpha = 0.8f),
         )
-        Spacer(Modifier.width(0.dp))
     }
 }

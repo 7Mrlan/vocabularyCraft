@@ -1,6 +1,8 @@
 package dev.wordloom.ui.word
 
 import android.animation.ValueAnimator
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,8 +24,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -32,13 +32,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.ui.graphics.Brush
 import com.valentinilk.shimmer.shimmer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -49,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
@@ -76,14 +70,10 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.wordloom.data.translate.TranslationService
@@ -167,6 +157,7 @@ private fun posColor(pos: String, dark: Boolean = false): Color {
 
 @Composable
 fun WordScreen(
+    term: String,
     state: WordUiState,
     card: CardEntity?,
     lists: List<dev.wordloom.data.local.ListWithCount>,
@@ -179,6 +170,12 @@ fun WordScreen(
     onOpenSynonyms: () -> Unit,
 ) {
     val wl = WordloomTheme.colors
+    // The ViewModel holds a single wordState; on the first frame of a new
+    //word/{term} destination it may still carry the previous word's entry.
+    val loadedForTerm = (state as? WordUiState.Loaded)?.takeIf {
+        it.requestedTerm.equals(term.trim(), ignoreCase = true) ||
+            it.entry.word.equals(term.trim(), ignoreCase = true)
+    }
 
     Column(
         modifier = Modifier
@@ -202,9 +199,9 @@ fun WordScreen(
             }
             // No word text here: the 36sp headline right below already says it.
             Spacer(Modifier.weight(1f))
-            if (state is WordUiState.Loaded) {
-                val inDeck = state.inDeck
-                IconButton(onClick = { onToggleDeck(state.entry, inDeck) }) {
+            if (loadedForTerm != null) {
+                val inDeck = card != null || loadedForTerm.inDeck
+                IconButton(onClick = { onToggleDeck(loadedForTerm.entry, inDeck) }) {
                     Icon(
                         painter = painterResource(
                             if (inDeck) R.drawable.wl_bookmark_on else R.drawable.wl_bookmark,
@@ -226,52 +223,54 @@ fun WordScreen(
         // Skeleton and content share the title position, so the swap is invisible
         // and needs no extra animated layer.
         val current = state
-        when (current) {
-                    is WordUiState.Loading -> WordLoading(
-                        term = current.term,
-                        look = if (wl.isDark) DarkLook else LightLook,
-                        wl = wl,
+        when {
+            loadedForTerm != null -> ContentFade(loadedForTerm.entry.word) {
+                WordContent(
+                    entry = loadedForTerm.entry,
+                    inDeck = card != null || loadedForTerm.inDeck,
+                    card = card,
+                    lists = lists,
+                    onAddToList = onAddToList,
+                    onCreateList = onCreateList,
+                    onWord = onWord,
+                    onOpenSynonyms = onOpenSynonyms,
+                )
+            }
+
+            current is WordUiState.Loading || current is WordUiState.Loaded -> WordLoading(
+                term = term,
+                look = if (wl.isDark) DarkLook else LightLook,
+                wl = wl,
+            )
+
+            current is WordUiState.NotFound && current.term.equals(term.trim(), ignoreCase = true) -> CenterBox {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("没有找到 “${current.term}”", style = MaterialTheme.typography.titleMedium, color = wl.ink)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "检查拼写，或换一个词形试试。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = wl.inkMuted,
                     )
-
-                    is WordUiState.NotFound -> CenterBox {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("没有找到 “${current.term}”", style = MaterialTheme.typography.titleMedium, color = wl.ink)
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "检查拼写，或换一个词形试试。",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = wl.inkMuted,
-                            )
-                        }
-                    }
-
-                    is WordUiState.Failed -> CenterBox {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("查询失败", style = MaterialTheme.typography.titleMedium, color = wl.ink)
-                            Spacer(Modifier.height(8.dp))
-                            Text(current.message, style = MaterialTheme.typography.bodySmall, color = wl.inkMuted)
-                            Spacer(Modifier.height(16.dp))
-                            Button(onClick = onRetry) { Text("重试") }
-                        }
-                    }
-
-                    is WordUiState.Loaded -> ContentFade(current.entry.word) {
-                        WordContent(
-                            entry = current.entry,
-                            inDeck = current.inDeck,
-                            card = card,
-                            lists = lists,
-                            onAddToList = onAddToList,
-                            onCreateList = onCreateList,
-                            onWord = onWord,
-                            onOpenSynonyms = onOpenSynonyms,
-                        )
-                    }
-
-                    WordUiState.Idle -> CenterBox {
-                        Text("输入一个词开始", color = wl.inkMuted)
-                    }
                 }
+            }
+
+            current is WordUiState.Failed && current.term.equals(term.trim(), ignoreCase = true) -> CenterBox {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("查询失败", style = MaterialTheme.typography.titleMedium, color = wl.ink)
+                    Spacer(Modifier.height(8.dp))
+                    Text(current.message, style = MaterialTheme.typography.bodySmall, color = wl.inkMuted)
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick = onRetry) { Text("重试") }
+                }
+            }
+
+            else -> WordLoading(
+                term = term,
+                look = if (wl.isDark) DarkLook else LightLook,
+                wl = wl,
+            )
+        }
     }
 }
 
@@ -306,10 +305,7 @@ private fun titleSizeFor(word: String) = when {
     else -> 22.sp
 }
 
-@OptIn(
-    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
-    androidx.compose.animation.ExperimentalSharedTransitionApi::class,
-)
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun WordContent(
     entry: WordEntry,
@@ -423,34 +419,55 @@ private fun WordContent(
                 ) {
                     // A region can carry more than one clip ("either" ships two US takes),
                     // and the reference page shows one speaker per clip.
-                    val usClips = entry.audio.filter { it.label.equals("US", true) }
-                    val usIpa = entry.ipa.firstOrNull { it.label.equals("US", true) }?.text ?: entry.ipa.firstOrNull()?.text
-                    if (usClips.isNotEmpty() || usIpa != null) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(text = "🇺🇸", fontSize = 16.sp)
-                            usClips.forEach { clip -> SpeakerButton(url = clip.url) }
-                            if (usIpa != null) {
-                                Text(
-                                    text = usIpa,
-                                    fontFamily = SerifFamily,
-                                    fontSize = 17.sp,
-                                    color = look.headline,
-                                )
+                    val regionLabeled = entry.ipa.any {
+                        it.label.equals("US", true) || it.label.equals("UK", true)
+                    } || entry.audio.any {
+                        it.label.equals("US", true) || it.label.equals("UK", true)
+                    }
+                    if (regionLabeled) {
+                        val usClips = entry.audio.filter { it.label.equals("US", true) }
+                        val usIpa = entry.ipa.firstOrNull { it.label.equals("US", true) }?.text ?: entry.ipa.firstOrNull()?.text
+                        if (usClips.isNotEmpty() || usIpa != null) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(text = "🇺🇸", fontSize = 16.sp)
+                                usClips.forEach { clip -> SpeakerButton(url = clip.url) }
+                                if (usIpa != null) {
+                                    Text(
+                                        text = usIpa,
+                                        fontFamily = SerifFamily,
+                                        fontSize = 17.sp,
+                                        color = look.headline,
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    val ukAudio = entry.audio.firstOrNull { it.label.equals("UK", true) }
-                    val ukIpa = entry.ipa.firstOrNull { it.label.equals("UK", true) }?.text
-                    if (ukAudio != null || ukIpa != null) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(text = "🇬🇧", fontSize = 16.sp)
-                            if (ukAudio != null) {
-                                SpeakerButton(url = ukAudio.url)
+                        val ukAudio = entry.audio.firstOrNull { it.label.equals("UK", true) }
+                        val ukIpa = entry.ipa.firstOrNull { it.label.equals("UK", true) }?.text
+                        if (ukAudio != null || ukIpa != null) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(text = "🇬🇧", fontSize = 16.sp)
+                                if (ukAudio != null) {
+                                    SpeakerButton(url = ukAudio.url)
+                                }
+                                if (ukIpa != null) {
+                                    Text(
+                                        text = ukIpa,
+                                        fontFamily = SerifFamily,
+                                        fontSize = 17.sp,
+                                        color = look.headline,
+                                    )
+                                }
                             }
-                            if (ukIpa != null) {
+                        }
+                    } else {
+                        // Wiktionary does not tag a region: list the clips without a
+                        // flag rather than putting them under one we cannot vouch for.
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            entry.audio.forEach { clip -> SpeakerButton(url = clip.url) }
+                            if (entry.ipa.isNotEmpty()) {
                                 Text(
-                                    text = ukIpa,
+                                    text = entry.ipa.joinToString(" · ") { it.text },
                                     fontFamily = SerifFamily,
                                     fontSize = 17.sp,
                                     color = look.headline,
@@ -818,13 +835,9 @@ private fun WordListsDialog(
             onAddToList(id, entry.word)
             onDismiss()
         },
-        onCreate = { name, onCreated ->
-            onCreateList(name) { id ->
-                onCreated(id)
-                onAddToList(id, entry.word)
-                onDismiss()
-            }
-        },
+        // The callback handed in by AddToListDialog already routes through
+        // onPick above, which adds the word and dismisses the sheet.
+        onCreate = { name, onCreated -> onCreateList(name, onCreated) },
     )
 }
 
@@ -897,7 +910,6 @@ private fun WordLoading(
     term: String,
     look: WordLook,
     wl: dev.wordloom.ui.theme.WlColors,
-    titleModifier: Modifier = Modifier,
 ) {
     Column(
         modifier = Modifier
@@ -913,7 +925,6 @@ private fun WordLoading(
             maxLines = 1,
             softWrap = false,
             overflow = TextOverflow.Ellipsis,
-            modifier = titleModifier,
         )
         Spacer(Modifier.height(14.dp))
         // Only the bars shimmer; the word itself stays solid, so a slow lookup

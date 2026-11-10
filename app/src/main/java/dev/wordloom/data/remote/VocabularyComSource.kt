@@ -34,7 +34,10 @@ class VocabularyComSource(
         val cleaned = term.trim()
         if (cleaned.isEmpty()) return@withContext null
 
-        val vocabEntry = runCatching { fetchFromVocab(cleaned) }.getOrNull()
+        // A failed Vocabulary.com request still goes to the fallback, but a
+        // cancelled coroutine must stay cancelled instead of starting a second
+        // network call.
+        val vocabEntry = attempt { fetchFromVocab(cleaned) }.getOrNull()
         if (vocabEntry != null && vocabEntry.hasContent) {
             return@withContext vocabEntry
         }
@@ -52,14 +55,31 @@ class VocabularyComSource(
         val cleaned = prefix.trim()
         if (cleaned.isEmpty()) return@withContext emptyList()
 
-        val local = runCatching { suggestFromSmartSearch(cleaned) }.getOrNull().orEmpty()
-        if (local.isNotEmpty()) return@withContext local
-        fallback.suggest(cleaned)
+        // Try the site's own search first, then Wiktionary. A request that failed
+        // is not the same as a request that answered "nothing", so keep the
+        // failures and only report empty once at least one source actually replied.
+        val primary = attempt { suggestFromSmartSearch(cleaned) }
+        primary.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return@withContext it }
+
+        val fallbackResult = attempt { fallback.suggest(cleaned) }
+        fallbackResult.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return@withContext it }
+
+        if (primary.isSuccess || fallbackResult.isSuccess) return@withContext emptyList()
+        throw primary.exceptionOrNull() ?: fallbackResult.exceptionOrNull()!!
+    }
+
+    /** [runCatching] without swallowing cancellation; the caller still rethrows it. */
+    private inline fun <T> attempt(block: () -> T): Result<T> = try {
+        Result.success(block())
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+        throw cancelled
+    } catch (error: Throwable) {
+        Result.failure(error)
     }
 
     override suspend fun random(): String? = withContext(Dispatchers.IO) {
         // /randomword 302s to /dictionary/{word}; read the Location instead of following.
-        runCatching {
+        attempt {
             val request = Request.Builder()
                 .url("https://www.vocabulary.com/randomword")
                 .header("User-Agent", USER_AGENT)
@@ -82,7 +102,9 @@ class VocabularyComSource(
             .build()
 
         val body = client.newCall(request).execute().use { resp ->
-            if (!resp.isSuccessful) return emptyList()
+            // A 4xx/5xx is a failed lookup, not "no matches"; let suggest() decide
+            // whether the fallback source can still answer.
+            if (!resp.isSuccessful) error("HTTP ${resp.code} for autocomplete")
             resp.body?.string().orEmpty()
         }
         val doc = Jsoup.parse(body)

@@ -9,7 +9,7 @@ import com.google.mlkit.nl.translate.TranslatorOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import java.util.concurrent.ConcurrentHashMap
+import java.util.Collections
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -21,7 +21,13 @@ import kotlin.coroutines.resumeWithException
  */
 object TranslationService {
 
-    private val cache = ConcurrentHashMap<String, String>()
+    private const val MAX_CACHE = 256
+    private val cache: MutableMap<String, String> = Collections.synchronizedMap(
+        object : LinkedHashMap<String, String>(64, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean =
+                size > MAX_CACHE
+        },
+    )
     private var client: Translator? = null
 
     fun init() {
@@ -52,6 +58,8 @@ object TranslationService {
                 DownloadConditions.Builder().build(),
             ).await()
             translator.translate(cleaned).await()
+        }.onFailure { error ->
+            if (error is kotlinx.coroutines.CancellationException) throw error
         }.onSuccess { cache[cleaned] = it }
     }
 

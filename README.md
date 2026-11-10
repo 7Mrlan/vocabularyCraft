@@ -117,6 +117,9 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 > 首次构建会下载 Gradle 依赖，约 3–5 分钟。
 
+> **release 包只含 arm64-v8a**（体积与原因见 [`docs/BUILD.md`](docs/BUILD.md) 第 2 节）；
+> debug 包是全 ABI，模拟器照常可用。
+
 ### 模拟器 / 国内网络的注意事项
 
 如果宿主机走 HTTP 代理（`HTTP_PROXY`），模拟器默认**不会**继承，表现为查词一直转圈。
@@ -187,6 +190,15 @@ app/src/main/java/dev/wordloom/
     ├── map/                           可拖拽世界地图 + 自动巡航（MapLibre）
     └── WordloomViewModel.kt           单一状态源
 ```
+
+项目文档：
+
+| 文件 | 内容 |
+|---|---|
+| `AGENTS.md` | 给 AI 助手的硬性约定（ABI 策略、依赖卫生、错误语义、深浅色规则） |
+| `docs/DESIGN.md` | 设计系统：配色令牌、字体、动效、图标、深色模式 |
+| `docs/BUILD.md` | 构建、体积与发布：工具链、**为什么 release 只打 arm64-v8a**、签名、CI、发布前检查清单 |
+| `RESEARCH.md` | 早期可行性研究（存档，非当前实现） |
 
 ## 发布
 

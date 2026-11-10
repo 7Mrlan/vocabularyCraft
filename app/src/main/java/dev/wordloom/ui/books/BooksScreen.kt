@@ -184,7 +184,6 @@ fun BooksScreen(onBack: () -> Unit) {
                                     )
                                     position = ((target % count) + count) % count.toFloat()
                                     settling = false
-                                    if (click != 0) soundPool.play(click, 0.14f, 0.14f, 1, 0, 0.92f)
                                 }
                             },
                         ),
@@ -234,7 +233,6 @@ fun BooksScreen(onBack: () -> Unit) {
                                         } else if (spec.id != currentId) {
                                             currentId = spec.id
                                             view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                                            if (click != 0) soundPool.play(click, 0.36f, 0.36f, 1, 0, 0.9f)
                                         }
                                     },
                             )

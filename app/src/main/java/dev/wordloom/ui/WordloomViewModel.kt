@@ -295,6 +295,17 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
         }
     }
 
+    /** One rating from the study card: a new word joins the deck first. */
+    fun rateStudy(entry: WordEntry, rating: Rating, isNew: Boolean, onDone: (Int?) -> Unit = {}) {
+        viewModelScope.launch {
+            runCatching {
+                if (isNew) repo.addToDeck(entry)
+                val card = repo.card(entry.word)
+                card?.let { repo.review(it, rating).intervalDays }
+            }.onSuccess(onDone).onFailure { onDone(null) }
+        }
+    }
+
     fun trimCache() {
         viewModelScope.launch { repo.trimOldCache() }
     }

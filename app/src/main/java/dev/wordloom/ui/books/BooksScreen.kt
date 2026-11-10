@@ -25,8 +25,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -48,6 +51,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -72,7 +76,7 @@ import kotlin.math.roundToInt
  * book is the only heavier haptic.
  */
 @Composable
-fun BooksScreen(onBack: () -> Unit) {
+fun BooksScreen(onBack: () -> Unit, onStartStudy: () -> Unit) {
     val wl = WordloomTheme.colors
     val books = SampleBooks
     val count = books.size
@@ -282,6 +286,22 @@ fun BooksScreen(onBack: () -> Unit) {
                     color = wl.inkMuted,
                 )
 
+                Spacer(Modifier.height(24.dp))
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = wl.primary,
+                    modifier = Modifier
+                        .fillMaxWidth(0.72f)
+                        .clickable(onClick = onStartStudy),
+                ) {
+                    Text(
+                        text = "开始学习",
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = wl.onPrimary,
+                        modifier = Modifier.padding(vertical = 14.dp),
+                    )
+                }
             }
         }
     }

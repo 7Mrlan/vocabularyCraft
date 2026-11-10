@@ -18,6 +18,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import dev.wordloom.data.model.WordEntry
 import dev.wordloom.ui.books.BooksScreen
+import dev.wordloom.ui.study.StudyScreen
 import dev.wordloom.ui.home.HomeScreen
 import dev.wordloom.ui.lists.ListDetailScreen
 import dev.wordloom.ui.lists.ListsScreen
@@ -103,7 +104,19 @@ fun AppNav(
         }
 
         composable("books") {
-            BooksScreen(onBack = { nav.popBackStack() })
+            BooksScreen(
+                onBack = { nav.popBackStack() },
+                onStartStudy = { nav.navigate("study") },
+            )
+        }
+
+        composable("study") {
+            StudyScreen(
+                dueCards = cards,
+                words = mapWords,
+                onBack = { nav.popBackStack() },
+                onRate = { entry, rating, isNew -> viewModel.rateStudy(entry, rating, isNew) },
+            )
         }
 
         composable("search") {

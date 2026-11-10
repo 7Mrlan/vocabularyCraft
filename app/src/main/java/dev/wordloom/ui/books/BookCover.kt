@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
@@ -115,6 +116,13 @@ fun BookCover(
 ) {
     Box(
         modifier = modifier
+            .shadow(
+                elevation = 16.dp,
+                shape = RoundedCornerShape(14.dp),
+                clip = false,
+                ambientColor = Color(0xFF0139A3).copy(alpha = 0.16f),
+                spotColor = Color(0xFF0139A3).copy(alpha = 0.22f),
+            )
             .clip(RoundedCornerShape(14.dp))
             .background(Brush.verticalGradient(listOf(spec.top, spec.bottom))),
     ) {

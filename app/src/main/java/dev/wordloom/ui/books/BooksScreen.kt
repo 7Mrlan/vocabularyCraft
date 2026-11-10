@@ -2,16 +2,20 @@ package dev.wordloom.ui.books
 
 import android.media.SoundPool
 import android.view.HapticFeedbackConstants
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,10 +24,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerDefaults
-import androidx.compose.foundation.pager.PagerSnapDistance
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,9 +32,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,34 +44,44 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import dev.wordloom.R
 import dev.wordloom.ui.theme.SerifFamily
 import dev.wordloom.ui.theme.WordloomTheme
+import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
+import kotlin.math.roundToInt
 
 /**
- * The shelf: the middle cover faces the reader, the neighbours turn away a
- * little and recede, so the four books read as one deck rather than a strip.
- * Each cover carries its own shadow — nothing is painted under the deck, so the
- * shadows move with the cards.
+ * One card at a time, on an endless wheel.
  *
- * A snap is a ratchet: crossing a card fires a gear click and a tick; picking
- * one is the only heavier haptic.
+ * The reader only ever sees the face in front of them; the next card turns in
+ * from the edge while the current one turns away, and both fade before they
+ * would sit side by side. A flick keeps its velocity into a damped spring, so a
+ * hard swipe crosses several books and rocks to a stop; the fourth book wraps
+ * back to the first without a jump.
+ *
+ * Each crossing is a tooth of a ratchet: a gear click (pitch drifting with
+ * direction) and a light tick; settling adds one softer click, and choosing the
+ * book is the only heavier haptic.
  */
 @Composable
 fun BooksScreen(onBack: () -> Unit) {
     val wl = WordloomTheme.colors
     val books = SampleBooks
-    val pager = rememberPagerState(pageCount = { books.size })
-    var currentId by remember { mutableStateOf(books.first().id) }
+    val count = books.size
+    val scope = rememberCoroutineScope()
 
     val context = LocalContext.current
     val view = LocalView.current
+    val density = LocalDensity.current.density
+
     val soundPool = remember { SoundPool.Builder().setMaxStreams(2).build() }
     var click by remember { mutableIntStateOf(0) }
     DisposableEffect(Unit) {
@@ -77,21 +89,20 @@ fun BooksScreen(onBack: () -> Unit) {
         onDispose { soundPool.release() }
     }
 
-    var lastPage by remember { mutableIntStateOf(pager.currentPage) }
-    LaunchedEffect(pager.currentPage) {
-        val page = pager.currentPage
-        if (page != lastPage) {
-            val rate = if (page > lastPage) 1.045f else 0.955f
-            lastPage = page
-            if (click != 0) soundPool.play(click, 0.24f, 0.24f, 1, 0, rate)
+    var currentId by remember { mutableStateOf(books.first().id) }
+    var position by remember { mutableFloatStateOf(0f) }
+    val settle = remember { Animatable(0f) }
+    var settling by remember { mutableStateOf(false) }
+    val shown = if (settling) settle.value else position
+    val nearest = ((shown.roundToInt() % count) + count) % count
+
+    var lastNearest by remember { mutableIntStateOf(0) }
+    LaunchedEffect(nearest) {
+        if (nearest != lastNearest) {
+            val rate = if (nearest > lastNearest) 1.05f else 0.95f
+            lastNearest = nearest
+            if (click != 0) soundPool.play(click, 0.26f, 0.26f, 1, 0, rate)
             view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-        }
-    }
-    var lastSettled by remember { mutableIntStateOf(pager.settledPage) }
-    LaunchedEffect(pager.settledPage) {
-        if (pager.settledPage != lastSettled) {
-            lastSettled = pager.settledPage
-            if (click != 0) soundPool.play(click, 0.15f, 0.15f, 1, 0, 0.92f)
         }
     }
 
@@ -133,65 +144,114 @@ fun BooksScreen(onBack: () -> Unit) {
                 .weight(1f),
             verticalArrangement = Arrangement.Center,
         ) {
-            HorizontalPager(
-                state = pager,
-                contentPadding = PaddingValues(horizontal = 56.dp),
-                pageSpacing = 12.dp,
-                beyondViewportPageCount = 1,
-                flingBehavior = PagerDefaults.flingBehavior(
-                    state = pager,
-                    pagerSnapDistance = PagerSnapDistance.atMost(3),
-                ),
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(300.dp),
-            ) { page ->
-                val spec = books[page]
-                val offset = (pager.currentPage - page) + pager.currentPageOffsetFraction
+                    .height(286.dp),
+            ) {
+                val cardHeight = 250.dp
+                val cardWidth = cardHeight * 0.76f
+                val pxPerPage = maxWidth.value * density / 2f + cardWidth.value * density / 2f
+
                 Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    BookCover(
-                        spec = spec,
-                        inReading = spec.id == currentId,
-                        artParallax = offset,
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .aspectRatio(0.78f)
-                            .graphicsLayer {
-                                rotationY = (offset * -12f).coerceIn(-24f, 24f)
-                                cameraDistance = 16f * density
-                                translationY = 6f * density * offset.absoluteValue
-                                val shrink = 1f - (offset.absoluteValue * 0.06f).coerceAtMost(0.12f)
-                                scaleX = shrink
-                                scaleY = shrink
-                                alpha = 1f - (offset.absoluteValue * 0.20f).coerceAtMost(0.40f)
-                            }
-                            .clickable {
-                                if (page != pager.currentPage) {
-                                    if (click != 0) soundPool.play(click, 0.20f, 0.20f, 1, 0, 1f)
-                                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                                } else if (spec.id != currentId) {
-                                    currentId = spec.id
-                                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                                    if (click != 0) soundPool.play(click, 0.34f, 0.34f, 1, 0, 0.9f)
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .draggable(
+                            orientation = Orientation.Horizontal,
+                            state = rememberDraggableState { delta ->
+                                if (settling) {
+                                    scope.launch { settle.stop() }
+                                    position = settle.value
+                                    settling = false
+                                }
+                                position -= delta / pxPerPage
+                            },
+                            onDragStopped = { velocity ->
+                                // Velocity carries into the spring; a hard flick
+                                // crosses a couple of books and rocks to rest.
+                                val pagesPerSecond = velocity / pxPerPage
+                                val target = (position - pagesPerSecond * 0.20f).roundToInt()
+                                settling = true
+                                scope.launch {
+                                    settle.snapTo(position)
+                                    settle.animateTo(
+                                        targetValue = target.toFloat(),
+                                        animationSpec = spring(
+                                            dampingRatio = 0.90f,
+                                            stiffness = 190f,
+                                        ),
+                                        initialVelocity = -pagesPerSecond,
+                                    )
+                                    position = ((target % count) + count) % count.toFloat()
+                                    settling = false
+                                    if (click != 0) soundPool.play(click, 0.14f, 0.14f, 1, 0, 0.92f)
                                 }
                             },
-                    )
+                        ),
+                ) {
+                    books.forEachIndexed { index, spec ->
+                        var d = index - shown
+                        d -= count * (d / count).roundToInt()
+                        if (d.absoluteValue < 1.42f) {
+                            BookCover(
+                                spec = spec,
+                                inReading = spec.id == currentId,
+                                artParallax = d,
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .width(cardWidth)
+                                    .height(cardHeight)
+                                    .zIndex(10f - d.absoluteValue)
+                                    .graphicsLayer {
+                                        // The ring passes just outside both screen edges:
+                                        // at rest the neighbours are off-canvas, during a
+                                        // drag they swing in, turn inward and lose a little
+                                        // size. Same height, fully opaque — the circle is
+                                        // read from the motion, not from a static row.
+                                        translationX = d * pxPerPage
+                                        rotationY = (d * -34f).coerceIn(-40f, 40f)
+                                        cameraDistance = 15f * density
+                                        val shrink = (1f - d.absoluteValue * 0.14f).coerceAtLeast(0.70f)
+                                        scaleX = shrink
+                                        scaleY = shrink
+                                    }
+                                    .clickable {
+                                        if (d.absoluteValue > 0.2f) {
+                                            val target = (shown + d).roundToInt()
+                                            settling = true
+                                            scope.launch {
+                                                settle.snapTo(position)
+                                                settle.animateTo(
+                                                    targetValue = target.toFloat(),
+                                                    animationSpec = spring(
+                                                        dampingRatio = 0.90f,
+                                                        stiffness = 240f,
+                                                    ),
+                                                )
+                                                position = ((target % count) + count) % count.toFloat()
+                                                settling = false
+                                            }
+                                        } else if (spec.id != currentId) {
+                                            currentId = spec.id
+                                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                            if (click != 0) soundPool.play(click, 0.36f, 0.36f, 1, 0, 0.9f)
+                                        }
+                                    },
+                            )
+                        }
+                    }
                 }
             }
 
-            // Four thin rules; the active one grows instead of lighting up.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 18.dp),
+                    .padding(top = 4.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 books.forEachIndexed { index, _ ->
-                    val active = index == pager.currentPage
+                    val active = index == nearest
                     Box(
                         modifier = Modifier
                             .padding(horizontal = 3.dp)
@@ -203,11 +263,11 @@ fun BooksScreen(onBack: () -> Unit) {
                 }
             }
 
-            val selected = books[pager.currentPage]
+            val selected = books[nearest]
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 18.dp),
+                    .padding(top = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
@@ -223,6 +283,7 @@ fun BooksScreen(onBack: () -> Unit) {
                     fontSize = 11.sp,
                     color = wl.inkMuted,
                 )
+
             }
         }
     }

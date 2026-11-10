@@ -1,5 +1,6 @@
 package dev.wordloom.ui.word
 
+import android.animation.ValueAnimator
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -48,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -252,21 +255,46 @@ fun WordScreen(
                         }
                     }
 
-                    is WordUiState.Loaded -> WordContent(
-                        entry = current.entry,
-                        inDeck = current.inDeck,
-                        card = card,
-                        lists = lists,
-                        onAddToList = onAddToList,
-                        onCreateList = onCreateList,
-                        onWord = onWord,
-                        onOpenSynonyms = onOpenSynonyms,
-                    )
+                    is WordUiState.Loaded -> ContentFade(current.entry.word) {
+                        WordContent(
+                            entry = current.entry,
+                            inDeck = current.inDeck,
+                            card = card,
+                            lists = lists,
+                            onAddToList = onAddToList,
+                            onCreateList = onCreateList,
+                            onWord = onWord,
+                            onOpenSynonyms = onOpenSynonyms,
+                        )
+                    }
 
                     WordUiState.Idle -> CenterBox {
                         Text("输入一个词开始", color = wl.inkMuted)
                     }
                 }
+    }
+}
+
+/**
+ * The skeleton and the entry share the title position, so only the body needs to
+ * arrive: 140ms of alpha, no layout change, no relayout of the list underneath.
+ */
+@Composable
+private fun ContentFade(contentKey: String, content: @Composable () -> Unit) {
+    val reduceMotion = remember { !ValueAnimator.areAnimatorsEnabled() }
+    var visible by remember(contentKey) { mutableStateOf(reduceMotion) }
+    LaunchedEffect(contentKey) { visible = true }
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(140),
+        label = "contentFade",
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer { this.alpha = alpha },
+    ) {
+        content()
     }
 }
 
@@ -552,7 +580,10 @@ private fun WordContent(
             }
 
             // 6. Numbered definitions list
-            itemsIndexed(visibleSenses) { index, sense ->
+            itemsIndexed(
+                visibleSenses,
+                key = { index, sense -> "${sense.partOfSpeech}-${sense.definition.hashCode()}-$index" },
+            ) { index, sense ->
                 val pc = posColor(sense.partOfSpeech, look.isDark)
                 Column(modifier = Modifier.padding(bottom = 20.dp)) {
                     Row(verticalAlignment = Alignment.Top) {

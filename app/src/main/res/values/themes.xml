@@ -3,6 +3,10 @@
     <style name="Theme.Wordloom" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <!-- Every screen paints its own surface, but a frame that Compose has not
+             drawn yet falls back to the window. White here and #0B1320 at night keeps
+             that fallback invisible instead of flashing. -->
+        <item name="android:windowBackground">#FFFFFFFF</item>
     </style>
 </resources>

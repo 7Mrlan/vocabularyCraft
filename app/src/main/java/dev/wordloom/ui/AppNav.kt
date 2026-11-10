@@ -32,8 +32,7 @@ fun AppNav(
     val nav = rememberNavController()
 
     val wordState by viewModel.wordState.collectAsStateWithLifecycle()
-    val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
-    val searching by viewModel.searching.collectAsStateWithLifecycle()
+    val suggest by viewModel.suggest.collectAsStateWithLifecycle()
     val recent by viewModel.recent.collectAsStateWithLifecycle()
     val dueCards by viewModel.dueCards.collectAsStateWithLifecycle()
     val dueCount by viewModel.dueCount.collectAsStateWithLifecycle()
@@ -90,8 +89,7 @@ fun AppNav(
 
         composable("search") {
             SearchScreen(
-                suggestions = suggestions,
-                searching = searching,
+                suggest = suggest,
                 recent = recent.map { it.word }.take(8),
                 onQueryChange = viewModel::onQueryChanged,
                 onSubmit = { term ->

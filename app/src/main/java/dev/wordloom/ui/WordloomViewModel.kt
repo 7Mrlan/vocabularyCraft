@@ -33,17 +33,23 @@ sealed interface WordUiState {
     data class Failed(val term: String, val message: String) : WordUiState
 }
 
+/** Where a suggestion request stands. The query travels with the result so the UI never
+ *  reports "no match" for text the person has already moved past. */
+enum class SuggestPhase { Idle, Typing, Loading, Done, Empty, Error }
+
+data class SuggestUiState(
+    val query: String = "",
+    val phase: SuggestPhase = SuggestPhase.Idle,
+    val items: List<Suggestion> = emptyList(),
+)
+
 class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
 
     private val _wordState = MutableStateFlow<WordUiState>(WordUiState.Idle)
     val wordState: StateFlow<WordUiState> = _wordState.asStateFlow()
 
-    private val _suggestions = MutableStateFlow<List<Suggestion>>(emptyList())
-    val suggestions: StateFlow<List<Suggestion>> = _suggestions.asStateFlow()
-
-    /** True while a suggestion request is in flight, so the UI never reports "no match" too early. */
-    private val _searching = MutableStateFlow(false)
-    val searching: StateFlow<Boolean> = _searching.asStateFlow()
+    private val _suggest = MutableStateFlow(SuggestUiState())
+    val suggest: StateFlow<SuggestUiState> = _suggest.asStateFlow()
 
     private val _randomRequest = MutableStateFlow(0)
 
@@ -181,20 +187,35 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
     }
 
     fun onQueryChanged(prefix: String) {
+        val query = prefix.trim()
         suggestJob?.cancel()
-        if (prefix.isBlank()) {
-            _suggestions.value = emptyList()
-            _searching.value = false
+        if (query.isEmpty()) {
+            _suggest.value = SuggestUiState()
             return
         }
+        // Keep whatever the list already shows while the next request is on its way:
+        // clearing here is what made the empty state flash mid-word.
+        _suggest.value = SuggestUiState(query, SuggestPhase.Typing, _suggest.value.items)
         suggestJob = viewModelScope.launch {
             delay(250)
-            try {
-                _searching.value = true
-                _suggestions.value = runCatching { repo.suggest(prefix) }.getOrElse { emptyList() }
-            } finally {
-                _searching.value = false
+            _suggest.value = _suggest.value.copy(phase = SuggestPhase.Loading)
+            val items = try {
+                repo.suggest(query)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                if (_suggest.value.query == query) {
+                    _suggest.value = _suggest.value.copy(phase = SuggestPhase.Error)
+                }
+                return@launch
             }
+            // A newer keystroke owns the field now; this answer is stale.
+            if (_suggest.value.query != query) return@launch
+            _suggest.value = SuggestUiState(
+                query = query,
+                phase = if (items.isEmpty()) SuggestPhase.Empty else SuggestPhase.Done,
+                items = items,
+            )
         }
     }
 

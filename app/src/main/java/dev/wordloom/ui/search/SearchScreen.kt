@@ -1,5 +1,14 @@
 package dev.wordloom.ui.search
 
+import android.animation.ValueAnimator
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -40,7 +50,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -50,10 +65,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.wordloom.R
 import dev.wordloom.data.model.Suggestion
+import dev.wordloom.ui.SuggestPhase
+import dev.wordloom.ui.SuggestUiState
 import dev.wordloom.ui.components.PoolHeader
 import dev.wordloom.ui.theme.SansFamily
 import dev.wordloom.ui.theme.SerifFamily
 import dev.wordloom.ui.theme.WordloomTheme
+import kotlin.math.PI
+import kotlin.math.sin
+import kotlinx.coroutines.delay
 
 /**
  * Search sits inside the same navy "pool" as the home hero and hands the eye a
@@ -62,8 +82,7 @@ import dev.wordloom.ui.theme.WordloomTheme
  */
 @Composable
 fun SearchScreen(
-    suggestions: List<Suggestion>,
-    searching: Boolean,
+    suggest: SuggestUiState,
     recent: List<String>,
     onQueryChange: (String) -> Unit,
     onSubmit: (String) -> Unit,
@@ -80,6 +99,12 @@ fun SearchScreen(
     }
     var query by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
+
+    // One source of truth for what the page is doing. "No match" is a finished
+    // answer for this exact text, never a placeholder while a request is out.
+    val waiting = suggest.phase == SuggestPhase.Typing || suggest.phase == SuggestPhase.Loading
+    val empty = suggest.phase == SuggestPhase.Empty
+    val failed = suggest.phase == SuggestPhase.Error
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
@@ -156,11 +181,21 @@ fun SearchScreen(
                     }),
                 )
             }
-            Spacer(Modifier.height(34.dp))
+            Spacer(Modifier.height(12.dp))
+            // The water is the status: it keeps moving while a lookup is out,
+            // and settles flat when the answer is "nothing here".
+            Waterline(
+                active = waiting,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 34.dp)
+                    .height(10.dp),
+            )
+            Spacer(Modifier.height(12.dp))
         }
 
-        val words = suggestions.filter { !it.word.contains(' ') }
-        val phrases = suggestions.filter { it.word.contains(' ') }
+        val words = suggest.items.filter { !it.word.contains(' ') }
+        val phrases = suggest.items.filter { it.word.contains(' ') }
 
         if (query.isBlank()) {
             EmptyQuery(recent = recent, onPick = submit, onRandom = onRandom)
@@ -173,8 +208,10 @@ fun SearchScreen(
             ) {
                 if (words.isNotEmpty()) {
                     item { SectionLabel("匹配的词") }
-                    items(words, key = { it.word }) { item ->
-                        ResultRow(item, Modifier.animateItem()) { submit(item.word) }
+                    itemsIndexed(words, key = { _, item -> item.word }) { index, item ->
+                        Surfaced(index, Modifier.animateItem()) {
+                            ResultRow(item, Modifier.fillMaxWidth()) { submit(item.word) }
+                        }
                     }
                 }
                 if (phrases.isNotEmpty()) {
@@ -182,24 +219,117 @@ fun SearchScreen(
                         Spacer(Modifier.height(18.dp))
                         SectionLabel("短语")
                     }
-                    items(phrases, key = { it.word }) { item ->
-                        ResultRow(item, Modifier.animateItem()) { submit(item.word) }
+                    itemsIndexed(phrases, key = { _, item -> item.word }) { index, item ->
+                        Surfaced(words.size + index, Modifier.animateItem()) {
+                            ResultRow(item, Modifier.fillMaxWidth()) { submit(item.word) }
+                        }
                     }
                 }
-                if (suggestions.isEmpty() && searching) {
-                    item {
-                        Text(
-                            text = "正在查…",
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                            color = wl.inkMuted,
-                            modifier = Modifier.padding(top = 22.dp),
-                        )
+                if (suggest.items.isEmpty()) {
+                    when {
+                        waiting -> item {
+                            Text(
+                                text = "正在查…",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                                color = wl.inkMuted,
+                                modifier = Modifier.padding(top = 22.dp),
+                            )
+                        }
+                        failed -> item {
+                            Text(
+                                text = "网络不给力，点这里重试",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                                color = wl.coral,
+                                modifier = Modifier
+                                    .padding(top = 22.dp)
+                                    .clickable { submit(query.trim()) },
+                            )
+                        }
+                        empty -> item { NoResults(query) { submit(query.trim()) } }
                     }
-                } else if (suggestions.isEmpty()) {
-                    item { NoResults(query) { submit(query.trim()) } }
                 }
             }
         }
+    }
+}
+
+/**
+ * A thread of water under the search pill. It moves only while a lookup is out;
+ * when the answer is empty it flattens into a still line, so the page says
+ * "nothing" with motion before the copy does.
+ */
+@Composable
+private fun Waterline(active: Boolean, modifier: Modifier = Modifier) {
+    val reduceMotion = remember { !ValueAnimator.areAnimatorsEnabled() }
+    val phase = if (active && !reduceMotion) {
+        val transition = rememberInfiniteTransition(label = "waterline")
+        val value by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = (2f * PI.toFloat()),
+            animationSpec = infiniteRepeatable(tween(2000, easing = LinearEasing)),
+            label = "waterlinePhase",
+        )
+        value
+    } else {
+        0f
+    }
+    val amplitude by animateFloatAsState(
+        targetValue = if (active && !reduceMotion) 1f else 0f,
+        animationSpec = tween(420),
+        label = "waterlineAmplitude",
+    )
+    val ink = Color.White.copy(alpha = 0.55f)
+    Canvas(modifier = modifier) {
+        val mid = size.height / 2f
+        val amp = 2.dp.toPx() * amplitude
+        if (amp < 0.05f) {
+            drawLine(
+                color = ink,
+                start = Offset(0f, mid),
+                end = Offset(size.width, mid),
+                strokeWidth = 1.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+            return@Canvas
+        }
+        val path = Path()
+        val steps = 96
+        for (i in 0..steps) {
+            val t = i / steps.toFloat()
+            val y = mid + sin(t * 2f * PI.toFloat() + phase) * amp
+            if (i == 0) path.moveTo(0f, y) else path.lineTo(size.width * t, y)
+        }
+        drawPath(path, ink, style = Stroke(width = 1.dp.toPx(), cap = StrokeCap.Round))
+    }
+}
+
+/** Results rise out of that waterline, a beat apart, instead of popping in. */
+@Composable
+private fun Surfaced(
+    index: Int,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val reduceMotion = remember { !ValueAnimator.areAnimatorsEnabled() }
+    var visible by remember { mutableStateOf(reduceMotion) }
+    LaunchedEffect(Unit) {
+        if (!visible) {
+            delay(30L * index.coerceAtMost(8))
+            visible = true
+        }
+    }
+    val progress by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(240, easing = FastOutSlowInEasing),
+        label = "surface",
+    )
+    Box(
+        modifier = modifier.graphicsLayer {
+            alpha = progress
+            translationY = (1f - progress) * 14.dp.toPx()
+        },
+    ) {
+        content()
     }
 }
 

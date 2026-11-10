@@ -1,7 +1,14 @@
 package dev.wordloom.ui.review
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -170,80 +177,95 @@ fun ReviewScreen(
         ) {
             Spacer(Modifier.height(12.dp))
             val view = LocalView.current
-            val card = current
-            val cardRevealed = card.word in revealedWords
-            val rotation by animateFloatAsState(
-                targetValue = if (cardRevealed) 180f else 0f,
-                animationSpec = spring(dampingRatio = 0.8f, stiffness = 260f),
-                label = "cardFlip",
-            )
 
-            Surface(
+            // A rated card slides out the way the thumb moved and the next one
+            // arrives a beat behind it; both live inside a fixed-height box, so
+            // nothing below them re-measures.
+            AnimatedContent(
+                targetState = current,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
-                    .clickable {
-                        if (!cardRevealed) {
-                            revealedWords.add(card.word)
-                            feedback.reveal(view)
-                        }
-                    },
-                shape = RoundedCornerShape(24.dp),
-                color = wl.surfaceAlt,
-            ) {
-                Box(
+                    .weight(1f),
+                contentKey = { it.word },
+                transitionSpec = {
+                    (fadeIn(tween(200)) + slideInHorizontally(tween(240)) { it / 10 }) togetherWith
+                        (fadeOut(tween(120)) + slideOutHorizontally(tween(200)) { -it / 10 })
+                },
+                label = "cardAdvance",
+            ) { card ->
+                val cardRevealed = card.word in revealedWords
+                val rotation by animateFloatAsState(
+                    targetValue = if (cardRevealed) 180f else 0f,
+                    animationSpec = spring(dampingRatio = 0.8f, stiffness = 260f),
+                    label = "cardFlip",
+                )
+
+                Surface(
                     modifier = Modifier
                         .fillMaxSize()
-                        .graphicsLayer {
-                            rotationY = rotation
-                            cameraDistance = 14f * density
+                        .clickable {
+                            if (!cardRevealed) {
+                                revealedWords.add(card.word)
+                                feedback.reveal(view)
+                            }
                         },
-                    contentAlignment = Alignment.Center,
+                    shape = RoundedCornerShape(24.dp),
+                    color = wl.surfaceAlt,
                 ) {
-                    if (rotation <= 90f) {
-                        Column(
-                            modifier = Modifier.padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Text(
-                                text = card.word,
-                                fontFamily = SerifFamily,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 40.sp,
-                                color = wl.ink,
-                            )
-                            Spacer(Modifier.height(20.dp))
-                            Text(
-                                text = "点击卡片显示释义",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = wl.inkMuted,
-                            )
-                        }
-                    } else {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { rotationY = 180f }
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            Text(
-                                text = card.word,
-                                fontFamily = SerifFamily,
-                                fontSize = 20.sp,
-                                color = wl.inkMuted,
-                            )
-                            Spacer(Modifier.height(14.dp))
-                            Text(
-                                text = card.preview.ifBlank { "（这个条目没有缓存释义，点下方查看词条）" },
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = wl.ink,
-                                textAlign = TextAlign.Center,
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            TextButton(onClick = { onOpenWord(card.word) }) {
-                                Text("查看完整词条", color = wl.primary)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                rotationY = rotation
+                                cameraDistance = 14f * density
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (rotation <= 90f) {
+                            Column(
+                                modifier = Modifier.padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Text(
+                                    text = card.word,
+                                    fontFamily = SerifFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 40.sp,
+                                    color = wl.ink,
+                                )
+                                Spacer(Modifier.height(20.dp))
+                                Text(
+                                    text = "点击卡片显示释义",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = wl.inkMuted,
+                                )
+                            }
+                        } else {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer { rotationY = 180f }
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                            ) {
+                                Text(
+                                    text = card.word,
+                                    fontFamily = SerifFamily,
+                                    fontSize = 20.sp,
+                                    color = wl.inkMuted,
+                                )
+                                Spacer(Modifier.height(14.dp))
+                                Text(
+                                    text = card.preview.ifBlank { "（这个条目没有缓存释义，点下方查看词条）" },
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = wl.ink,
+                                    textAlign = TextAlign.Center,
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                TextButton(onClick = { onOpenWord(card.word) }) {
+                                    Text("查看完整词条", color = wl.primary)
+                                }
                             }
                         }
                     }

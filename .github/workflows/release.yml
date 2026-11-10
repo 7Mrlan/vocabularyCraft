@@ -91,16 +91,19 @@ jobs:
           fi
 
           SIZE=$(stat -c%s "$APK")
-          BASELINE=$(grep -E '^maxApkBytes=' gradle/apk-budget.properties | cut -d= -f2)
+          # The baseline is optional: an older tag may predate the file, and a
+          # missing baseline must never fail the build.
+          BASELINE=$(grep -E '^maxApkBytes=' gradle/apk-budget.properties 2>/dev/null | cut -d= -f2 || true)
+          BASELINE=${BASELINE:-0}
           echo "APK size: $SIZE bytes (baseline $BASELINE)"
           if [ "$BASELINE" -gt 0 ] && [ "$SIZE" -gt "$BASELINE" ]; then
             echo "::warning::APK is $((SIZE / 1048576)) MiB, over the $((BASELINE / 1048576)) MiB baseline. This is only a warning — if the growth is a real feature, update gradle/apk-budget.properties and note it in the release notes."
           fi
 
           echo "--- largest entries in the APK ---"
-          unzip -l "$APK" | sort -k1 -n -r | head -12
+          unzip -l "$APK" 2>/dev/null | sort -k1 -n -r | head -12 || true
           echo "--- native libraries ---"
-          unzip -l "$APK" | grep "lib/" | awk '{print $1, $4}' | sort -k2
+          unzip -l "$APK" 2>/dev/null | grep "lib/" | awk '{print $1, $4}' | sort -k2 || true
 
           "$AAPT2" dump badging "$APK" | grep -E "^package:|^sdkVersion|^targetSdkVersion"
 

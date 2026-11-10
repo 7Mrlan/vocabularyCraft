@@ -55,12 +55,15 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :app:assembleRelease --no-daemon --stacktrace
 
-      # Mechanical guard against the APK silently growing back. MapLibre and ML Kit
-      # ship native code per ABI, so re-adding x86 / x86_64 / armeabi-v7a would
-      # take the package from ~38 MiB back to ~117 MiB for code no phone loads.
-      # Docs (AGENTS.md, docs/BUILD.md) say "don't"; this step makes sure the
-      # build actually fails if someone does it anyway.
-      - name: Verify APK (ABI and size budget)
+      # Two different kinds of check:
+      #   · ABI — a hard rule. MapLibre and ML Kit ship native code per ABI, so
+      #     bundling x86 / x86_64 / armeabi-v7a adds ~79 MiB that no phone ever
+      #     loads. Failing here is what stops the package from silently growing
+      #     back to 117 MiB.
+      #   · Size — a baseline, not a budget. Adding features legitimately makes
+      #     the APK bigger (an offline word list alone adds tens of MiB), so this
+      #     only warns and prints the breakdown. See gradle/apk-budget.properties.
+      - name: Verify APK (ABI rule + size baseline)
         run: |
           APK=app/build/outputs/apk/release/app-release.apk
           ls -lh app/build/outputs/apk/release/
@@ -88,11 +91,16 @@ jobs:
           fi
 
           SIZE=$(stat -c%s "$APK")
-          echo "APK size: $SIZE bytes"
-          if [ "$SIZE" -gt 62914560 ]; then
-            echo "::error::APK is $((SIZE / 1048576)) MiB, over the 60 MiB budget (see docs/BUILD.md section 3)"
-            exit 1
+          BASELINE=$(grep -E '^maxApkBytes=' gradle/apk-budget.properties | cut -d= -f2)
+          echo "APK size: $SIZE bytes (baseline $BASELINE)"
+          if [ "$BASELINE" -gt 0 ] && [ "$SIZE" -gt "$BASELINE" ]; then
+            echo "::warning::APK is $((SIZE / 1048576)) MiB, over the $((BASELINE / 1048576)) MiB baseline. This is only a warning — if the growth is a real feature, update gradle/apk-budget.properties and note it in the release notes."
           fi
+
+          echo "--- largest entries in the APK ---"
+          unzip -l "$APK" | sort -k1 -n -r | head -12
+          echo "--- native libraries ---"
+          unzip -l "$APK" | grep "lib/" | awk '{print $1, $4}' | sort -k2
 
           "$AAPT2" dump badging "$APK" | grep -E "^package:|^sdkVersion|^targetSdkVersion"
 

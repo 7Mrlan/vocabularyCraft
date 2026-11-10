@@ -24,9 +24,11 @@ Wordloom：本地优先的英英词典 + FSRS 间隔重复复习 App（Android /
    MapLibre 与 ML Kit 每个 ABI 一份原生库（单 ABI 约 28 MiB），四 ABI 打包会让 APK 从
    38 MiB 涨到 117 MiB 而手机只加载一份。**不要新增/删除 `abiFilters`，除非明确要求。**
    debug 保持全 ABI（模拟器需要）。
-   这条不是靠自觉：`.github/workflows/release.yml` 的 **Verify APK (ABI and size budget)**
-   步骤会用 `aapt2` 检查 APK 只含 arm64-v8a、且不超过 60 MiB，多一个 ABI 或超预算就让
-   CI 直接失败。背景见 `docs/BUILD.md` 第 2、3 节。
+   这条不是靠自觉：`.github/workflows/release.yml` 的 **Verify APK (ABI rule + size baseline)**
+   步骤会用 `aapt2` 检查 APK 只含 arm64-v8a，多一个 ABI 就让 CI 直接失败。
+   注意：**体积本身没有硬上限**——加功能让包变大是正常的，CI 只在超过
+   `gradle/apk-budget.properties` 里的基线时告警，需要时改那个数字做记录即可。
+   背景见 `docs/BUILD.md` 第 2、3 节。
 
 2. **不要引入没被引用的依赖。** 已因无引用被删掉的四个：
    `datastore-preferences`、`material-icons-extended`、`haze-materials`、`ui-tooling-preview`。

@@ -146,10 +146,14 @@ apksigner verify --verbose --print-certs app/build/outputs/apk/release/app-relea
 - **环境**：GitHub 托管的 `ubuntu-latest`，JDK 17 + Android SDK 35；
 - **产物**：`app/build/outputs/apk/release/app-release.apk`，同时上传为 Actions artifact
   并自动挂到对应的 GitHub Release；
-- **门禁**：`Verify APK (ABI and size budget)` 步骤会用 `aapt2` 校验
-  **只含 arm64-v8a**（多一个 ABI 就失败）且**体积 ≤ 60 MiB**（超预算就失败）。
-  这条是机械校验：不管谁改动了 `abiFilters`，多打一份原生库都会让 CI 变红，
-  而不是悄悄把包体从 38 MiB 涨回 117 MiB；
+- **门禁**：`Verify APK (ABI rule + size baseline)` 步骤做两类检查，性质不同：
+  - **ABI 是硬规则**：用 `aapt2` 读出 APK 的 `native-code`，必须只有 `arm64-v8a`。
+    多一个 ABI 就让 CI 失败——因为同一份原生库多打几份是纯浪费，手机只加载自己那份。
+  - **体积只是基线**：当前体积与 `gradle/apk-budget.properties` 里的
+    `maxApkBytes` 对比，**超出只发一条 warning，不拦截构建**。
+    加功能让包变大是正常的（比如预打包离线词库会加几十 MiB），需要时直接改那个
+    数字做记录即可，不用改代码逻辑。
+  - 日志里会打印 APK 最大的条目和全部原生库清单，方便定位体积增长来自哪里；
 - **签名**：CI 上没有 `local.properties`，所以同样是 debug 签名。
 
 > **已知阻塞**：如果账号处于 billing lock，任务根本不会启动，报的是
@@ -165,7 +169,8 @@ apksigner verify --verbose --print-certs app/build/outputs/apk/release/app-relea
 - [ ] `./gradlew :app:assembleDebug` 通过（至少证明能编译）
 - [ ] `./gradlew :app:assembleRelease` 通过，产出 `app-release.apk`
 - [ ] `aapt2 dump badging`：versionCode / versionName 正确、`native-code` 只有 `arm64-v8a`
-- [ ] APK 体积 ≤ 60 MiB（CI 的 `Verify APK` 步骤会自动卡这条，本地可先看一眼文件大小）
+- [ ] 体积对比 `gradle/apk-budget.properties` 的基线：超了没关系（只是提醒），
+      但要能说清多出来的体积花在什么功能上，并在 release notes 里写一句
 - [ ] `apksigner verify`：签名符合预期（debug 或 release keystore）
 - [ ] 真机安装并走一遍：首页、深浅色切换、查词与跳转、复习评分、四选一练习、地图巡航、备份导出/导入
 - [ ] 长按选词翻译：**联网**（有道）与**断网**（ML Kit 端上模型）各试一次

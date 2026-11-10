@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Wordloom 词书封面 v7 · 鲜亮</title>
+<style>
+  :root{--paper:#f2ede5;--ink:#1c1a17}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(1200px 620px at 50% 0%,#faf7f1 0%,var(--paper) 62%,#e8e1d4 100%);
+    font-family:"PingFang SC","Noto Sans SC",system-ui,-apple-system,sans-serif;color:var(--ink)}
+  .stage{display:flex;gap:42px;padding:72px 60px;perspective:1500px;align-items:flex-end}
+  .wrap{position:relative}
+  .label{position:absolute;top:-28px;left:0;right:0;text-align:center;font-size:11px;letter-spacing:.14em;color:#8a8072}
+
+  .cover{
+    position:relative;width:286px;height:402px;border-radius:16px;
+    transform:rotateY(-5deg) rotateX(1deg);transform-style:preserve-3d;
+    box-shadow:0 1px 1px rgba(0,0,0,.10),0 18px 30px -16px rgba(25,20,10,.32),0 46px 60px -34px rgba(25,20,10,.26);
+    overflow:hidden;
+  }
+  .cover.chosen{transform:rotateY(-2deg) rotateX(1deg) scale(1.018);
+    box-shadow:0 2px 2px rgba(0,0,0,.10),0 28px 44px -18px rgba(25,20,10,.38),0 60px 76px -36px rgba(25,20,10,.30)}
+  /* page edge instead of a cloth spine */
+  .edge-left{position:absolute;left:0;top:10px;bottom:10px;width:5px;border-radius:3px;
+    background:rgba(255,255,255,.35);box-shadow:1px 0 0 rgba(0,0,0,.06)}
+  .face{position:absolute;inset:0;overflow:hidden}
+  .grain{position:absolute;inset:0;pointer-events:none;opacity:.05;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml;utf8,\
+<svg xmlns='http://www.w3.org/2000/svg' width='150' height='150'>\
+<filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='2' stitchTiles='stitch'/></filter>\
+<rect width='150' height='150' filter='url(%23n)' opacity='.6'/></svg>")}
+  .gloss{position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(160deg,rgba(255,255,255,.16),transparent 46%,rgba(0,0,0,.06))}
+
+  .head{position:absolute;left:24px;top:22px;right:70px;z-index:2}
+  .kicker{font-size:10px;letter-spacing:.18em;color:rgba(255,255,255,.82)}
+  .title{margin-top:9px;font-size:26px;line-height:1.14;font-weight:700;color:#fff;letter-spacing:.01em;min-height:59px}
+  .sub{margin-top:8px;font-size:11px;letter-spacing:.04em;color:rgba(255,255,255,.78)}
+  .pill{position:absolute;right:16px;top:20px;z-index:3;padding:4px 9px;border-radius:99px;
+    background:rgba(255,255,255,.28);color:#fff;font-size:10px;letter-spacing:.12em}
+  .foot{position:absolute;left:24px;bottom:20px;right:22px;z-index:2}
+  .rule{height:1px;background:rgba(255,255,255,.38);margin-bottom:13px}
+  .count{font-size:22px;color:#fff;letter-spacing:.01em;font-weight:600}
+  .count small{font-size:10px;letter-spacing:.16em;color:rgba(255,255,255,.75);margin-left:8px;font-weight:400}
+  .art{position:absolute;right:-30px;bottom:42px;width:238px;height:238px;z-index:1}
+
+  .c1{--cream:#fff;background:linear-gradient(168deg,#2ACB9E 0%,#1DBE93 55%,#0FA57F 100%)}
+  .c2{--cream:#fff;background:linear-gradient(168deg,#FF9648 0%,#FF7F33 55%,#F2671B 100%)}
+  .c3{--cream:#fff;background:linear-gradient(168deg,#8A79FF 0%,#7661FA 55%,#5B45E8 100%)}
+  .c4{--cream:#fff;background:linear-gradient(168deg,#FF7E90 0%,#FA6379 55%,#EC4A63 100%)}
+
+  .caption{position:fixed;left:0;right:0;bottom:18px;text-align:center;font-size:11px;letter-spacing:.18em;color:#948a7c}
+</style>
+</head>
+<body>
+  <div class="stage">
+
+    <div class="wrap">
+      <div class="label">通用核心 · 三千词族</div>
+      <div class="cover c1 chosen">
+        <div class="face">
+          <svg class="art" viewBox="0 0 238 238" fill="none">
+            <circle cx="128" cy="112" r="66" fill="#fff" opacity=".14"/>
+            <path d="M156 10 L178 82 L250 104 L178 126 L156 198 L134 126 L62 104 L134 82 Z" fill="#fff"/>
+            <path d="M92 54 L102 88 L136 98 L102 108 L92 142 L82 108 L48 98 L82 88 Z" fill="#fff" opacity=".5"/>
+          </svg>
+          <div class="head">
+            <div class="kicker">词书 · 第一卷</div>
+            <div class="title">通用<br>核心</div>
+            <div class="sub">日常英语的底子</div>
+          </div>
+          <div class="pill">在读</div>
+          <div class="foot">
+            <div class="rule"></div>
+            <div class="count">3000<small>词族 · 词频排序</small></div>
+          </div>
+          <div class="edge-left"></div>
+          <div class="grain"></div><div class="gloss"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <div class="label">四六级核心 · 两千五</div>
+      <div class="cover c2">
+        <div class="face">
+          <svg class="art" viewBox="0 0 238 238" fill="none">
+            <path d="M26 182 L104 108 L170 174 Z" fill="#fff" opacity=".16"/>
+            <path d="M54 138 L122 70 L190 138 L172 156 L122 106 L72 156 Z" fill="#fff"/>
+            <path d="M82 100 L138 44 L194 100 L178 116 L138 76 L98 116 Z" fill="#fff" opacity=".8"/>
+            <path d="M104 64 L146 22 L188 64 L174 78 L146 50 L118 78 Z" fill="#fff" opacity=".55"/>
+          </svg>
+          <div class="head">
+            <div class="kicker">词书 · 第二卷</div>
+            <div class="title">四六级<br>核心</div>
+            <div class="sub">大纲收词 · 按词频裁剪</div>
+          </div>
+          <div class="foot">
+            <div class="rule"></div>
+            <div class="count">2500<small>词族 · CET 4/6</small></div>
+          </div>
+          <div class="edge-left"></div>
+          <div class="grain"></div><div class="gloss"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <div class="label">考研核心 · 三千</div>
+      <div class="cover c3">
+        <div class="face">
+          <svg class="art" viewBox="0 0 238 238" fill="none">
+            <circle cx="152" cy="94" r="60" fill="#fff" opacity=".16"/>
+            <path d="M152 50 A46 46 0 1 0 152 142 A46 46 0 1 1 152 50 Z" fill="#fff"/>
+            <path d="M16 194 L94 84 L132 138 L156 106 L220 194 Z" fill="#fff" opacity=".95"/>
+            <path d="M94 84 L112 108 L86 108 Z" fill="#5B45E8" opacity=".45"/>
+          </svg>
+          <div class="head">
+            <div class="kicker">词书 · 第三卷</div>
+            <div class="title">考研<br>核心</div>
+            <div class="sub">大纲收词 · 按词频裁剪</div>
+          </div>
+          <div class="foot">
+            <div class="rule"></div>
+            <div class="count">3000<small>词族 · 考研大纲</small></div>
+          </div>
+          <div class="edge-left"></div>
+          <div class="grain"></div><div class="gloss"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <div class="label">生词本 · 自动成书</div>
+      <div class="cover c4">
+        <div class="face">
+          <svg class="art" viewBox="0 0 238 238" fill="none">
+            <path d="M118 202 L118 98" stroke="#fff" stroke-width="11" stroke-linecap="round"/>
+            <path d="M118 120 C118 78 88 52 42 46 C38 94 70 120 118 120 Z" fill="#fff"/>
+            <path d="M120 154 C120 118 148 96 192 92 C194 132 166 154 120 154 Z" fill="#fff" opacity=".8"/>
+            <circle cx="118" cy="202" r="17" fill="#EC4A63" opacity=".45"/>
+          </svg>
+          <div class="head">
+            <div class="kicker">词书 · 自建</div>
+            <div class="title">生词本</div>
+            <div class="sub">查过的词，长成一本书</div>
+          </div>
+          <div class="foot">
+            <div class="rule"></div>
+            <div class="count">动态<small>词族 · 自动收录</small></div>
+          </div>
+          <div class="edge-left"></div>
+          <div class="grain"></div><div class="gloss"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <div class="caption">Wordloom 词书封面 · 鲜亮方向 v7（非最终稿）</div>
+</body>
+</html>

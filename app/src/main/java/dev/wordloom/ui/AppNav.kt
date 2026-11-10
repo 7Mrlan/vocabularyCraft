@@ -116,6 +116,8 @@ fun AppNav(
                 words = mapWords,
                 onBack = { nav.popBackStack() },
                 onRate = { entry, rating, isNew -> viewModel.rateStudy(entry, rating, isNew) },
+                onUndo = viewModel::undoStudy,
+                onMarkKnown = viewModel::markKnown,
             )
         }
 

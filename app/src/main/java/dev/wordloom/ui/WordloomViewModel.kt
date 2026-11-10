@@ -299,11 +299,31 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
     fun rateStudy(entry: WordEntry, rating: Rating, isNew: Boolean, onDone: (Int?) -> Unit = {}) {
         viewModelScope.launch {
             runCatching {
+                val before = repo.card(entry.word)
                 if (isNew) repo.addToDeck(entry)
                 val card = repo.card(entry.word)
-                card?.let { repo.review(it, rating).intervalDays }
+                val interval = card?.let { repo.review(it, rating).intervalDays }
+                lastStudyUndo = {
+                    if (isNew) repo.removeFromDeck(entry.word) else before?.let { repo.restoreCard(it) }
+                }
+                interval
             }.onSuccess(onDone).onFailure { onDone(null) }
         }
+    }
+
+    private var lastStudyUndo: (suspend () -> Unit)? = null
+
+    /** Reverts the most recent rating, so a mis-tap never schedules a card wrongly. */
+    fun undoStudy() {
+        viewModelScope.launch {
+            lastStudyUndo?.invoke()
+            lastStudyUndo = null
+        }
+    }
+
+    /** The reader says they already know this word: take it out of the queue. */
+    fun markKnown(entry: WordEntry) {
+        viewModelScope.launch { runCatching { repo.removeFromDeck(entry.word) } }
     }
 
     fun trimCache() {

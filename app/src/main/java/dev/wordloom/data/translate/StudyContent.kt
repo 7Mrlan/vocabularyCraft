@@ -14,7 +14,7 @@ import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
-data class StudyExample(val en: String, val zh: String)
+data class StudyExample(val en: String, val zh: String, val audioUrl: String = "")
 
 data class StudyDetails(
     val senses: List<String> = emptyList(),
@@ -73,7 +73,11 @@ object StudyContent {
                 val obj = pair.jsonObject
                 val en = obj["sentence"]?.jsonPrimitive?.content?.trim().orEmpty()
                 val zh = obj["sentence-translation"]?.jsonPrimitive?.content?.trim().orEmpty()
-                if (en.isEmpty() || zh.isEmpty()) null else StudyExample(en, zh)
+                if (en.isEmpty() || zh.isEmpty()) {
+                    null
+                } else {
+                    StudyExample(en, zh, speechUrl(en))
+                }
             }
             ?.distinctBy { it.en }
             ?.take(8)
@@ -95,6 +99,9 @@ object StudyContent {
 
         return StudyDetails(senses = senses, examples = examples, phrases = phrases)
     }
+
+    private fun speechUrl(sentence: String): String =
+        "https://dict.youdao.com/dictvoice?audio=" + URLEncoder.encode(sentence, "UTF-8") + "&type=2"
 
     private const val USER_AGENT =
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"

@@ -166,6 +166,8 @@ class WordRepository(
 
     suspend fun card(word: String): CardEntity? = dao.card(word.lowercase())
 
+    suspend fun restoreCard(card: CardEntity) = dao.putCard(card)
+
     suspend fun addToDeck(entry: WordEntry) {
         val key = entry.word.lowercase()
         if (dao.card(key) != null) return

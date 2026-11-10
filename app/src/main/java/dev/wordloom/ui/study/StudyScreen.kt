@@ -49,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -100,6 +101,8 @@ fun StudyScreen(
     words: List<WordEntry>,
     onBack: () -> Unit,
     onRate: (WordEntry, Rating, Boolean) -> Unit,
+    onUndo: () -> Unit,
+    onMarkKnown: (WordEntry) -> Unit,
 ) {
     val wl = WordloomTheme.colors
     val view = LocalView.current
@@ -130,8 +133,10 @@ fun StudyScreen(
     }
 
     val seenToday = remember { mutableSetOf<String>() }
+    var lastCommitted by remember { mutableStateOf<StudyItem?>(null) }
 
     fun commit(item: StudyItem, rating: Rating, requeue: Boolean) {
+        lastCommitted = item
         val key = item.entry.word.lowercase()
         if (seenToday.add(key)) onRate(item.entry, rating, item.isNew)
         val rest = queue.drop(1)
@@ -190,6 +195,43 @@ fun StudyScreen(
                 color = wl.ink,
             )
             Spacer(Modifier.weight(1f))
+            if (current != null) {
+                IconButton(
+                    onClick = {
+                        val item = lastCommitted
+                        if (item != null) {
+                            val rest = queue.filterNot {
+                                it.entry.word.equals(item.entry.word, ignoreCase = true)
+                            }
+                            queue = listOf(item) + rest
+                            lastCommitted = null
+                            onUndo()
+                        }
+                    },
+                    enabled = lastCommitted != null,
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.wl_refresh),
+                        contentDescription = "撤销上一次评分",
+                        tint = Color.Unspecified,
+                        modifier = Modifier
+                            .size(22.dp)
+                            .alpha(if (lastCommitted != null) 1f else 0.3f),
+                    )
+                }
+                Text(
+                    text = "熟知",
+                    fontFamily = SerifFamily,
+                    fontSize = 12.5.sp,
+                    color = wl.inkMuted,
+                    modifier = Modifier
+                        .clickable {
+                            onMarkKnown(current.entry)
+                            queue = queue.drop(1)
+                        }
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                )
+            }
             if (total > 0) {
                 Text(
                     text = "${total - queue.size}/$total",
@@ -325,7 +367,6 @@ private fun StudyCard(
 
                         Layer.English -> EnglishFace(
                             entry = entry,
-                            onPlay = onPlay,
                             onNext = {
                                 onCommit(pending ?: Rating.Good, false)
                             },
@@ -348,6 +389,7 @@ private fun StudyCard(
                         Layer.Examples -> ExamplesFace(
                             entry = entry,
                             details = details,
+                            onPlay = onPlay,
                             onNext = { onCommit(pending ?: Rating.Good, false) },
                             onWrong = {
                                 onWrong()
@@ -487,7 +529,6 @@ private fun GradeOption(
 @Composable
 private fun EnglishFace(
     entry: WordEntry,
-    onPlay: (String) -> Unit,
     onNext: () -> Unit,
     onWrong: () -> Unit,
 ) {
@@ -651,6 +692,7 @@ private fun ChineseFace(
 private fun ExamplesFace(
     entry: WordEntry,
     details: StudyDetails?,
+    onPlay: (String) -> Unit,
     onNext: () -> Unit,
     onWrong: () -> Unit,
 ) {
@@ -660,18 +702,30 @@ private fun ExamplesFace(
     }
     val pager = rememberPagerState(pageCount = { examples.size.coerceAtLeast(1) })
 
+    LaunchedEffect(pager.currentPage, examples.size) {
+        examples.getOrNull(pager.currentPage)?.audioUrl
+            ?.takeIf { it.isNotBlank() }
+            ?.let(onPlay)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 22.dp, vertical = 22.dp),
     ) {
-        Text(
-            text = entry.word,
-            fontFamily = SerifFamily,
-            fontWeight = FontWeight.Bold,
-            fontSize = 18.sp,
-            color = wl.ink,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = entry.word,
+                fontFamily = SerifFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = wl.ink,
+            )
+            Spacer(Modifier.width(6.dp))
+            examples.getOrNull(pager.currentPage)?.audioUrl
+                ?.takeIf { it.isNotBlank() }
+                ?.let { url -> SpeakerButton(url = url, modifier = Modifier.size(28.dp)) }
+        }
         Spacer(Modifier.height(10.dp))
         if (examples.isEmpty()) {
             Text("还没有例句", fontSize = 12.sp, color = wl.inkMuted)

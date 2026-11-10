@@ -48,6 +48,8 @@ jobs:
       # No local.properties on CI, so the build falls back to the debug signing
       # config (see app/build.gradle.kts). That produces an installable APK for
       # device verification; a store-signed build still needs the keystore.
+      # The release variant ships arm64-v8a only, so the APK stays around 50 MiB
+      # instead of carrying four ABIs' worth of native code.
       - name: Build release APK
         run: |
           chmod +x ./gradlew

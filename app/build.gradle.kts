@@ -48,6 +48,14 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+            // Release builds go to real phones, and every phone since 2017 is
+            // arm64. MapLibre (12.6 MiB) and ML Kit translate (15.6 MiB) ship
+            // native code per ABI: bundling all four ABIs took the APK from
+            // 60 MiB to 117 MiB for nothing — a phone only ever loads one.
+            // Debug keeps every ABI so the x86 emulator still works.
+            ndk {
+                abiFilters += listOf("arm64-v8a")
+            }
         }
     }
 

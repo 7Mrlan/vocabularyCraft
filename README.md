@@ -195,6 +195,12 @@ app/src/main/java/dev/wordloom/
 3. `gh release create v<versionName> app/build/outputs/apk/release/app-release.apk`
 4. 若只是替换已有版本的资产：`gh release upload v<versionName> <apk> --clobber`
 
+> **release 只打 arm64-v8a**（debug 仍是全 ABI，模拟器可用）。MapLibre 与 ML Kit 翻译各带
+> 一份原生库，单 ABI 合计约 28 MiB；四个 ABI 全塞进一个 APK 会让包体从 ~50 MiB 涨到 ~117 MiB，
+> 而手机只加载其中一份。需要 32 位旧机时把 `abiFilters` 加上 `armeabi-v7a`，需要模拟器时用 debug 包。
+>
+> 仓库里还有 `.github/workflows/release.yml`：推送 `v*` 标签即可在 GitHub 云端构建并上传 APK。
+
 ## 路线图
 
 1. **CSV 导入词表**：粘贴 / 选文件导入，去重后批量落库

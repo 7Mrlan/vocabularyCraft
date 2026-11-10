@@ -17,6 +17,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import dev.wordloom.data.model.WordEntry
+import dev.wordloom.ui.books.BooksScreen
 import dev.wordloom.ui.home.HomeScreen
 import dev.wordloom.ui.lists.ListDetailScreen
 import dev.wordloom.ui.lists.ListsScreen
@@ -97,7 +98,12 @@ fun AppNav(
                 onImportBackup = viewModel::importBackup,
                 onQuiz = { nav.navigate("quiz") },
                 onToggleTheme = onToggleTheme,
+                onOpenBooks = { nav.navigate("books") },
             )
+        }
+
+        composable("books") {
+            BooksScreen(onBack = { nav.popBackStack() })
         }
 
         composable("search") {

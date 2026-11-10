@@ -83,6 +83,7 @@ fun HomeScreen(
     onImportBackup: suspend (String) -> Result<Int>,
     onQuiz: () -> Unit,
     onToggleTheme: () -> Unit,
+    onOpenBooks: () -> Unit,
 ) {
     val wl = WordloomTheme.colors
     val band = wl.primaryBright
@@ -173,6 +174,7 @@ fun HomeScreen(
                         onOpenLists = onOpenLists,
                         onOpenBackup = { showBackup = true },
                         onToggleTheme = onToggleTheme,
+                        onOpenBooks = onOpenBooks,
                     )
                     Spacer(Modifier.height(22.dp))
                     SearchPill(
@@ -368,6 +370,7 @@ private fun BrandRow(
     onOpenLists: () -> Unit,
     onOpenBackup: () -> Unit,
     onToggleTheme: () -> Unit,
+    onOpenBooks: () -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         // The mark itself flips the palette: same icon, one more job.
@@ -403,6 +406,21 @@ private fun BrandRow(
         )
         }
         Spacer(Modifier.weight(1f))
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .background(Color.White.copy(alpha = 0.14f), CircleShape)
+                .clickable(onClick = onOpenBooks),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.wl_book_knockout),
+                contentDescription = "词书",
+                tint = Color.Unspecified,
+                modifier = Modifier.size(19.dp),
+            )
+        }
+        Spacer(Modifier.width(8.dp))
         Box(
             modifier = Modifier
                 .size(36.dp)

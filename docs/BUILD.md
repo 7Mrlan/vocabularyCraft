@@ -146,6 +146,10 @@ apksigner verify --verbose --print-certs app/build/outputs/apk/release/app-relea
 - **环境**：GitHub 托管的 `ubuntu-latest`，JDK 17 + Android SDK 35；
 - **产物**：`app/build/outputs/apk/release/app-release.apk`，同时上传为 Actions artifact
   并自动挂到对应的 GitHub Release；
+- **门禁**：`Verify APK (ABI and size budget)` 步骤会用 `aapt2` 校验
+  **只含 arm64-v8a**（多一个 ABI 就失败）且**体积 ≤ 60 MiB**（超预算就失败）。
+  这条是机械校验：不管谁改动了 `abiFilters`，多打一份原生库都会让 CI 变红，
+  而不是悄悄把包体从 38 MiB 涨回 117 MiB；
 - **签名**：CI 上没有 `local.properties`，所以同样是 debug 签名。
 
 > **已知阻塞**：如果账号处于 billing lock，任务根本不会启动，报的是
@@ -161,6 +165,7 @@ apksigner verify --verbose --print-certs app/build/outputs/apk/release/app-relea
 - [ ] `./gradlew :app:assembleDebug` 通过（至少证明能编译）
 - [ ] `./gradlew :app:assembleRelease` 通过，产出 `app-release.apk`
 - [ ] `aapt2 dump badging`：versionCode / versionName 正确、`native-code` 只有 `arm64-v8a`
+- [ ] APK 体积 ≤ 60 MiB（CI 的 `Verify APK` 步骤会自动卡这条，本地可先看一眼文件大小）
 - [ ] `apksigner verify`：签名符合预期（debug 或 release keystore）
 - [ ] 真机安装并走一遍：首页、深浅色切换、查词与跳转、复习评分、四选一练习、地图巡航、备份导出/导入
 - [ ] 长按选词翻译：**联网**（有道）与**断网**（ML Kit 端上模型）各试一次

@@ -55,10 +55,46 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :app:assembleRelease --no-daemon --stacktrace
 
-      - name: Verify APK
+      # Mechanical guard against the APK silently growing back. MapLibre and ML Kit
+      # ship native code per ABI, so re-adding x86 / x86_64 / armeabi-v7a would
+      # take the package from ~38 MiB back to ~117 MiB for code no phone loads.
+      # Docs (AGENTS.md, docs/BUILD.md) say "don't"; this step makes sure the
+      # build actually fails if someone does it anyway.
+      - name: Verify APK (ABI and size budget)
         run: |
+          APK=app/build/outputs/apk/release/app-release.apk
           ls -lh app/build/outputs/apk/release/
-          test -s app/build/outputs/apk/release/app-release.apk
+          test -s "$APK"
+
+          AAPT2=$(ls -d "$ANDROID_HOME"/build-tools/*/aapt2 2>/dev/null | head -1)
+          if [ -z "$AAPT2" ]; then
+            echo "::error::aapt2 not found under $ANDROID_HOME/build-tools"
+            exit 1
+          fi
+
+          ABIS=$("$AAPT2" dump badging "$APK" | grep "native-code:" || true)
+          echo "ABIs: $ABIS"
+          if [ -z "$ABIS" ]; then
+            echo "::error::no native-code reported; the APK layout changed, check the ABI filter"
+            exit 1
+          fi
+          if ! echo "$ABIS" | grep -q "native-code: 'arm64-v8a'"; then
+            echo "::error::release APK must contain arm64-v8a (see docs/BUILD.md section 2)"
+            exit 1
+          fi
+          if echo "$ABIS" | grep -qE "native-code:.*(x86|armeabi-v7a)"; then
+            echo "::error::release APK must not bundle extra ABIs; that is what made it 117 MiB"
+            exit 1
+          fi
+
+          SIZE=$(stat -c%s "$APK")
+          echo "APK size: $SIZE bytes"
+          if [ "$SIZE" -gt 62914560 ]; then
+            echo "::error::APK is $((SIZE / 1048576)) MiB, over the 60 MiB budget (see docs/BUILD.md section 3)"
+            exit 1
+          fi
+
+          "$AAPT2" dump badging "$APK" | grep -E "^package:|^sdkVersion|^targetSdkVersion"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

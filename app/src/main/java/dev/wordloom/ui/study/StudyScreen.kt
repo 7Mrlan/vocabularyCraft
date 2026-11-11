@@ -1,5 +1,7 @@
 package dev.wordloom.ui.study
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -22,6 +24,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -147,6 +150,7 @@ fun StudyScreen(
     var spelling by remember { mutableStateOf(false) }
     var spellScore by remember { mutableIntStateOf(0) }
     var spellTotal by remember { mutableIntStateOf(0) }
+    var completed by remember { mutableIntStateOf(0) }
     var spellTaken by remember { mutableStateOf(false) }
     var lastCommitted by remember { mutableStateOf<StudyItem?>(null) }
 
@@ -155,6 +159,7 @@ fun StudyScreen(
         val key = item.entry.word.lowercase()
         val firstToday = seenToday.add(key)
         if (firstToday) {
+            completed += 1
             onRate(item.entry, rating, item.isNew)
             if (rating == Rating.Good || rating == Rating.Easy) {
                 spellWords.add(item.entry)
@@ -176,7 +181,7 @@ fun StudyScreen(
     }
 
     val current = queue.firstOrNull()
-    val progress = if (total == 0) 0f else (total - queue.size).toFloat() / total
+    val progress = if (total == 0) 0f else completed.toFloat() / total
 
     Column(
         modifier = Modifier
@@ -191,7 +196,8 @@ fun StudyScreen(
                 ),
             )
             .statusBarsPadding()
-            .navigationBarsPadding(),
+            .navigationBarsPadding()
+            .imePadding(),
     ) {
         Row(
             modifier = Modifier
@@ -226,6 +232,7 @@ fun StudyScreen(
                             }
                             queue = listOf(item) + rest
                             lastCommitted = null
+                            completed = (completed - 1).coerceAtLeast(0)
                             onUndo()
                         }
                     },
@@ -323,9 +330,11 @@ private fun StudyCard(
     var layer by remember(entry.word) { mutableStateOf(Layer.Word) }
     var pending by remember(entry.word) { mutableStateOf<Rating?>(null) }
     var details by remember(entry.word) { mutableStateOf<StudyDetails?>(null) }
+    var detailsFailed by remember(entry.word) { mutableStateOf(false) }
 
     LaunchedEffect(entry.word) {
         details = StudyContent.details(entry.word)
+        detailsFailed = details == null
         entry.audio.firstOrNull()?.let { onAutoPlay(it.url) }
     }
 
@@ -338,6 +347,46 @@ private fun StudyCard(
         val cardWidth = minOf(maxWidth * 0.92f, 360.dp)
         val cardHeight = minOf(maxHeight * 0.88f, 500.dp)
 
+        // On the example layer the pager owns horizontal drags and taps, so the
+        // card's own gesture detector steps aside.
+        val cardGestures = if (layer == Layer.Examples) {
+            Modifier
+        } else {
+            Modifier
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) {
+                    if (pending != null && layer != Layer.Word) {
+                        layer = Layer.Word
+                        pending = null
+                    }
+                }
+                .pointerInput(entry.word, pending) {
+                    var total = Offset.Zero
+                    detectDragGestures(
+                        onDragStart = { total = Offset.Zero },
+                        onDrag = { change, amount ->
+                            change.consume()
+                            total += amount
+                        },
+                        onDragEnd = {
+                            if (pending != null) {
+                                val t = 44.dp.toPx()
+                                layer = when {
+                                    abs(total.x) > abs(total.y) && total.x > t -> Layer.Examples
+                                    abs(total.x) > abs(total.y) && total.x < -t -> Layer.English
+                                    total.y < -t -> Layer.Chinese
+                                    total.y > t -> Layer.English
+                                    else -> layer
+                                }
+                            }
+                            total = Offset.Zero
+                        },
+                    )
+                }
+        }
+
         Box(
             modifier = Modifier
                 .width(cardWidth)
@@ -349,38 +398,7 @@ private fun StudyCard(
                 shadowElevation = 6.dp,
                 modifier = Modifier
                     .fillMaxSize()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) {
-                        if (pending != null && layer != Layer.Word) {
-                            layer = Layer.Word
-                            pending = null
-                        }
-                    }
-                    .pointerInput(entry.word, pending) {
-                        var total = Offset.Zero
-                        detectDragGestures(
-                            onDragStart = { total = Offset.Zero },
-                            onDrag = { change, amount ->
-                                change.consume()
-                                total += amount
-                            },
-                            onDragEnd = {
-                                if (pending != null) {
-                                    val t = 44.dp.toPx()
-                                    layer = when {
-                                        abs(total.x) > abs(total.y) && total.x > t -> Layer.Examples
-                                        abs(total.x) > abs(total.y) && total.x < -t -> Layer.English
-                                        total.y < -t -> Layer.Chinese
-                                        total.y > t -> Layer.English
-                                        else -> layer
-                                    }
-                                }
-                                total = Offset.Zero
-                            },
-                        )
-                    },
+                    .then(cardGestures),
             ) {
                 AnimatedContent(
                     targetState = layer,
@@ -410,7 +428,8 @@ private fun StudyCard(
                         Layer.English -> EnglishFace(
                             entry = entry,
                             onNext = {
-                                onCommit(pending ?: Rating.Good, false)
+                                val rating = pending ?: Rating.Good
+                                onCommit(rating, rating == Rating.Again || rating == Rating.Hard)
                             },
                             onWrong = {
                                 onWrong()
@@ -421,7 +440,11 @@ private fun StudyCard(
                         Layer.Chinese -> ChineseFace(
                             entry = entry,
                             details = details,
-                            onNext = { onCommit(pending ?: Rating.Good, false) },
+                            failed = detailsFailed,
+                            onNext = {
+                                val rating = pending ?: Rating.Good
+                                onCommit(rating, rating == Rating.Again || rating == Rating.Hard)
+                            },
                             onWrong = {
                                 onWrong()
                                 onCommit(Rating.Again, true)
@@ -432,7 +455,11 @@ private fun StudyCard(
                             entry = entry,
                             details = details,
                             onPlay = onPlay,
-                            onNext = { onCommit(pending ?: Rating.Good, false) },
+                            onCollapse = { layer = Layer.English },
+                            onNext = {
+                                val rating = pending ?: Rating.Good
+                                onCommit(rating, rating == Rating.Again || rating == Rating.Hard)
+                            },
                             onWrong = {
                                 onWrong()
                                 onCommit(Rating.Again, true)
@@ -442,33 +469,64 @@ private fun StudyCard(
                 }
             }
 
-            // The ring sits on the card's edge, outside its clip.
+            // The ring starts at top centre and grows clockwise; a small bead
+            // marks the head so the progress reads as a pen stroke, not a border.
+            val animated by androidx.compose.animation.core.animateFloatAsState(
+                targetValue = progress.coerceIn(0f, 1f),
+                animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
+                label = "studyRing",
+            )
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val inset = 1.dp.toPx()
-                val radius = 24.dp.toPx()
-                val rect = Rect(inset, inset, size.width - inset, size.height - inset)
-                val path = Path().apply {
-                    addRoundRect(
-                        androidx.compose.ui.geometry.RoundRect(
-                            rect,
-                            CornerRadius(radius, radius),
-                        ),
-                    )
-                }
-                drawPath(path, color = wl.outline, style = Stroke(width = 1.6.dp.toPx()))
-                if (progress > 0f) {
-                    val measure = PathMeasure()
-                    measure.setPath(path, false)
+                val path = ringPath(size.width, size.height, 24.dp.toPx(), 2.dp.toPx())
+                val measure = PathMeasure()
+                measure.setPath(path, false)
+                drawPath(
+                    path = path,
+                    color = wl.outline.copy(alpha = 0.9f),
+                    style = Stroke(width = 1.2.dp.toPx()),
+                )
+                if (animated > 0.001f) {
                     val segment = Path()
-                    measure.getSegment(0f, measure.length * progress.coerceIn(0f, 1f), segment, true)
+                    measure.getSegment(0f, measure.length * animated, segment, true)
                     drawPath(
                         path = segment,
                         color = wl.primary,
-                        style = Stroke(width = 2.4.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round),
+                        style = Stroke(
+                            width = 3.dp.toPx(),
+                            cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                        ),
+                    )
+                    val head = measure.getPosition(measure.length * animated)
+                    drawCircle(
+                        color = wl.primary,
+                        radius = 3.2.dp.toPx(),
+                        center = head,
                     )
                 }
             }
         }
+    }
+}
+
+
+private fun ringPath(width: Float, height: Float, radius: Float, inset: Float): Path {
+    val left = inset
+    val top = inset
+    val right = width - inset
+    val bottom = height - inset
+    val r = radius.coerceAtMost(minOf(right - left, bottom - top) / 2f)
+    return Path().apply {
+        moveTo((left + right) / 2f, top)
+        lineTo(right - r, top)
+        arcTo(Rect(right - 2 * r, top, right, top + 2 * r), 270f, 90f, false)
+        lineTo(right, bottom - r)
+        arcTo(Rect(right - 2 * r, bottom - 2 * r, right, bottom), 0f, 90f, false)
+        lineTo(left + r, bottom)
+        arcTo(Rect(left, bottom - 2 * r, left + 2 * r, bottom), 90f, 90f, false)
+        lineTo(left, top + r)
+        arcTo(Rect(left, top, left + 2 * r, top + 2 * r), 180f, 90f, false)
+        lineTo((left + right) / 2f, top)
+        close()
     }
 }
 
@@ -646,6 +704,7 @@ private fun EnglishFace(
 private fun ChineseFace(
     entry: WordEntry,
     details: StudyDetails?,
+    failed: Boolean,
     onNext: () -> Unit,
     onWrong: () -> Unit,
 ) {
@@ -719,7 +778,7 @@ private fun ChineseFace(
 
         if (details == null) {
             Text(
-                text = "正在取中文…",
+                text = if (failed) "中文暂不可用" else "正在取中文…",
                 fontSize = 12.sp,
                 color = wl.inkMuted,
             )
@@ -735,6 +794,7 @@ private fun ExamplesFace(
     entry: WordEntry,
     details: StudyDetails?,
     onPlay: (String) -> Unit,
+    onCollapse: () -> Unit,
     onNext: () -> Unit,
     onWrong: () -> Unit,
 ) {
@@ -767,6 +827,16 @@ private fun ExamplesFace(
             examples.getOrNull(pager.currentPage)?.audioUrl
                 ?.takeIf { it.isNotBlank() }
                 ?.let { url -> SpeakerButton(url = url, modifier = Modifier.size(28.dp)) }
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = "收起",
+                fontFamily = SerifFamily,
+                fontSize = 12.5.sp,
+                color = wl.inkMuted,
+                modifier = Modifier
+                    .clickable(onClick = onCollapse)
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+            )
         }
         Spacer(Modifier.height(10.dp))
         if (examples.isEmpty()) {

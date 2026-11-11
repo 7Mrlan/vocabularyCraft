@@ -18,6 +18,20 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.graphicsLayer
+import dev.wordloom.ui.theme.WlMotion
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
@@ -85,11 +99,44 @@ fun SearchPill(
 fun SpeakerButton(url: String, modifier: Modifier = Modifier) {
     val player = rememberAudioPlayer()
     val wl = WordloomTheme.colors
+    var playing by remember { mutableStateOf(false) }
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (pressed) 0.90f else 1f,
+        animationSpec = WlMotion.press,
+        label = "speakerPress",
+    )
+    val pulse = rememberInfiniteTransition(label = "speakerPlaying")
+    val wave by pulse.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.12f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 480, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "speakerWave",
+    )
+
     Box(
         modifier = modifier
             .size(34.dp)
-            .background(wl.surfaceAlt, CircleShape)
-            .clickable { player.play(url) },
+            .graphicsLayer {
+                val s = pressScale * if (playing) wave else 1f
+                scaleX = s
+                scaleY = s
+            }
+            .background(
+                if (playing) wl.primary.copy(alpha = 0.16f) else wl.surfaceAlt,
+                CircleShape,
+            )
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+            ) {
+                playing = true
+                player.play(url) { playing = false }
+            },
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -152,9 +199,12 @@ class AudioPlayer(private val context: Context) {
     private var mediaPlayer: MediaPlayer? = null
     private var job: Job? = null
 
-    fun play(url: String) {
+    fun play(url: String, onDone: () -> Unit = {}) {
         job?.cancel()
-        job = scope.launch { playOne(url) }
+        job = scope.launch {
+            playOne(url)
+            onDone()
+        }
     }
 
     /** Plays the clips in order, one after the other (the "play all" button). */

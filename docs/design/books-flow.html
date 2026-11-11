@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>词书 · 按钮 / 详情 / 转场</title>
+<style>
+  :root{
+    --paper:#f6f3ec; --ink:#16223a; --muted:#7b8494; --line:#e5dfd4;
+    --coral:#d9542b; --violet:#8a79ff; --violet2:#5b45e8;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;gap:56px;
+    background:radial-gradient(1100px 600px at 50% 0%,#fbf8f2 0%,#efe9de 70%,#e7dfd1 100%);
+    font-family:"PingFang SC","Noto Sans SC",system-ui,sans-serif;color:var(--ink);
+    padding:44px;
+  }
+  .col{display:flex;flex-direction:column;align-items:center;gap:14px}
+  .title{font-size:12px;letter-spacing:.16em;color:#8a8072}
+  .phone{
+    position:relative;width:330px;height:680px;border-radius:34px;background:var(--paper);
+    box-shadow:0 2px 2px rgba(0,0,0,.08),0 30px 60px -30px rgba(30,20,10,.35);
+    overflow:hidden;perspective:1400px;isolation:isolate;
+  }
+  .status{position:absolute;top:14px;left:22px;font-size:10px;color:#9aa0ab;letter-spacing:.08em}
+  .nav{position:absolute;top:34px;left:16px;right:16px;display:flex;align-items:center;gap:8px}
+  .back{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    color:var(--ink);font-size:18px;cursor:pointer;user-select:none}
+  .nav h1{margin:0;font-size:16px;font-weight:600;letter-spacing:.02em}
+  .nav .spacer{flex:1}
+
+  /* ---------- shelf ---------- */
+  .shelf{position:absolute;inset:0;transition:transform .5s cubic-bezier(.22,.8,.2,1),opacity .35s}
+  .shelf.dim{transform:scale(.94);opacity:0;pointer-events:none}
+  .deck{position:absolute;left:0;right:0;top:150px;display:flex;justify-content:center;perspective:1200px}
+  .cover{
+    position:relative;width:196px;height:258px;border-radius:14px;overflow:hidden;
+    background:linear-gradient(168deg,var(--violet),var(--violet2));
+    box-shadow:0 14px 30px -14px rgba(40,25,90,.5);
+    transform-style:preserve-3d;transition:transform .6s cubic-bezier(.3,.7,.2,1);
+    cursor:pointer;
+  }
+  .cover.spin{transform:rotateY(360deg) scale(1.06)}
+  .cover .k{position:absolute;left:16px;top:14px;font-size:8px;letter-spacing:.18em;color:rgba(255,255,255,.8)}
+  .cover .n{position:absolute;left:16px;top:36px;font-size:20px;line-height:1.12;font-weight:700;color:#fff}
+  .cover .s{position:absolute;left:16px;top:88px;font-size:9px;color:rgba(255,255,255,.78)}
+  .cover .c{position:absolute;left:16px;bottom:14px;font-size:17px;font-weight:600;color:#fff}
+  .cover .c small{font-size:8px;opacity:.75;margin-left:5px;letter-spacing:.14em;font-weight:400}
+  .cover svg{position:absolute;right:-16px;bottom:26px;width:150px;height:150px}
+  .dots{position:absolute;left:0;right:0;top:430px;display:flex;justify-content:center;gap:6px}
+  .dots i{width:8px;height:2px;border-radius:2px;background:#d8d0c2;display:block}
+  .dots i.on{width:18px;background:var(--ink)}
+  .meta{position:absolute;left:0;right:0;top:452px;text-align:center}
+  .meta .name{font-family:"Songti SC",Georgia,serif;font-size:17px;font-weight:700}
+  .meta .sub{margin-top:5px;font-size:10.5px;color:var(--muted)}
+  .ctaWrap{position:absolute;left:30px;right:30px;top:530px}
+  .cta{display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;
+    transition:transform .16s ease,background .2s}
+  .cta:active{transform:scale(.97)}
+  /* A 墨色胶囊 */
+  .cta.a{height:48px;border-radius:99px;background:var(--ink);color:#f7f3ea;font-size:14px;letter-spacing:.04em}
+  .cta.a .arrow{font-size:15px;opacity:.8}
+  /* B 书签带 */
+  .cta.b{height:52px;border-radius:10px;background:var(--coral);color:#fff;font-size:14px;letter-spacing:.06em;
+    box-shadow:0 10px 20px -10px rgba(217,84,43,.7)}
+  .cta.b::before{content:"";position:absolute;top:-8px;left:50%;width:2px;height:8px;background:var(--coral);transform:translateX(-50%)}
+  /* C 极简 */
+  .cta.c{height:44px;background:transparent;color:var(--ink);font-family:"Songti SC",Georgia,serif;font-size:15px}
+  .cta.c .rule{position:absolute;left:0;right:0;bottom:6px;height:1px;background:var(--ink);opacity:.35}
+  .cta.c .arrow{font-size:16px;transform:translateY(-1px)}
+  .variants{display:flex;gap:8px}
+  .variants button{border:1px solid #d8d0c2;background:#fff;color:#5d5546;border-radius:99px;
+    padding:6px 12px;font-size:11px;cursor:pointer}
+  .variants button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+
+  /* ---------- detail ---------- */
+  .detail{
+    position:absolute;inset:0;background:var(--paper);padding:0 20px;
+    transform-origin:50% 30%;opacity:0;pointer-events:none;
+    transform:scale(.6) translateY(6%) rotateY(-10deg);
+    transition:transform .62s cubic-bezier(.22,.8,.2,1),opacity .4s;
+  }
+  .detail.open{transform:scale(1) translateY(0) rotateY(0);opacity:1;pointer-events:auto}
+  .dhead{position:absolute;top:34px;left:16px;right:16px;display:flex;align-items:center;gap:8px}
+  .dhead h1{margin:0;font-family:"Songti SC",Georgia,serif;font-size:16px;font-weight:700}
+  .mini{width:24px;height:32px;border-radius:4px;background:linear-gradient(168deg,var(--violet),var(--violet2));
+    box-shadow:0 4px 8px -4px rgba(60,40,120,.6);position:relative;overflow:hidden;flex:none}
+  .mini::after{content:"";position:absolute;right:-6px;bottom:-4px;width:20px;height:20px;background:#fff;
+    opacity:.9;clip-path:polygon(50% 0,100% 100%,0 100%)}
+  .progress{margin-top:86px}
+  .progress .line{display:flex;align-items:baseline;gap:6px}
+  .progress .big{font-family:"Songti SC",Georgia,serif;font-size:28px;font-weight:700}
+  .progress .of{font-size:11px;color:var(--muted)}
+  .progress .right{margin-left:auto;font-size:10.5px;color:var(--muted)}
+  .bar{margin-top:10px;height:3px;border-radius:3px;background:#e2dccf;overflow:hidden}
+  .bar i{display:block;height:100%;width:4%;background:var(--violet2);border-radius:3px}
+  .tabs{display:flex;gap:20px;margin-top:22px;border-bottom:1px solid var(--line);padding-bottom:9px}
+  .tabs span{font-size:12px;color:var(--muted);position:relative;padding-bottom:9px}
+  .tabs span.on{color:var(--ink);font-weight:600}
+  .tabs span.on::after{content:"";position:absolute;left:0;right:0;bottom:-10px;height:2px;background:var(--ink);border-radius:2px}
+  .unit{margin-top:16px;font-size:10.5px;color:var(--muted);letter-spacing:.06em}
+  .list{margin-top:4px;padding-bottom:76px}
+  .row{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}
+  .row .w{font-family:"Songti SC",Georgia,serif;font-size:15px;width:92px}
+  .row .g{flex:1;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dot{width:9px;height:9px;border-radius:50%;border:1px solid #b9b1a2}
+  .dot.half{background:linear-gradient(90deg,#b9b1a2 50%,transparent 50%)}
+  .dot.full{background:var(--violet2);border-color:var(--violet2)}
+  .bottom{position:absolute;left:20px;right:20px;bottom:20px;display:flex;align-items:center;gap:14px}
+  .bottom .go{flex:1;height:46px;border-radius:99px;background:var(--ink);color:#f7f3ea;
+    display:flex;align-items:center;justify-content:center;font-size:13px;letter-spacing:.03em;cursor:pointer}
+  .bottom .txt{font-size:11.5px;color:var(--muted);cursor:pointer}
+
+  .caption{position:fixed;left:0;right:0;bottom:14px;text-align:center;font-size:10.5px;letter-spacing:.14em;color:#948a7c}
+</style>
+</head>
+<body>
+
+<div class="col">
+  <div class="title">词书 · 按钮与转场</div>
+  <div class="phone" id="p1">
+    <div class="status">9:41</div>
+    <div class="nav"><div class="back">‹</div><h1>词书</h1><div class="spacer"></div></div>
+
+    <div class="shelf" id="shelf">
+      <div class="deck">
+        <div class="cover" id="cover" onclick="openDetail()">
+          <div class="k">词书 · 第三卷</div>
+          <div class="n">考研<br>核心</div>
+          <div class="s">考研大纲裁剪</div>
+          <div class="c">3000<small>词族 · 考研大纲</small></div>
+          <svg viewBox="0 0 168 150" fill="none">
+            <circle cx="112" cy="70" r="44" fill="#fff" opacity=".16"/>
+            <path d="M112 28 A42 42 0 1 0 112 112 A42 42 0 1 1 112 28 Z" fill="#fff"/>
+            <path d="M8 138 L70 48 L98 88 L118 64 L164 138 Z" fill="#fff" opacity=".95"/>
+          </svg>
+        </div>
+      </div>
+      <div class="dots"><i class="on"></i><i></i><i></i><i></i></div>
+      <div class="meta"><div class="name">考研核心</div><div class="sub">3000 个词族 · 考研大纲</div></div>
+      <div class="ctaWrap" id="ctaWrap"></div>
+    </div>
+
+    <div class="detail" id="detail">
+      <div class="dhead"><div class="back" onclick="closeDetail()">‹</div><div class="mini"></div><h1>考研核心</h1><div class="spacer"></div><div class="back">⋯</div></div>
+      <div class="progress">
+        <div class="line"><span class="big">120</span><span class="of">/ 3000 词</span><span class="right">第 3 / 30 单元</span></div>
+        <div class="bar"><i></i></div>
+      </div>
+      <div class="tabs"><span class="on">全部</span><span>未学习</span><span>学习中</span><span>已掌握</span></div>
+      <div class="unit">第 3 单元 · 100 词</div>
+      <div class="list">
+        <div class="row"><span class="w">clay</span><span class="g">n. 黏土；泥土</span><span class="dot"></span></div>
+        <div class="row"><span class="w">allow</span><span class="g">v. 允许；准许</span><span class="dot full"></span></div>
+        <div class="row"><span class="w">element</span><span class="g">n. 元素；要素</span><span class="dot half"></span></div>
+        <div class="row"><span class="w">biography</span><span class="g">n. 传记</span><span class="dot"></span></div>
+        <div class="row"><span class="w">crew</span><span class="g">n. 全体船员；一组工作人员</span><span class="dot half"></span></div>
+        <div class="row"><span class="w">scarf</span><span class="g">n. 围巾；头巾</span><span class="dot"></span></div>
+        <div class="row"><span class="w">alphabet</span><span class="g">n. 字母表</span><span class="dot"></span></div>
+        <div class="row"><span class="w">strawberry</span><span class="g">n. 草莓</span><span class="dot full"></span></div>
+      </div>
+      <div class="bottom">
+        <div class="go">继续学习 · 第 3 单元</div>
+        <span class="txt">拼写</span>
+        <span class="txt">词表</span>
+      </div>
+    </div>
+  </div>
+  <div class="variants" id="variants">
+    <button data-v="a" class="on">A 墨色胶囊</button>
+    <button data-v="b">B 书签带</button>
+    <button data-v="c">C 极简箭头</button>
+  </div>
+</div>
+
+<div class="col">
+  <div class="title">词书详情 · 静态稿</div>
+  <div class="phone">
+    <div class="status">9:41</div>
+    <div class="detail open" style="pointer-events:none">
+      <div class="dhead"><div class="back">‹</div><div class="mini"></div><h1>考研核心</h1><div class="spacer"></div><div class="back">⋯</div></div>
+      <div class="progress">
+        <div class="line"><span class="big">120</span><span class="of">/ 3000 词</span><span class="right">第 3 / 30 单元</span></div>
+        <div class="bar"><i></i></div>
+      </div>
+      <div class="tabs"><span class="on">全部</span><span>未学习</span><span>学习中</span><span>已掌握</span></div>
+      <div class="unit">第 3 单元 · 100 词</div>
+      <div class="list">
+        <div class="row"><span class="w">clay</span><span class="g">n. 黏土；泥土</span><span class="dot"></span></div>
+        <div class="row"><span class="w">allow</span><span class="g">v. 允许；准许</span><span class="dot full"></span></div>
+        <div class="row"><span class="w">element</span><span class="g">n. 元素；要素</span><span class="dot half"></span></div>
+        <div class="row"><span class="w">biography</span><span class="g">n. 传记</span><span class="dot"></span></div>
+        <div class="row"><span class="w">crew</span><span class="g">n. 全体船员；一组工作人员</span><span class="dot half"></span></div>
+        <div class="row"><span class="w">scarf</span><span class="g">n. 围巾；头巾</span><span class="dot"></span></div>
+        <div class="row"><span class="w">alphabet</span><span class="g">n. 字母表</span><span class="dot"></span></div>
+        <div class="row"><span class="w">strawberry</span><span class="g">n. 草莓</span><span class="dot full"></span></div>
+      </div>
+      <div class="bottom">
+        <div class="go">继续学习 · 第 3 单元</div>
+        <span class="txt">拼写</span>
+        <span class="txt">词表</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="caption">Wordloom 词书 · 按钮 A/B/C、详情页与开合转场（非最终稿）</div>
+
+<script>
+const CTA = {
+  a: '<div class="cta a" onclick="openDetail()"><span>开始学习</span><span class="arrow">→</span></div>',
+  b: '<div class="cta b" onclick="openDetail()">开始学习</div>',
+  c: '<div class="cta c" onclick="openDetail()"><span>开始学习</span><span class="arrow">→</span><span class="rule"></span></div>',
+};
+const wrap = document.getElementById('ctaWrap');
+function setVariant(v){
+  wrap.innerHTML = CTA[v];
+  [...document.querySelectorAll('#variants button')].forEach(b=>b.classList.toggle('on', b.dataset.v===v));
+}
+document.querySelectorAll('#variants button').forEach(b=>b.addEventListener('click',()=>setVariant(b.dataset.v)));
+setVariant('a');
+
+const cover = document.getElementById('cover');
+const shelf = document.getElementById('shelf');
+const detail = document.getElementById('detail');
+let busy = false;
+
+function openDetail(){
+  if (busy) return;
+  busy = true;
+  cover.classList.add('spin');
+  setTimeout(()=>{
+    shelf.classList.add('dim');
+    detail.classList.add('open');
+    setTimeout(()=>{ busy = false; }, 620);
+  }, 260);
+}
+function closeDetail(){
+  if (busy) return;
+  busy = true;
+  detail.classList.remove('open');
+  shelf.classList.remove('dim');
+  cover.classList.remove('spin');
+  setTimeout(()=>{ busy = false; }, 620);
+}
+</script>
+</body>
+</html>

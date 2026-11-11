@@ -65,6 +65,16 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import kotlinx.coroutines.delay
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.wordloom.R
@@ -133,12 +143,23 @@ fun StudyScreen(
     }
 
     val seenToday = remember { mutableSetOf<String>() }
+    val spellWords = remember { mutableListOf<WordEntry>() }
+    var spelling by remember { mutableStateOf(false) }
+    var spellScore by remember { mutableIntStateOf(0) }
+    var spellTotal by remember { mutableIntStateOf(0) }
+    var spellTaken by remember { mutableStateOf(false) }
     var lastCommitted by remember { mutableStateOf<StudyItem?>(null) }
 
     fun commit(item: StudyItem, rating: Rating, requeue: Boolean) {
         lastCommitted = item
         val key = item.entry.word.lowercase()
-        if (seenToday.add(key)) onRate(item.entry, rating, item.isNew)
+        val firstToday = seenToday.add(key)
+        if (firstToday) {
+            onRate(item.entry, rating, item.isNew)
+            if (rating == Rating.Good || rating == Rating.Easy) {
+                spellWords.add(item.entry)
+            }
+        }
         val rest = queue.drop(1)
         queue = if (requeue) {
             when (rating) {
@@ -248,7 +269,28 @@ fun StudyScreen(
 
             total == 0 -> EmptyState(onBack = onBack)
 
-            current == null -> DoneState(total = total, onBack = onBack)
+            current == null && spelling -> SpellingRound(
+                words = spellWords,
+                onPlay = { url -> player.play(url) },
+                onFinish = { correct ->
+                    spellScore = correct
+                    spellTaken = true
+                    spelling = false
+                },
+            )
+
+            current == null -> DoneState(
+                total = total,
+                hasSpelling = spellWords.isNotEmpty(),
+                spelled = spellTaken,
+                spellScore = spellScore,
+                spellTotal = spellTotal,
+                onStartSpelling = {
+                    spellTotal = spellWords.size
+                    spelling = true
+                },
+                onBack = onBack,
+            )
 
             else -> StudyCard(
                 item = current,
@@ -880,7 +922,15 @@ private fun EmptyState(onBack: () -> Unit) {
 }
 
 @Composable
-private fun DoneState(total: Int, onBack: () -> Unit) {
+private fun DoneState(
+    total: Int,
+    hasSpelling: Boolean,
+    spelled: Boolean,
+    spellScore: Int,
+    spellTotal: Int,
+    onStartSpelling: () -> Unit,
+    onBack: () -> Unit,
+) {
     val wl = WordloomTheme.colors
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -893,7 +943,33 @@ private fun DoneState(total: Int, onBack: () -> Unit) {
             )
             Spacer(Modifier.height(6.dp))
             Text("本轮 $total 个词", fontSize = 12.sp, color = wl.inkMuted)
+            if (spelled) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "拼写 $spellScore/${if (spellTotal > 0) spellTotal else total}",
+                    fontSize = 12.sp,
+                    color = wl.inkMuted,
+                )
+            }
             Spacer(Modifier.height(20.dp))
+            if (hasSpelling && !spelled) {
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = wl.primary,
+                    modifier = Modifier
+                        .width(180.dp)
+                        .clickable(onClick = onStartSpelling),
+                ) {
+                    Text(
+                        text = "拼写检查",
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = wl.onPrimary,
+                        modifier = Modifier.padding(vertical = 13.dp),
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
+            }
             Text(
                 text = "返回",
                 style = MaterialTheme.typography.labelLarge,
@@ -901,5 +977,260 @@ private fun DoneState(total: Int, onBack: () -> Unit) {
                 modifier = Modifier.clickable(onClick = onBack),
             )
         }
+    }
+}
+
+@Composable
+private fun SpellingRound(
+    words: List<WordEntry>,
+    onPlay: (String) -> Unit,
+    onFinish: (Int) -> Unit,
+) {
+    if (words.isEmpty()) {
+        LaunchedEffect(Unit) { onFinish(0) }
+        return
+    }
+    val wl = WordloomTheme.colors
+    var index by remember { mutableIntStateOf(0) }
+    var typed by remember(index) { mutableStateOf("") }
+    var checked by remember(index) { mutableStateOf<Boolean?>(null) }
+    var correctCount by remember { mutableIntStateOf(0) }
+    var details by remember(index) { mutableStateOf<StudyDetails?>(null) }
+    val focus = remember { FocusRequester() }
+    val entry = words[index]
+
+    LaunchedEffect(index) {
+        details = StudyContent.details(entry.word)
+        focus.requestFocus()
+    }
+
+    fun advance() {
+        if (index + 1 >= words.size) {
+            onFinish(correctCount)
+        } else {
+            index += 1
+            typed = ""
+            checked = null
+        }
+    }
+
+    fun check() {
+        if (checked != null) return
+        val ok = typed.equals(entry.word.drop(1), ignoreCase = true)
+        checked = ok
+        if (ok) {
+            correctCount += 1
+            onPlay(entry.audio.firstOrNull()?.url.orEmpty())
+        }
+    }
+
+    LaunchedEffect(checked) {
+        if (checked == true) {
+            delay(700)
+            advance()
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "拼写",
+                fontFamily = SerifFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                color = wl.ink,
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = "${index + 1}/${words.size}",
+                fontSize = 12.sp,
+                color = wl.inkMuted,
+            )
+        }
+
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentAlignment = Alignment.Center,
+        ) {
+            val cardWidth = minOf(maxWidth * 0.92f, 360.dp)
+            val cardHeight = minOf(maxHeight * 0.82f, 460.dp)
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = if (wl.isDark) wl.surfaceAlt else Color.White,
+                shadowElevation = 6.dp,
+                modifier = Modifier
+                    .width(cardWidth)
+                    .height(cardHeight),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 24.dp, vertical = 24.dp),
+                ) {
+                    val meaning = details?.senses?.firstOrNull()
+                        ?: entry.senses.firstOrNull()?.definition.orEmpty()
+                    Text(
+                        text = meaning,
+                        fontSize = 14.sp,
+                        lineHeight = 22.sp,
+                        color = wl.ink,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "首字母 ${entry.word.first().uppercase()} · ${entry.word.length} 个字母",
+                            fontSize = 11.5.sp,
+                            color = wl.inkMuted,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        entry.audio.firstOrNull()?.let { clip ->
+                            SpeakerButton(
+                                url = clip.url,
+                                modifier = Modifier.size(28.dp),
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(26.dp))
+
+                    // Letter slots; a transparent text field sits on top and
+                    // takes the keyboard input.
+                    Box {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            entry.word.forEachIndexed { i, ch ->
+                                val fixed = !ch.isLetter()
+                                val shown = when {
+                                    fixed -> ch.toString()
+                                    i == 0 -> ch.toString()
+                                    i - 1 < typed.length -> typed[i - 1].toString()
+                                    else -> ""
+                                }
+                                val wrong = !fixed && i > 0 && i - 1 < typed.length &&
+                                    typed[i - 1].lowercaseChar() != ch.lowercaseChar()
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (wrong) wl.coral.copy(alpha = 0.12f) else Color.Transparent,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, wl.outline),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(42.dp),
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = shown,
+                                            fontFamily = SerifFamily,
+                                            fontSize = 18.sp,
+                                            color = when {
+                                                wrong -> wl.coral
+                                                fixed -> wl.inkMuted
+                                                else -> wl.ink
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                ) { focus.requestFocus() },
+                        )
+                        BasicTextField(
+                            value = typed,
+                            onValueChange = { text ->
+                                if (checked == null) {
+                                    typed = text.filter { it.isLetter() }
+                                        .take((entry.word.length - 1).coerceAtLeast(0))
+                                        .lowercase()
+                                }
+                            },
+                            singleLine = true,
+                            textStyle = TextStyle(color = Color.Transparent, fontSize = 1.sp),
+                            cursorBrush = SolidColor(Color.Transparent),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Text,
+                                imeAction = ImeAction.Done,
+                                autoCorrect = false,
+                            ),
+                            keyboardActions = KeyboardActions(onDone = { check() }),
+                            modifier = Modifier
+                                .matchParentSize()
+                                .focusRequester(focus)
+                                .alpha(0.02f),
+                        )
+                    }
+
+                    Spacer(Modifier.height(20.dp))
+
+                    when (checked) {
+                        true -> Text(
+                            text = "写对了",
+                            fontFamily = SerifFamily,
+                            fontSize = 15.sp,
+                            color = Color(0xFF0FA646),
+                        )
+                        false -> Column {
+                            Text(
+                                text = "应该是 ${entry.word}",
+                                fontFamily = SerifFamily,
+                                fontSize = 15.sp,
+                                color = wl.coral,
+                            )
+                            Spacer(Modifier.height(14.dp))
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = wl.surfaceAlt,
+                                modifier = Modifier
+                                    .width(140.dp)
+                                    .clickable { advance() },
+                            ) {
+                                Text(
+                                    text = "下一个",
+                                    textAlign = TextAlign.Center,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = wl.ink,
+                                    modifier = Modifier.padding(vertical = 12.dp),
+                                )
+                            }
+                        }
+                        null -> Surface(
+                            shape = RoundedCornerShape(50),
+                            color = if (typed.length >= entry.word.length - 1) wl.primary else wl.surfaceAlt,
+                            modifier = Modifier
+                                .width(150.dp)
+                                .clickable(enabled = typed.length >= entry.word.length - 1) { check() },
+                        ) {
+                            Text(
+                                text = "检查",
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (typed.length >= entry.word.length - 1) wl.onPrimary else wl.inkMuted,
+                                modifier = Modifier.padding(vertical = 12.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
     }
 }

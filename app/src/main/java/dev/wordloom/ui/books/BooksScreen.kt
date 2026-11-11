@@ -103,6 +103,9 @@ fun BooksScreen(
     onOpenWord: (String) -> Unit = {},
     onSelectBook: (String) -> Unit = {},
     selectedBookId: String = dev.wordloom.data.wordbook.WordBook.Core.name,
+    /** Live counts for the automatic books; curated covers carry their own. */
+    counts: Map<String, Int> = emptyMap(),
+    emptyHint: String? = null,
     words: List<String> = emptyList(),
     entries: Map<String, dev.wordloom.data.model.WordEntry> = emptyMap(),
     cards: List<dev.wordloom.data.local.CardEntity> = emptyList(),
@@ -171,7 +174,10 @@ fun BooksScreen(
     fun openBook() {
         if (detailOpen) return
         // The book is chosen at the tap, not while the deck is still settling.
-        openedId = books[nearest].id
+        val target = books[nearest]
+        openedId = target.id
+        // Opening a volume also makes it the book the study queue follows.
+        if (target.id != selectedBookId) onSelectBook(target.id)
         scope.launch {
             gust.snapTo(0f)
             gust.animateTo(
@@ -309,7 +315,8 @@ fun BooksScreen(
                             },
                         ),
                 ) {
-                    books.forEachIndexed { index, spec ->
+                    books.forEachIndexed { index, base ->
+                        val spec = counts[base.id]?.let { base.copy(count = it.toString()) } ?: base
                         var d = index - shown
                         d -= count * (d / count).roundToInt()
                         if (d.absoluteValue < 1.42f) {
@@ -395,7 +402,9 @@ fun BooksScreen(
                 }
             }
 
-            val selected = books[nearest]
+            val selected = books[nearest].let { base ->
+                counts[base.id]?.let { base.copy(count = it.toString()) } ?: base
+            }
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -463,7 +472,10 @@ fun BooksScreen(
 
     if (detailReady || detailOpen) {
         BookDetail(
-            book = books.firstOrNull { it.id == openedId } ?: books[nearest],
+            book = (books.firstOrNull { it.id == openedId } ?: books[nearest]).let { base ->
+                counts[base.id]?.let { base.copy(count = it.toString()) } ?: base
+            },
+            emptyHint = emptyHint,
             words = words,
             entries = entries,
             cards = cards,

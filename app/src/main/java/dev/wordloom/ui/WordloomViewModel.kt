@@ -78,8 +78,9 @@ class WordloomViewModel(
     val mapWords = repo.openedWords()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private val _book = MutableStateFlow(bookSelection.selected)
-    val book: StateFlow<WordBook> = _book.asStateFlow()
+    /** A curated book's name, or an [AutoBook] id. */
+    private val _selectedId = MutableStateFlow(bookSelection.selectedId)
+    val selectedId: StateFlow<String> = _selectedId.asStateFlow()
 
     /** The selected book's headwords, in study order. Loaded off the main thread. */
     private val _bookWords = MutableStateFlow<List<String>>(emptyList())
@@ -94,20 +95,25 @@ class WordloomViewModel(
     private val prefetching = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     init {
-        loadBook(_book.value)
+        loadBook(_selectedId.value)
     }
 
     fun selectBook(id: String) {
-        val next = WordBook.fromId(id)
-        if (next == _book.value) return
-        _book.value = next
-        bookSelection.selected = next
-        loadBook(next)
+        if (id == _selectedId.value) return
+        _selectedId.value = id
+        bookSelection.selectedId = id
+        loadBook(id)
     }
 
-    private fun loadBook(book: WordBook) {
+    /** Automatic books have no word list on disk; their words come from history. */
+    private fun loadBook(id: String) {
+        val curated = WordBook.entries.firstOrNull { it.name == id }
+        if (curated == null) {
+            _bookWords.value = emptyList()
+            return
+        }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            _bookWords.value = bookStore.words(book)
+            _bookWords.value = bookStore.words(curated)
         }
     }
 

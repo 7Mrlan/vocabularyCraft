@@ -64,6 +64,7 @@ fun BookDetail(
     words: List<String>,
     entries: Map<String, WordEntry>,
     cards: List<CardEntity>,
+    emptyHint: String? = null,
     onBack: () -> Unit,
     onStartStudy: () -> Unit,
     onOpenWord: (String) -> Unit,
@@ -189,7 +190,9 @@ fun BookDetail(
                 .weight(1f),
             contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 90.dp),
         ) {
-            if (sections.isEmpty() && words.isNotEmpty()) {
+            if (words.isEmpty()) {
+                item { EmptyBook(emptyHint ?: "这本词书还没有词") }
+            } else if (sections.isEmpty()) {
                 item { FilterEmpty(filter) }
             }
             sections.forEachIndexed { index, section ->
@@ -221,7 +224,7 @@ fun BookDetail(
         }
     }
 
-    Column(
+    if (words.isNotEmpty()) Column(
         modifier = Modifier
             .align(Alignment.BottomCenter)
             .fillMaxWidth()
@@ -296,6 +299,22 @@ private fun UnitHeader(unit: Int, detail: String, first: Boolean) {
             color = wl.inkMuted,
         )
     }
+}
+
+@Composable
+private fun EmptyBook(hint: String) {
+    val wl = WordloomTheme.colors
+    Text(
+        text = hint,
+        fontFamily = SerifFamily,
+        fontSize = 13.sp,
+        lineHeight = 22.sp,
+        color = wl.inkMuted,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 64.dp, start = 18.dp, end = 18.dp),
+    )
 }
 
 @Composable

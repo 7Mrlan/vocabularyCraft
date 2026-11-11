@@ -17,6 +17,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import dev.wordloom.data.model.WordEntry
+import dev.wordloom.data.wordbook.AutoBook
+import dev.wordloom.data.wordbook.AutoWords
 import dev.wordloom.ui.books.BookProgress
 import dev.wordloom.ui.books.BooksScreen
 import dev.wordloom.ui.study.StudyScreen
@@ -50,13 +52,27 @@ fun AppNav(
     val listWords by viewModel.listWords.collectAsStateWithLifecycle()
     val quiz by viewModel.quiz.collectAsStateWithLifecycle()
     val mapWords by viewModel.mapWords.collectAsStateWithLifecycle()
-    val book by viewModel.book.collectAsStateWithLifecycle()
-    val bookWords by viewModel.bookWords.collectAsStateWithLifecycle()
+    val selectedId by viewModel.selectedId.collectAsStateWithLifecycle()
+    val curatedWords by viewModel.bookWords.collectAsStateWithLifecycle()
     val studyEntries by viewModel.studyEntries.collectAsStateWithLifecycle()
 
     val entries = remember(mapWords, studyEntries) {
         mapWords.associateBy { it.word.lowercase() } + studyEntries
     }
+
+    // The automatic books are derived here, from data the app already holds.
+    val autoKind = remember(selectedId) { AutoBook.fromId(selectedId) }
+    val autoCounts = remember(mapWords, cards) {
+        mapOf(
+            AutoBook.Looked.id to AutoWords.looked(mapWords).size,
+            AutoBook.Wrong.id to AutoWords.wrong(cards).size,
+            AutoBook.Saved.id to AutoWords.saved(cards).size,
+        )
+    }
+    val bookWords = remember(autoKind, curatedWords, mapWords, cards) {
+        autoKind?.let { AutoWords.of(it, mapWords, cards) } ?: curatedWords
+    }
+
     val bookStatus = remember(cards) { BookProgress.statusMap(cards) }
     val currentUnit = remember(bookWords, bookStatus) {
         BookProgress.currentUnitIndex(bookWords, bookStatus)
@@ -124,7 +140,9 @@ fun AppNav(
                 onStartStudy = { nav.navigate("study") },
                 onOpenWord = { word -> openWord(word) },
                 onSelectBook = viewModel::selectBook,
-                selectedBookId = book.name,
+                selectedBookId = selectedId,
+                counts = autoCounts,
+                emptyHint = autoKind?.let { it.emptyHint },
                 words = bookWords,
                 entries = entries,
                 cards = cards,

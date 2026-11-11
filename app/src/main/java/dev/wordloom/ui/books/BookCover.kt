@@ -32,9 +32,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Canvas
+import dev.wordloom.data.wordbook.AutoBook
 import dev.wordloom.data.wordbook.WordBook
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
 
-enum class CoverArt { Star, Chevrons, Peak, Sprout }
+enum class CoverArt { Star, Chevrons, Peak, Sprout, Ribbon, Waves }
 
 data class BookCoverSpec(
     val id: String,
@@ -86,6 +89,41 @@ val Bookshelf: List<BookCoverSpec> = listOf(
         top = Color(0xFF8A79FF),
         bottom = Color(0xFF5B45E8),
         art = CoverArt.Peak,
+    ),
+    // The three books that write themselves. Their counts are filled in at
+    // runtime from the reader's own history.
+    BookCoverSpec(
+        id = AutoBook.Looked.id,
+        title = "查过\n的词",
+        kicker = AutoBook.Looked.kicker,
+        subtitle = AutoBook.Looked.subtitle,
+        count = "0",
+        countNote = AutoBook.Looked.countNote,
+        top = Color(0xFF4EA9FE),
+        bottom = Color(0xFF005AFB),
+        art = CoverArt.Waves,
+    ),
+    BookCoverSpec(
+        id = AutoBook.Wrong.id,
+        title = "错词\n本",
+        kicker = AutoBook.Wrong.kicker,
+        subtitle = AutoBook.Wrong.subtitle,
+        count = "0",
+        countNote = AutoBook.Wrong.countNote,
+        top = Color(0xFFFF7E90),
+        bottom = Color(0xFFEC4A63),
+        art = CoverArt.Sprout,
+    ),
+    BookCoverSpec(
+        id = AutoBook.Saved.id,
+        title = "收藏\n夹",
+        kicker = AutoBook.Saved.kicker,
+        subtitle = AutoBook.Saved.subtitle,
+        count = "0",
+        countNote = AutoBook.Saved.countNote,
+        top = Color(0xFF3E5A86),
+        bottom = Color(0xFF1B2C4A),
+        art = CoverArt.Ribbon,
     ),
 )
 
@@ -217,6 +255,8 @@ private fun DrawScope.drawCoverArt(art: CoverArt) {
                 CoverArt.Chevrons -> chevronsArt()
                 CoverArt.Peak -> peakArt()
                 CoverArt.Sprout -> sproutArt()
+                CoverArt.Ribbon -> ribbonArt()
+                CoverArt.Waves -> wavesArt()
             }
         }
     }
@@ -314,4 +354,37 @@ private fun DrawScope.sproutArt() {
         color = Color.White.copy(alpha = 0.80f),
     )
     drawCircle(Color.White.copy(alpha = 0.20f), radius = 17f, center = Offset(118f, 202f))
+}
+
+private fun DrawScope.ribbonArt() {
+    drawCircle(Color.White.copy(alpha = 0.12f), radius = 74f, center = Offset(150f, 120f))
+    drawPath(
+        path = Path().apply {
+            moveTo(112f, 24f); lineTo(206f, 24f); lineTo(206f, 206f)
+            lineTo(159f, 164f); lineTo(112f, 206f); close()
+        },
+        color = Color.White,
+    )
+    drawPath(
+        path = Path().apply {
+            moveTo(66f, 74f); lineTo(74f, 102f); lineTo(102f, 110f); lineTo(74f, 118f)
+            lineTo(66f, 146f); lineTo(58f, 118f); lineTo(30f, 110f); lineTo(58f, 102f); close()
+        },
+        color = Color.White.copy(alpha = 0.55f),
+    )
+}
+
+private fun DrawScope.wavesArt() {
+    val center = Offset(150f, 202f)
+    listOf(52f, 100f, 148f).forEachIndexed { index, radius ->
+        drawArc(
+            color = Color.White.copy(alpha = 0.9f - index * 0.28f),
+            startAngle = 180f,
+            sweepAngle = 180f,
+            useCenter = false,
+            topLeft = Offset(center.x - radius, center.y - radius),
+            size = Size(radius * 2, radius * 2),
+            style = Stroke(width = 16f, cap = StrokeCap.Round),
+        )
+    }
 }

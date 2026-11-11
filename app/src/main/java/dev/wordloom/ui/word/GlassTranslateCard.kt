@@ -38,6 +38,7 @@ import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import dev.wordloom.ui.theme.SerifFamily
 import dev.wordloom.ui.theme.WordloomTheme
+import dev.wordloom.ui.theme.wlPress
 
 /**
  * The card that opens over a selection.
@@ -256,7 +257,7 @@ private fun TranslationBody(translation: String) {
 private fun CopyAction(badge: @Composable () -> Unit, label: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
-            .clickable(onClick = onClick)
+            .wlPress(onClick = onClick)
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp),

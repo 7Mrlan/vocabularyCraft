@@ -187,8 +187,16 @@ fun BooksScreen(
     }
 
     fun closeBook() {
+        if (!detailOpen) return
         detailOpen = false
-        spinning = false
+        // The page folds back first; the cover only turns once it can be seen,
+        // otherwise the spin happens behind an opaque page and the close reads
+        // as a cut.
+        scope.launch {
+            kotlinx.coroutines.delay(280)
+            // A quick reopen in between owns the spin now.
+            if (!detailOpen) spinning = false
+        }
     }
 
     // System back closes the book before it leaves the shelf.
@@ -459,18 +467,22 @@ fun BooksScreen(
             words = words,
             entries = entries,
             cards = cards,
-            interactive = detailOpen || openProgress > 0.01f,
+            interactive = detailOpen,
             onBack = { closeBook() },
             onStartStudy = { onStartStudy() },
             onOpenWord = onOpenWord,
             modifier = Modifier
                 // Composed behind the shelf before anyone can tap, so the first
                 // frame of the opening animation is already laid out.
-                .zIndex(if (detailOpen || openProgress > 0.01f) 1f else -1f)
+                // Stay on top until the fold is finished, then drop behind the
+                // shelf so the pre-composed page can never be hit while closed.
+                .zIndex(if (openProgress > 0.01f) 1f else -1f)
                 .graphicsLayer {
-                // Fully opaque from the first frame: the page unfolds over the
-                // shelf instead of being blended with it. No fade at all.
-                val s = 0.72f + 0.28f * openProgress
+                // Opening is opaque from the first frame. Closing stays opaque
+                // while the page folds onto the cover and only dissolves in its
+                // last few frames, so the two layers never ghost each other.
+                alpha = if (detailOpen) 1f else ((openProgress - 0.12f) / 0.14f).coerceIn(0f, 1f)
+                val s = 0.48f + 0.52f * openProgress
                 scaleX = s
                 scaleY = s
                 // Grows out of the cover, not from the middle of the screen.

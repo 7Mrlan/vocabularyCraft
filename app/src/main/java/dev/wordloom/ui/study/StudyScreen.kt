@@ -91,6 +91,7 @@ import dev.wordloom.ui.components.SpeakerButton
 import dev.wordloom.ui.components.rememberAudioPlayer
 import dev.wordloom.ui.feedback.rememberAppFeedback
 import dev.wordloom.ui.theme.SerifFamily
+import dev.wordloom.ui.theme.wlPress
 import dev.wordloom.ui.theme.WordloomTheme
 import kotlin.math.abs
 import kotlin.math.min
@@ -608,57 +609,50 @@ private fun WordFace(entry: WordEntry, onGrade: (Rating) -> Unit) {
 @Composable
 private fun GradeRow(onGrade: (Rating) -> Unit) {
     val wl = WordloomTheme.colors
-    Column {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            GradeOption("瞬间", "秒懂", Color(0xFF0FA646), Modifier.weight(1f)) { onGrade(Rating.Easy) }
-            GradeOption("很快", "认识", wl.primary, Modifier.weight(1f)) { onGrade(Rating.Good) }
-            GradeOption("想一会", "模糊", Color(0xFFC98A12), Modifier.weight(1f)) { onGrade(Rating.Hard) }
-            GradeOption("想不起", "忘记", wl.coral, Modifier.weight(1f)) { onGrade(Rating.Again) }
+            GradeOption("秒懂", Modifier.weight(1f)) { onGrade(Rating.Easy) }
+            GradeOption("认识", Modifier.weight(1f)) { onGrade(Rating.Good) }
+            GradeOption("模糊", Modifier.weight(1f)) { onGrade(Rating.Hard) }
+            GradeOption("忘记", Modifier.weight(1f)) { onGrade(Rating.Again) }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
-            text = "先凭第一反应选，再揭晓",
-            fontSize = 10.sp,
-            color = wl.inkMuted.copy(alpha = 0.7f),
+            text = "凭第一反应，再揭晓",
+            fontFamily = SerifFamily,
+            fontSize = 10.5.sp,
+            color = wl.inkMuted.copy(alpha = 0.8f),
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
         )
     }
 }
 
+/**
+ * Four answers, one voice. No colours, no rules, no second labels — the words
+ * themselves carry the scale, and the only thing a touch does is sink the ink.
+ */
 @Composable
 private fun GradeOption(
-    hint: String,
     label: String,
-    tint: Color,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    Column(
-        modifier = modifier.clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Box(
+        modifier = modifier
+            .height(46.dp)
+            .wlPress(onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = hint,
-            fontSize = 9.5.sp,
-            color = WordloomTheme.colors.inkMuted.copy(alpha = 0.75f),
-        )
-        Spacer(Modifier.height(3.dp))
         Text(
             text = label,
             fontFamily = SerifFamily,
-            fontSize = 14.sp,
-            color = tint,
-        )
-        Spacer(Modifier.height(4.dp))
-        Box(
-            modifier = Modifier
-                .width(18.dp)
-                .height(2.dp)
-                .background(tint, CircleShape),
+            fontSize = 16.sp,
+            letterSpacing = 0.5.sp,
+            color = WordloomTheme.colors.ink.copy(alpha = 0.86f),
         )
     }
 }
@@ -974,32 +968,24 @@ private fun RevealActions(onNext: () -> Unit, onWrong: () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.clickable(onClick = onNext),
-        ) {
-            Text(
-                text = "下一词",
-                fontFamily = SerifFamily,
-                fontSize = 15.sp,
-                color = wl.primary,
-            )
-            Spacer(Modifier.height(4.dp))
-            Box(Modifier.width(22.dp).height(2.dp).background(wl.primary, CircleShape))
-        }
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.clickable(onClick = onWrong),
-        ) {
-            Text(
-                text = "记错了",
-                fontFamily = SerifFamily,
-                fontSize = 15.sp,
-                color = wl.coral,
-            )
-            Spacer(Modifier.height(4.dp))
-            Box(Modifier.width(22.dp).height(2.dp).background(wl.coral, CircleShape))
-        }
+        Text(
+            text = "下一词",
+            fontFamily = SerifFamily,
+            fontSize = 15.sp,
+            color = wl.ink,
+            modifier = Modifier
+                .wlPress(onClick = onNext)
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+        )
+        Text(
+            text = "记错了",
+            fontFamily = SerifFamily,
+            fontSize = 15.sp,
+            color = wl.coral,
+            modifier = Modifier
+                .wlPress(onClick = onWrong)
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+        )
     }
 }
 

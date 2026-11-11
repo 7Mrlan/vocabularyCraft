@@ -1,6 +1,7 @@
 package dev.wordloom.ui.theme
 
 import android.app.Activity
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -70,7 +71,10 @@ fun WordloomTheme(
         }
     }
 
-    CompositionLocalProvider(LocalWlColors provides wl) {
+    CompositionLocalProvider(
+        LocalWlColors provides wl,
+        LocalIndication provides NoIndication,
+    ) {
         MaterialTheme(
             colorScheme = scheme,
             typography = WlTypography,

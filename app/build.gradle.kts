@@ -104,4 +104,6 @@ dependencies {
     implementation(libs.play.services.tasks)
     implementation(libs.haze)
     implementation(libs.compose.shimmer)
+
+    testImplementation(libs.junit)
 }

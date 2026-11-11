@@ -46,19 +46,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.wordloom.R
-import kotlin.math.roundToInt
 import dev.wordloom.data.local.CardEntity
 import dev.wordloom.data.model.WordEntry
 import dev.wordloom.ui.theme.SerifFamily
 import dev.wordloom.ui.theme.WlMotion
 import dev.wordloom.ui.theme.WordloomTheme
-
-private enum class WordFilter(val label: String) {
-    All("全部"),
-    New("未学习"),
-    Learning("学习中"),
-    Mastered("已掌握"),
-}
 
 /**
  * The inside of a book: one number for the whole volume, then the words in it.
@@ -76,37 +68,19 @@ fun BookDetail(
     modifier: Modifier = Modifier,
 ) {
     val wl = WordloomTheme.colors
-    val cardMap = remember(cards) { cards.associateBy { it.word.lowercase() } }
+    val statusByWord = remember(cards) { BookProgress.statusMap(cards) }
     val total = book.count.toIntOrNull() ?: words.size.coerceAtLeast(1)
-    val learned = words.count { cardMap[it.word.lowercase()] != null }
-    val units = (total / 100).coerceAtLeast(1)
-    val currentUnit = (learned / 100 + 1).coerceAtMost(units)
+    val learned = words.count { statusByWord[it.word.lowercase()] != WordStatus.New }
+    val units = BookProgress.unitCount(total)
+    val currentUnit = (learned / BookProgress.UNIT_SIZE + 1).coerceAtMost(units)
     val accent = book.top
-    val ratio = (learned.toFloat() / total).coerceIn(0f, 1f)
-    // Whole-book progress reads as a number, not a bar you have to squint at.
-    val percentText = when {
-        learned == 0 -> "0%"
-        ratio >= 0.1f -> "${(ratio * 100).roundToInt()}%"
-        else -> String.format(java.util.Locale.US, "%.1f%%", ratio * 100f)
-    }
+    val ratio = BookProgress.ratio(learned, total)
+    val percentText = BookProgress.percentText(learned, total)
 
     var filter by remember { mutableStateOf(WordFilter.All) }
 
-    // Units are a property of the book's own order, not of the filter, so a
-    // filtered list keeps its original unit numbers and just drops empty ones.
     val sections = remember(words, cards, filter) {
-        words.withIndex()
-            .filter { (_, entry) ->
-                val card = cardMap[entry.word.lowercase()]
-                when (filter) {
-                    WordFilter.All -> true
-                    WordFilter.New -> card == null
-                    WordFilter.Learning -> card != null && card.stability < 21.0
-                    WordFilter.Mastered -> card != null && card.stability >= 21.0
-                }
-            }
-            .groupBy { it.index / 100 }
-            .map { (index, rows) -> index + 1 to rows.map { it.value } }
+        BookProgress.sections(words, statusByWord, filter)
     }
 
     Box(
@@ -232,24 +206,25 @@ fun BookDetail(
             if (sections.isEmpty()) {
                 item { FilterEmpty(filter) }
             }
-            sections.forEachIndexed { index, (unit, rows) ->
-                item(key = "unit-$unit") {
-                    val inUnit = rows.count { cardMap[it.word.lowercase()] != null }
+            sections.forEachIndexed { index, section ->
+                item(key = "unit-${section.unit}") {
+                    val inUnit = section.words.count {
+                        statusByWord[it.word.lowercase()] != WordStatus.New
+                    }
                     UnitHeader(
-                        unit = unit,
-                        detail = if (filter == WordFilter.All) "$inUnit / ${rows.size} 词" else "${rows.size} 词",
+                        unit = section.unit,
+                        detail = if (filter == WordFilter.All) {
+                            "$inUnit / ${section.words.size} 词"
+                        } else {
+                            "${section.words.size} 词"
+                        },
                         first = index == 0,
                     )
                 }
-                items(rows, key = { it.word }) { entry ->
-                    val card = cardMap[entry.word.lowercase()]
+                items(section.words, key = { it.word }) { entry ->
                     WordRow(
                         entry = entry,
-                        status = when {
-                            card == null -> 0
-                            card.stability >= 21.0 -> 2
-                            else -> 1
-                        },
+                        status = statusByWord[entry.word.lowercase()] ?: WordStatus.New,
                         accent = accent,
                         onClick = { onOpenWord(entry) },
                     )
@@ -363,7 +338,7 @@ private fun FilterEmpty(filter: WordFilter) {
 @Composable
 private fun WordRow(
     entry: WordEntry,
-    status: Int,
+    status: WordStatus,
     accent: Color,
     onClick: () -> Unit,
 ) {
@@ -399,9 +374,11 @@ private fun WordRow(
         Spacer(Modifier.width(10.dp))
         Box(modifier = Modifier.size(9.dp), contentAlignment = Alignment.Center) {
             when (status) {
-                2 -> Box(Modifier.fillMaxSize().background(accent, CircleShape))
-                1 -> Box(Modifier.fillMaxSize().background(accent.copy(alpha = 0.45f), CircleShape))
-                else -> Canvas(modifier = Modifier.fillMaxSize()) {
+                WordStatus.Mastered -> Box(Modifier.fillMaxSize().background(accent, CircleShape))
+                WordStatus.Learning -> Box(
+                    Modifier.fillMaxSize().background(accent.copy(alpha = 0.45f), CircleShape),
+                )
+                WordStatus.New -> Canvas(modifier = Modifier.fillMaxSize()) {
                     drawCircle(
                         color = wl.outline,
                         radius = size.minDimension / 2f,

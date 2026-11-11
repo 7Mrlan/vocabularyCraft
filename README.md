@@ -61,6 +61,18 @@
 运行时按需取。词条页不摆来源行（个人自用，不需要那两行占用首屏）。若将来改成对外分发，把 `WordloomApp.kt` 里
 的默认实现换回 `WiktionarySource()` 即可。
 
+### 词书词表
+
+三本词书只打包**词形**（一行一词，约 100KB），不带任何释义：
+
+| 文件 | 词数 | 来源 | 授权 |
+|---|---|---|---|
+| `assets/wordbooks/core3000.txt` | 3,000 | NGSL 1.2（2,809 词）+ COCA 补足 | CC BY-SA 4.0（Browne, Culligan & Phillips） |
+| `assets/wordbooks/cet2500.txt` | 2,500 | CET-4 ∪ CET-6 大纲，按 COCA 词频裁剪 | 只取词形 |
+| `assets/wordbooks/kaoyan3000.txt` | 3,000 | 考研大纲，按 COCA 词频裁剪 | 只取词形 |
+
+生成脚本与来源说明见 [`tools/wordbooks/README.md`](tools/wordbooks/README.md)。
+
 ### 换数据源
 
 `data/remote/DictionarySource.kt` 是唯一的契约：
@@ -149,24 +161,7 @@ adb shell settings put global http_proxy 10.0.2.2:7890   # 换成你的代理端
 | FSRS 落库 | ✅ `stability=3.173`、`difficulty=5.282`、`due=3 天后`，与公式手算一致 |
 | 地图 | ✅ 瓦片加载、英文标签、自动巡航（欧→东亚镜头移动已验证）、轮播词卡切换 |
 
-| ![首页](docs/screenshots/home.png) | ![词条](docs/screenshots/word.png) | ![复习](docs/screenshots/review.png) |
-|---|---|---|
-| 首页 | 词条页 | 复习卡 |
-
-| ![深色首页](docs/screenshots/home-dark.png) | ![深色词条](docs/screenshots/word-dark.png) | ![搜索](docs/screenshots/search.png) |
-|---|---|---|
-| 深色首页 | 深色词条页 | 搜索页（空态） |
-| ![搜索结果](docs/screenshots/search-results.png) | ![词表](docs/screenshots/lists.png) | ![空词表](docs/screenshots/lists-empty.png) |
-| 搜索结果 | 词表 | 空词表 |
-| ![同义词](docs/screenshots/synonyms.png) | ![词条页底部](docs/screenshots/word-bottom.png) | |
-| 同义词页 | 词族 / 复习进度 | |
-| ![加入词表](docs/screenshots/add-to-list.png) | ![新建词表](docs/screenshots/new-list-sheet.png) |
-|---|---|
-| 加入词表（底部抽屉） | 新建词表 |
-
-| ![图标](docs/screenshots/icons.png) |
-|---|
-| 图标全集（浅 / 深） |
+> 截图在词书与学习流程完工后统一重拍，现在不保留过期界面图。
 
 ## 目录结构
 

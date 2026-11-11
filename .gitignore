@@ -12,3 +12,4 @@ captures/
 .kotlin/
 .claude/
 keystore/
+tools/wordbooks/.cache/

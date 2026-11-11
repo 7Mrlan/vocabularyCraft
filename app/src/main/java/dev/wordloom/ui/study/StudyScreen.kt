@@ -112,6 +112,8 @@ private data class StudyItem(val word: String, val isNew: Boolean)
 @Composable
 fun StudyScreen(
     dueCards: List<CardEntity>,
+    /** Every card, so a word already scheduled is never offered as new again. */
+    cards: List<CardEntity>,
     /** The current unit of the selected book. */
     newWords: List<String>,
     entries: Map<String, WordEntry>,
@@ -140,10 +142,8 @@ fun StudyScreen(
     val dueItems = remember(dueCards) {
         dueCards.take(60).map { StudyItem(it.word.lowercase(), false) }
     }
-    val newItems = remember(newWords, dueCards) {
-        newWords.filter { word -> dueCards.none { it.word.equals(word, ignoreCase = true) } }
-            .take(10)
-            .map { StudyItem(it, true) }
+    val newItems = remember(newWords, cards) {
+        StudyQueue.newWords(newWords, cards).map { StudyItem(it, true) }
     }
 
     var queue by remember { mutableStateOf<List<StudyItem>>(emptyList()) }
@@ -195,9 +195,10 @@ fun StudyScreen(
     }
 
     val current = queue.firstOrNull()
-    // The English entry may not be cached yet; ask for it as the card arrives.
-    LaunchedEffect(current?.word) {
-        current?.let { onNeedEntry(it.word) }
+    // The English entry may not be cached yet. Ask for the current card and the
+    // next two, so their clips are already on disk by the time they are tapped.
+    LaunchedEffect(queue.firstOrNull()?.word, queue.size) {
+        queue.take(3).forEach { onNeedEntry(it.word) }
     }
     val progress = if (total == 0) 0f else completed.toFloat() / total
 
@@ -1008,7 +1009,9 @@ private fun EmptyState(onBack: () -> Unit) {
                 text = "返回",
                 style = MaterialTheme.typography.labelLarge,
                 color = wl.inkMuted,
-                modifier = Modifier.clickable(onClick = onBack),
+                modifier = Modifier
+                    .wlPress(onClick = onBack)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
     }
@@ -1048,16 +1051,16 @@ private fun DoneState(
             if (hasSpelling && !spelled) {
                 Surface(
                     shape = RoundedCornerShape(50),
-                    color = wl.primary,
+                    color = wl.ink,
                     modifier = Modifier
                         .width(180.dp)
-                        .clickable(onClick = onStartSpelling),
+                        .wlPress(onClick = onStartSpelling),
                 ) {
                     Text(
                         text = "拼写检查",
                         textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.labelLarge,
-                        color = wl.onPrimary,
+                        color = wl.surface,
                         modifier = Modifier.padding(vertical = 13.dp),
                     )
                 }
@@ -1067,7 +1070,9 @@ private fun DoneState(
                 text = "返回",
                 style = MaterialTheme.typography.labelLarge,
                 color = wl.inkMuted,
-                modifier = Modifier.clickable(onClick = onBack),
+                modifier = Modifier
+                    .wlPress(onClick = onBack)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
     }

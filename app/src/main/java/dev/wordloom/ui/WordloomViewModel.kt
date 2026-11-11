@@ -9,6 +9,7 @@ import dev.wordloom.data.WordRepository
 import dev.wordloom.data.local.CardEntity
 import dev.wordloom.data.local.ListWithCount
 import dev.wordloom.data.model.Suggestion
+import dev.wordloom.data.audio.AudioCache
 import dev.wordloom.data.model.WordEntry
 import dev.wordloom.data.wordbook.WordBook
 import dev.wordloom.data.wordbook.WordBookSelection
@@ -60,6 +61,7 @@ class WordloomViewModel(
     private val repo: WordRepository,
     private val bookStore: WordBookStore,
     private val bookSelection: WordBookSelection,
+    private val audioCache: AudioCache,
 ) : ViewModel() {
 
     private val _wordState = MutableStateFlow<WordUiState>(WordUiState.Idle)
@@ -145,6 +147,8 @@ class WordloomViewModel(
             try {
                 repo.lookup(key, markRecent = false)?.let { entry ->
                     _studyEntries.value = _studyEntries.value + (key to entry)
+                    // Warm the clip now; the card's speaker then plays from disk.
+                    entry.audio.firstOrNull()?.url?.let { audioCache.fetch(it) }
                 }
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled

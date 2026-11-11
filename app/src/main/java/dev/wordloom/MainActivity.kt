@@ -55,7 +55,12 @@ class MainActivity : ComponentActivity() {
 
             WordloomTheme(darkTheme = dark) {
                 val factory = remember {
-                    RepositoryFactory(container.repository, container.wordBooks, container.bookSelection)
+                    RepositoryFactory(
+                        container.repository,
+                        container.wordBooks,
+                        container.bookSelection,
+                        container.audioCache,
+                    )
                 }
                 val vm: WordloomViewModel = viewModel(factory = factory)
                 AppNav(
@@ -75,8 +80,9 @@ private class RepositoryFactory(
     private val repository: WordRepository,
     private val wordBooks: dev.wordloom.data.wordbook.WordBookStore,
     private val bookSelection: dev.wordloom.data.wordbook.WordBookSelection,
+    private val audioCache: dev.wordloom.data.audio.AudioCache,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
-        WordloomViewModel(repository, wordBooks, bookSelection) as T
+        WordloomViewModel(repository, wordBooks, bookSelection, audioCache) as T
 }

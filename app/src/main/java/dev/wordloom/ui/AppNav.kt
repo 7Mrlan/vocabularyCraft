@@ -155,6 +155,7 @@ fun AppNav(
         composable("study") {
             StudyScreen(
                 dueCards = dueCards,
+                cards = cards,
                 newWords = unitWords,
                 entries = entries,
                 onNeedEntry = viewModel::prefetchForStudy,

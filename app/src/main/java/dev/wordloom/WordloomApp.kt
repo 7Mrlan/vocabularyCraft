@@ -5,6 +5,7 @@ import dev.wordloom.data.WordRepository
 import dev.wordloom.data.local.WordloomDb
 import dev.wordloom.data.remote.DictionarySource
 import dev.wordloom.data.remote.VocabularyComSource
+import dev.wordloom.data.audio.AudioCache
 import dev.wordloom.data.translate.TranslationService
 import dev.wordloom.data.wordbook.WordBookSelection
 import dev.wordloom.data.wordbook.WordBookStore
@@ -18,6 +19,7 @@ class AppContainer(app: Application) {
     val repository = WordRepository(source, db.dao())
     val wordBooks = WordBookStore(app)
     val bookSelection = WordBookSelection(app)
+    val audioCache = AudioCache(app)
 }
 
 class WordloomApp : Application() {

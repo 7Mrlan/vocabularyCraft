@@ -1,4 +1,8 @@
 package dev.wordloom.ui.study
+import android.view.HapticFeedbackConstants
+import android.os.Build
+import android.media.SoundPool
+import android.content.Context
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -40,8 +44,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.annotation.RawRes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -55,11 +61,16 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -78,6 +89,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import kotlinx.coroutines.delay
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.wordloom.R
@@ -100,6 +114,50 @@ private enum class Layer { Word, English, Chinese, Examples }
 
 @Immutable
 private data class StudyItem(val word: String, val isNew: Boolean)
+
+/**
+ * The review's voice. Four grades get four different gestures — a glass drop, a
+ * wooden tick, a page turn and a closing book — so the answer is heard before
+ * the screen explains it. Spelling has its own pair.
+ */
+private enum class StudySound(@RawRes val res: Int, val volume: Float) {
+    Easy(R.raw.grade_easy, 0.55f),
+    Good(R.raw.grade_good, 0.48f),
+    Hard(R.raw.grade_hard, 0.45f),
+    Again(R.raw.grade_again, 0.40f),
+    SpellRight(R.raw.spell_right, 0.55f),
+    SpellWrong(R.raw.spell_wrong, 0.40f),
+}
+
+private class SoundBank(context: Context) {
+    private val pool = SoundPool.Builder().setMaxStreams(2).build()
+    private val ids = HashMap<StudySound, Int>()
+
+    init {
+        StudySound.entries.forEach { ids[it] = pool.load(context, it.res, 1) }
+    }
+
+    fun play(sound: StudySound) {
+        ids[sound]?.let { pool.play(it, sound.volume, sound.volume, 1, 0, 1f) }
+    }
+
+    fun release() = pool.release()
+}
+
+@Composable
+private fun rememberSoundBank(): SoundBank {
+    val context = LocalContext.current
+    val bank = remember { SoundBank(context.applicationContext) }
+    DisposableEffect(bank) { onDispose { bank.release() } }
+    return bank
+}
+
+private fun Rating.studySound(): StudySound = when (this) {
+    Rating.Easy -> StudySound.Easy
+    Rating.Good -> StudySound.Good
+    Rating.Hard -> StudySound.Hard
+    Rating.Again -> StudySound.Again
+}
 
 /**
  * One word at a time, self-report first.
@@ -127,6 +185,7 @@ fun StudyScreen(
     val view = LocalView.current
     val feedback = rememberAppFeedback()
     val player = rememberAudioPlayer()
+    val sfx = rememberSoundBank()
 
     // A due card must never disappear because its word fell out of the entry
     // cache; the card's own preview is enough to study it.
@@ -307,6 +366,9 @@ fun StudyScreen(
             current == null && spelling -> SpellingRound(
                 words = spellWords,
                 onPlay = { url -> player.play(url) },
+                onSound = { correct ->
+                    sfx.play(if (correct) StudySound.SpellRight else StudySound.SpellWrong)
+                },
                 onFinish = { correct ->
                     spellScore = correct
                     spellTaken = true
@@ -331,7 +393,10 @@ fun StudyScreen(
                 item = current,
                 entry = entryFor(current.word),
                 progress = progress,
-                onCommit = { rating, requeue -> commit(current, rating, requeue) },
+                onCommit = { rating, requeue ->
+                    sfx.play(rating.studySound())
+                    commit(current, rating, requeue)
+                },
                 onReveal = { feedback.reveal(view) },
                 onCorrect = { feedback.correct(view) },
                 onWrong = { feedback.wrong(view) },
@@ -1082,6 +1147,7 @@ private fun DoneState(
 private fun SpellingRound(
     words: List<WordEntry>,
     onPlay: (String) -> Unit,
+    onSound: (Boolean) -> Unit,
     onFinish: (Int) -> Unit,
 ) {
     if (words.isEmpty()) {
@@ -1089,6 +1155,7 @@ private fun SpellingRound(
         return
     }
     val wl = WordloomTheme.colors
+    val view = LocalView.current
     var index by remember { mutableIntStateOf(0) }
     var typed by remember(index) { mutableStateOf("") }
     var checked by remember(index) { mutableStateOf<Boolean?>(null) }
@@ -1131,6 +1198,14 @@ private fun SpellingRound(
         if (checked != null) return
         val ok = typed.equals(letters.drop(1), ignoreCase = true)
         checked = ok
+        onSound(ok)
+        view.performHapticFeedback(
+            if (Build.VERSION.SDK_INT >= 30) {
+                if (ok) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.REJECT
+            } else {
+                if (ok) HapticFeedbackConstants.LONG_PRESS else HapticFeedbackConstants.LONG_PRESS
+            },
+        )
         if (ok) {
             correctCount += 1
             onPlay(entry.audio.firstOrNull()?.url.orEmpty())
@@ -1296,12 +1371,16 @@ private fun SpellingRound(
                     Spacer(Modifier.height(20.dp))
 
                     when (checked) {
-                        true -> Text(
-                            text = "写对了",
-                            fontFamily = SerifFamily,
-                            fontSize = 15.sp,
-                            color = Color(0xFF0FA646),
-                        )
+                        true -> Row(verticalAlignment = Alignment.CenterVertically) {
+                            InkStamp()
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                text = "写对了",
+                                fontFamily = SerifFamily,
+                                fontSize = 15.sp,
+                                color = Color(0xFF0FA646),
+                            )
+                        }
                         false -> Column {
                             Text(
                                 text = "应该是 ${entry.word}",
@@ -1315,7 +1394,7 @@ private fun SpellingRound(
                                 color = wl.surfaceAlt,
                                 modifier = Modifier
                                     .width(140.dp)
-                                    .clickable { advance() },
+                                    .wlPress(onClick = { advance() }),
                             ) {
                                 Text(
                                     text = "下一个",
@@ -1326,25 +1405,88 @@ private fun SpellingRound(
                                 )
                             }
                         }
-                        null -> Surface(
-                            shape = RoundedCornerShape(50),
-                            color = if (typed.length >= letters.length - 1) wl.primary else wl.surfaceAlt,
-                            modifier = Modifier
-                                .width(150.dp)
-                                .clickable(enabled = typed.length >= letters.length - 1) { check() },
-                        ) {
-                            Text(
-                                text = "检查",
-                                textAlign = TextAlign.Center,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = if (typed.length >= letters.length - 1) wl.onPrimary else wl.inkMuted,
-                                modifier = Modifier.padding(vertical = 12.dp),
-                            )
+                        null -> {
+                            val ready = typed.length >= letters.length - 1
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = if (ready) wl.ink else wl.surfaceAlt,
+                                modifier = Modifier
+                                    .width(150.dp)
+                                    .wlPress(enabled = ready, onClick = { check() }),
+                            ) {
+                                Text(
+                                    text = "检查",
+                                    textAlign = TextAlign.Center,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = if (ready) wl.surface else wl.inkMuted,
+                                    modifier = Modifier.padding(vertical = 12.dp),
+                                )
+                            }
                         }
                     }
                 }
             }
         }
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+/**
+ * The reward: a seal pressed onto the page. It lands with a spring (a stamp has
+ * weight), the check draws itself in, and six ink flecks leave the edge as it
+ * lands. No confetti, no stars — it belongs to a book.
+ */
+@Composable
+private fun InkStamp(modifier: Modifier = Modifier) {
+    val wl = WordloomTheme.colors
+    val stamp = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        stamp.animateTo(1f, spring(dampingRatio = 0.42f, stiffness = 430f))
+    }
+    Canvas(
+        modifier = modifier
+            .size(58.dp)
+            .graphicsLayer {
+                rotationZ = -8f
+                val s = 0.86f + 0.22f * stamp.value
+                scaleX = s
+                scaleY = s
+            },
+    ) {
+        val p = stamp.value
+        val alpha = p.coerceIn(0f, 1f)
+        val ink = wl.ink.copy(alpha = 0.88f * alpha)
+        val radius = size.minDimension * 0.46f
+        drawCircle(color = ink, radius = radius, style = Stroke(width = 2.2.dp.toPx()))
+
+        val check = Path().apply {
+            moveTo(size.width * 0.30f, size.height * 0.52f)
+            lineTo(size.width * 0.44f, size.height * 0.67f)
+            lineTo(size.width * 0.73f, size.height * 0.35f)
+        }
+        val measure = PathMeasure().apply { setPath(check, false) }
+        val drawn = Path()
+        measure.getSegment(
+            0f,
+            measure.length * ((p - 0.15f) / 0.55f).coerceIn(0f, 1f),
+            drawn,
+            true,
+        )
+        drawPath(drawn, color = ink, style = Stroke(width = 2.8.dp.toPx(), cap = StrokeCap.Round))
+
+        val fade = (1f - p).coerceIn(0f, 1f)
+        val center = Offset(size.width / 2f, size.height / 2f)
+        repeat(6) { index ->
+            val angle = (index / 6f) * 2f * PI.toFloat() + 0.35f
+            val from = radius * 1.02f
+            val to = from + size.minDimension * 0.16f * (1f - fade)
+            drawLine(
+                color = wl.ink.copy(alpha = 0.45f * fade),
+                start = center + Offset(cos(angle) * from, sin(angle) * from),
+                end = center + Offset(cos(angle) * to, sin(angle) * to),
+                strokeWidth = 1.5.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+        }
     }
 }

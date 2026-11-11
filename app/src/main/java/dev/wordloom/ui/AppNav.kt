@@ -107,6 +107,10 @@ fun AppNav(
             BooksScreen(
                 onBack = { nav.popBackStack() },
                 onStartStudy = { nav.navigate("study") },
+                onOpenWord = { entry ->
+                    viewModel.showWord(entry)
+                    openWord(entry.word)
+                },
                 words = mapWords,
                 cards = cards,
             )

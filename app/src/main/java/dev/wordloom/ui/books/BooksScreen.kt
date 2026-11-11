@@ -2,9 +2,20 @@ package dev.wordloom.ui.books
 
 import android.media.SoundPool
 import android.view.HapticFeedbackConstants
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -62,7 +73,10 @@ import dev.wordloom.ui.theme.SerifFamily
 import dev.wordloom.ui.theme.WordloomTheme
 import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
+import kotlin.math.cos
+import kotlin.math.pow
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
  * One card at a time, on an endless wheel.
@@ -81,6 +95,7 @@ import kotlin.math.roundToInt
 fun BooksScreen(
     onBack: () -> Unit,
     onStartStudy: () -> Unit,
+    onOpenWord: (dev.wordloom.data.model.WordEntry) -> Unit = {},
     words: List<dev.wordloom.data.model.WordEntry> = emptyList(),
     cards: List<dev.wordloom.data.local.CardEntity> = emptyList(),
 ) {
@@ -102,26 +117,53 @@ fun BooksScreen(
 
     var currentId by remember { mutableStateOf(books.first().id) }
     var detailOpen by remember { mutableStateOf(false) }
+    var detailReady by remember { mutableStateOf(false) }
     var spinning by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(220)
+        detailReady = true
+    }
     val openProgress by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (detailOpen) 1f else 0f,
-        animationSpec = tween(durationMillis = 400),
+        animationSpec = tween(durationMillis = 360),
         label = "bookOpen",
     )
+    // A flick, not a turn: the cover whips a full circle in a third of a second
+    // and the gust it throws is what covers the screen.
     val spinAngle by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (spinning) 360f else 0f,
-        animationSpec = tween(durationMillis = 520),
+        animationSpec = tween(
+            durationMillis = 320,
+            easing = CubicBezierEasing(0.2f, 0.85f, 0.25f, 1f),
+        ),
         label = "bookSpin",
     )
+    val gust = remember { Animatable(0f) }
+    var cardCenter by remember { mutableStateOf(Offset.Zero) }
+    val leafPath = remember {
+        Path().apply {
+            moveTo(0f, -1f)
+            quadraticTo(0.62f, 0f, 0f, 1f)
+            quadraticTo(-0.62f, 0f, 0f, -1f)
+            close()
+        }
+    }
 
-    // Opening is a two-beat gesture: the cover turns first, and the volume
-    // grows out of that turn. Closing runs both beats at once so going back
-    // takes one motion, not a queue.
+    // Opening is a two-beat gesture: the cover turns, the gust leaves with it,
+    // and the volume grows out of that turn. Closing runs both beats at once so
+    // going back takes one motion, not a queue.
     fun openBook() {
         if (detailOpen) return
         scope.launch {
+            gust.snapTo(0f)
+            gust.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 560, easing = LinearEasing),
+            )
+        }
+        scope.launch {
             spinning = true
-            kotlinx.coroutines.delay(170)
+            kotlinx.coroutines.delay(180)
             detailOpen = true
         }
     }
@@ -130,6 +172,9 @@ fun BooksScreen(
         detailOpen = false
         spinning = false
     }
+
+    // System back closes the book before it leaves the shelf.
+    BackHandler(enabled = detailOpen) { closeBook() }
     var position by remember { mutableFloatStateOf(0f) }
     val settle = remember { Animatable(0f) }
     var settling by remember { mutableStateOf(false) }
@@ -154,7 +199,8 @@ fun BooksScreen(
             .statusBarsPadding()
             .navigationBarsPadding()
             .graphicsLayer {
-                alpha = 1f - openProgress
+                // No fade: the page is opaque and simply grows over the shelf,
+                // so the shelf never has to be composited half-lit underneath.
                 val s = 1f - openProgress * 0.06f
                 scaleX = s
                 scaleY = s
@@ -194,7 +240,14 @@ fun BooksScreen(
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(286.dp),
+                    .height(286.dp)
+                    .onGloballyPositioned { coords ->
+                        val origin = coords.positionInRoot()
+                        cardCenter = Offset(
+                            origin.x + coords.size.width / 2f,
+                            origin.y + coords.size.height / 2f,
+                        )
+                    },
             ) {
                 val cardHeight = 250.dp
                 val cardWidth = cardHeight * 0.76f
@@ -258,9 +311,16 @@ fun BooksScreen(
                                         rotationY = (d * -34f).coerceIn(-40f, 40f) +
                                             (if (d.absoluteValue < 0.01f) spinAngle else 0f)
                                         cameraDistance = 15f * density
+                                        // A single swell at the halfway point of the turn, so the
+                                        // cover feels like it is throwing the gust.
+                                        val swell = if (d.absoluteValue < 0.01f) {
+                                            1f + 0.05f * sin((spinAngle / 360f) * Math.PI.toFloat())
+                                        } else {
+                                            1f
+                                        }
                                         val shrink = (1f - d.absoluteValue * 0.14f).coerceAtLeast(0.70f)
-                                        scaleX = shrink
-                                        scaleY = shrink
+                                        scaleX = shrink * swell
+                                        scaleY = shrink * swell
                                     }
                                     .clickable {
                                         if (d.absoluteValue > 0.2f) {
@@ -362,25 +422,94 @@ fun BooksScreen(
         }
     }
 
-    if (detailOpen || openProgress > 0.01f) {
+    if (detailReady || detailOpen) {
         BookDetail(
             book = books[nearest],
             words = words,
             cards = cards,
             onBack = { closeBook() },
             onStartStudy = { onStartStudy() },
-            modifier = Modifier.graphicsLayer {
-                // The page is opaque almost from the first frame: it unfolds
-                // over the shelf instead of being blended with it.
-                alpha = (openProgress * 2.2f).coerceIn(0f, 1f)
+            onOpenWord = onOpenWord,
+            modifier = Modifier
+                // Composed behind the shelf before anyone can tap, so the first
+                // frame of the opening animation is already laid out.
+                .zIndex(if (detailOpen || openProgress > 0.01f) 1f else -1f)
+                .graphicsLayer {
+                // Fully opaque from the first frame: the page unfolds over the
+                // shelf instead of being blended with it. No fade at all.
                 val s = 0.72f + 0.28f * openProgress
                 scaleX = s
                 scaleY = s
-                rotationY = (1f - openProgress) * -6f
                 // Grows out of the cover, not from the middle of the screen.
-                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0.45f)
+                transformOrigin = TransformOrigin(0.5f, 0.45f)
             },
         )
     }
+
+    // Leaves thrown off the cover by the turn. Drawn above the page so the
+    // gust survives the cover: for half a second they drift over the paper and
+    // are gone by the time the eye reaches the word list.
+    Canvas(
+        modifier = Modifier
+            .fillMaxSize()
+            .zIndex(30f),
+    ) {
+        val g = gust.value
+        if (g <= 0f || g >= 1f) return@Canvas
+        val c = cardCenter
+        if (c == Offset.Zero) return@Canvas
+        val base = 66.dp.toPx()
+        val travel = 152.dp.toPx()
+        GustLeaves.forEach { leaf ->
+            val local = ((g - leaf.delay) / (1f - leaf.delay)).coerceIn(0f, 1f)
+            if (local <= 0f) return@forEach
+            val eased = local.pow(0.62f)
+            val angle = leaf.angle + leaf.swirl * eased
+            val dist = base + travel * leaf.reach * eased
+            // A wind that leans right and lifts, not a symmetric confetti burst.
+            val x = c.x + cos(angle) * dist + 64.dp.toPx() * eased
+            val y = c.y + sin(angle) * dist * 0.7f - 22.dp.toPx() * eased +
+                leaf.fall.dp.toPx() * eased * eased
+            val alpha = 0.8f * (1f - local).pow(1.5f) * (local / 0.1f).coerceAtMost(1f)
+            if (alpha <= 0.01f) return@forEach
+            val size = leaf.size.dp.toPx() * (1f - 0.22f * local)
+            rotate(
+                degrees = Math.toDegrees(angle.toDouble()).toFloat() + eased * 220f,
+                pivot = Offset(x, y),
+            ) {
+                translate(left = x, top = y) {
+                    scale(scaleX = size, scaleY = size, pivot = Offset.Zero) {
+                        // Coral is the one hue that reads on the green cover, the
+                        // dark shelf and the paper page alike.
+                        drawPath(leafPath, color = wl.coral.copy(alpha = alpha))
+                    }
+                }
+            }
+        }
+    }
+    }
+}
+
+private data class GustLeaf(
+    val angle: Float,
+    val reach: Float,
+    val size: Float,
+    val delay: Float,
+    val swirl: Float,
+    val fall: Float,
+)
+
+/** Fixed scatter — the same gust every time, so it reads as the book's own. */
+private val GustLeaves: List<GustLeaf> = run {
+    val random = java.util.Random(29)
+    List(12) {
+        GustLeaf(
+            angle = random.nextFloat() * (Math.PI * 2).toFloat(),
+            reach = 0.4f + random.nextFloat() * 1.2f,
+            size = 5.6f + random.nextFloat() * 4.4f,
+            delay = random.nextFloat() * 0.22f,
+            swirl = 0.45f + random.nextFloat() * 0.8f,
+            fall = random.nextFloat() * 18f,
+        )
     }
 }

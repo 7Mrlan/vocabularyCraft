@@ -749,8 +749,10 @@ private fun StudyCard(
                 animationSpec = spring(dampingRatio = 0.88f, stiffness = 560f),
             ) { value, _ -> ring.offset = value }
             if (target != 0f) {
+                // A leftward hand movement turns the page forward; this is the
+                // direction every pager uses and the one fingers arrive with.
                 val count = 1 + examplesOf(details, entry).size
-                ring.index = Math.floorMod(ring.index + if (target > 0) 1 else -1, count)
+                ring.index = Math.floorMod(ring.index + if (target < 0) 1 else -1, count)
                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
             }
             ring.offset = 0f
@@ -996,7 +998,7 @@ private fun RatedRing(
                 page = Math.floorMod(page + 1, count),
                 resetKey = resetKey,
                 onSelect = onSelect,
-                modifier = Modifier.graphicsLayer { translationX = offsetProvider() - widthPx },
+                modifier = Modifier.graphicsLayer { translationX = offsetProvider() + widthPx },
             )
             RingPage(
                 entry = entry,
@@ -1005,7 +1007,7 @@ private fun RatedRing(
                 page = Math.floorMod(page - 1, count),
                 resetKey = resetKey,
                 onSelect = onSelect,
-                modifier = Modifier.graphicsLayer { translationX = offsetProvider() + widthPx },
+                modifier = Modifier.graphicsLayer { translationX = offsetProvider() - widthPx },
             )
             RingPage(
                 entry = entry,

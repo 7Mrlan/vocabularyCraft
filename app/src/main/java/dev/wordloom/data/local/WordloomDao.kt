@@ -13,6 +13,10 @@ interface WordloomDao {
     @Query("SELECT * FROM cached_words WHERE word = :word LIMIT 1")
     suspend fun cachedWord(word: String): CachedWordEntity?
 
+    /** Every cached row for a page that lists a whole book; callers chunk the ids. */
+    @Query("SELECT * FROM cached_words WHERE word IN (:words)")
+    suspend fun cachedWordsFor(words: List<String>): List<CachedWordEntity>
+
     @Upsert
     suspend fun putWord(entity: CachedWordEntity)
 

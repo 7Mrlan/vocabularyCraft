@@ -108,6 +108,20 @@ class WordRepository(
     fun cachedEntries(limit: Int = 300): Flow<List<WordEntry>> =
         dao.cachedWords(limit).map { list -> list.mapNotNull { decode(it) } }
 
+    /**
+     * Whatever we already know about these headwords. A book page lists words
+     * the reader may have studied without ever opening them, so the glosses
+     * must come from the cache rather than from "最近查过".
+     */
+    suspend fun cachedEntriesFor(words: List<String>): List<WordEntry> {
+        val keys = words.map { it.lowercase() }.distinct()
+        val found = ArrayList<WordEntry>(keys.size)
+        for (chunk in keys.chunked(800)) {
+            dao.cachedWordsFor(chunk).forEach { row -> decode(row)?.let(found::add) }
+        }
+        return found
+    }
+
     // ---- backup ----
 
     suspend fun exportBackup(): String = withContext(Dispatchers.IO) {

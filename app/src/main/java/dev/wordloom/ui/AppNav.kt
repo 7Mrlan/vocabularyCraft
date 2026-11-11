@@ -55,10 +55,7 @@ fun AppNav(
     val selectedId by viewModel.selectedId.collectAsStateWithLifecycle()
     val curatedWords by viewModel.bookWords.collectAsStateWithLifecycle()
     val studyEntries by viewModel.studyEntries.collectAsStateWithLifecycle()
-
-    val entries = remember(mapWords, studyEntries) {
-        mapWords.associateBy { it.word.lowercase() } + studyEntries
-    }
+    val cachedEntries by viewModel.bookEntries.collectAsStateWithLifecycle()
 
     // The automatic books are derived here, from data the app already holds.
     val autoKind = remember(selectedId) { AutoBook.fromId(selectedId) }
@@ -71,6 +68,12 @@ fun AppNav(
     }
     val bookWords = remember(autoKind, curatedWords, mapWords, cards) {
         autoKind?.let { AutoWords.of(it, mapWords, cards) } ?: curatedWords
+    }
+
+    // Glosses for the open book, including words studied but never opened.
+    LaunchedEffect(bookWords) { viewModel.loadCachedEntries(bookWords) }
+    val entries = remember(mapWords, studyEntries, cachedEntries) {
+        mapWords.associateBy { it.word.lowercase() } + cachedEntries + studyEntries
     }
 
     val bookStatus = remember(cards) { BookProgress.statusMap(cards) }

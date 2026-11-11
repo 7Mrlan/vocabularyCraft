@@ -92,6 +92,14 @@ class WordloomViewModel(
      */
     private val _studyEntries = MutableStateFlow<Map<String, WordEntry>>(emptyMap())
     val studyEntries: StateFlow<Map<String, WordEntry>> = _studyEntries.asStateFlow()
+
+    /**
+     * Glosses for the book page: whatever the cache already holds for the
+     * book's headwords, including words learned in a session and never opened.
+     */
+    private val _bookEntries = MutableStateFlow<Map<String, WordEntry>>(emptyMap())
+    val bookEntries: StateFlow<Map<String, WordEntry>> = _bookEntries.asStateFlow()
+    private var bookEntriesJob: Job? = null
     private val prefetching = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     init {
@@ -114,6 +122,18 @@ class WordloomViewModel(
         }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             _bookWords.value = bookStore.words(curated)
+        }
+    }
+
+    fun loadCachedEntries(words: List<String>) {
+        bookEntriesJob?.cancel()
+        if (words.isEmpty()) {
+            _bookEntries.value = emptyMap()
+            return
+        }
+        bookEntriesJob = viewModelScope.launch {
+            val found = repo.cachedEntriesFor(words)
+            _bookEntries.value = found.associateBy { it.word.lowercase() }
         }
     }
 

@@ -67,9 +67,11 @@
 
 | 文件 | 词数 | 来源 | 授权 |
 |---|---|---|---|
-| `assets/wordbooks/core3000.txt` | 3,000 | NGSL 1.2（2,809 词）+ COCA 补足 | CC BY-SA 4.0（Browne, Culligan & Phillips） |
+| `assets/wordbooks/core3000.txt` | 3,000 | NGSL 1.2（去功能词后 2,668 词）+ COCA 补足 | CC BY-SA 4.0（Browne, Culligan & Phillips） |
 | `assets/wordbooks/cet2500.txt` | 2,500 | CET-4 ∪ CET-6 大纲，按 COCA 词频裁剪 | 只取词形 |
 | `assets/wordbooks/kaoyan3000.txt` | 3,000 | 考研大纲，按 COCA 词频裁剪 | 只取词形 |
+
+the / be / and 这类功能词（141 个）不进书：它们在频率表最前，但对学习者没有价值。
 
 生成脚本与来源说明见 [`tools/wordbooks/README.md`](tools/wordbooks/README.md)。
 

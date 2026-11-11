@@ -1,4 +1,5 @@
 package dev.wordloom.ui.word
+import dev.wordloom.ui.theme.WordloomTheme
 
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -47,7 +48,8 @@ fun SelectableText(
 
     LaunchedEffect(resetKey) { selection = null }
 
-    val highlight = remember { Color(0xFF0090E3).copy(alpha = 0.22f) }
+    // Ink, not the app blue: selection is a pencil mark on paper.
+    val highlight = WordloomTheme.colors.ink.copy(alpha = 0.14f)
     val annotated = remember(text, selection) {
         buildAnnotatedString {
             append(text)

@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +66,8 @@ fun BookDetail(
     onBack: () -> Unit,
     onStartStudy: () -> Unit,
     onOpenWord: (WordEntry) -> Unit,
+    /** False while the page is pre-composed behind the shelf. */
+    interactive: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val wl = WordloomTheme.colors
@@ -77,7 +80,7 @@ fun BookDetail(
     val ratio = BookProgress.ratio(learned, total)
     val percentText = BookProgress.percentText(learned, total)
 
-    var filter by remember { mutableStateOf(WordFilter.All) }
+    var filter by rememberSaveable { mutableStateOf(WordFilter.All) }
 
     val sections = remember(words, cards, filter) {
         BookProgress.sections(words, statusByWord, filter)
@@ -89,7 +92,8 @@ fun BookDetail(
             // The shelf is still mounted beneath this page while it animates;
             // swallow pointers here so a tap on empty paper can't spin a cover
             // hidden in the dark.
-            .pointerInput(Unit) {
+            .pointerInput(interactive) {
+                if (!interactive) return@pointerInput
                 awaitPointerEventScope {
                     while (true) {
                         awaitPointerEvent().changes.forEach { it.consume() }
@@ -110,7 +114,7 @@ fun BookDetail(
                 .padding(horizontal = 6.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onBack) {
+            IconButton(onClick = onBack, enabled = interactive) {
                 Icon(
                     painter = painterResource(R.drawable.wl_back),
                     contentDescription = "返回",
@@ -174,7 +178,7 @@ fun BookDetail(
                 WordFilter.entries.forEach { item ->
                     val active = item == filter
                     Column(
-                        modifier = Modifier.clickable { filter = item },
+                        modifier = Modifier.clickable(enabled = interactive) { filter = item },
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(
@@ -226,6 +230,7 @@ fun BookDetail(
                         entry = entry,
                         status = statusByWord[entry.word.lowercase()] ?: WordStatus.New,
                         accent = accent,
+                        enabled = interactive,
                         onClick = { onOpenWord(entry) },
                     )
                 }
@@ -266,6 +271,7 @@ fun BookDetail(
                 .clickable(
                     interactionSource = interaction,
                     indication = null,
+                    enabled = interactive,
                     onClick = onStartStudy,
                 ),
         ) {
@@ -340,6 +346,7 @@ private fun WordRow(
     entry: WordEntry,
     status: WordStatus,
     accent: Color,
+    enabled: Boolean,
     onClick: () -> Unit,
 ) {
     val wl = WordloomTheme.colors
@@ -349,7 +356,12 @@ private fun WordRow(
         modifier = Modifier
             .fillMaxWidth()
             .background(if (pressed) wl.ink.copy(alpha = 0.045f) else Color.Transparent)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                enabled = enabled,
+                onClick = onClick,
+            )
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

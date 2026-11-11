@@ -123,9 +123,12 @@ fun StudyScreen(
     val player = rememberAudioPlayer()
 
     val dueItems = remember(dueCards, words) {
-        dueCards.take(60).mapNotNull { card ->
-            words.firstOrNull { it.word.equals(card.word, ignoreCase = true) }
-                ?.let { StudyItem(it, false) }
+        // A due card must never disappear because its word fell out of the
+        // in-memory cache; the card's preview is enough to study it.
+        dueCards.take(60).map { card ->
+            val entry = words.firstOrNull { it.word.equals(card.word, ignoreCase = true) }
+                ?: WordEntry(word = card.word, shortBlurb = card.preview.ifBlank { null })
+            StudyItem(entry, false)
         }
     }
     val newItems = remember(words, dueCards) {
@@ -155,10 +158,12 @@ fun StudyScreen(
     var lastCommitted by remember { mutableStateOf<StudyItem?>(null) }
 
     fun commit(item: StudyItem, rating: Rating, requeue: Boolean) {
-        lastCommitted = item
         val key = item.entry.word.lowercase()
         val firstToday = seenToday.add(key)
         if (firstToday) {
+            // Only a real commit can be undone: a requeued word answered a
+            // second time writes nothing, so it must not become the target.
+            lastCommitted = item
             completed += 1
             onRate(item.entry, rating, item.isNew)
             if (rating == Rating.Good || rating == Rating.Easy) {
@@ -231,6 +236,10 @@ fun StudyScreen(
                                 it.entry.word.equals(item.entry.word, ignoreCase = true)
                             }
                             queue = listOf(item) + rest
+                            // Put the word back where it was so rating it again
+                            // is a first answer, not a silent no-op.
+                            seenToday.remove(item.entry.word.lowercase())
+                            spellWords.removeAll { it.word.equals(item.entry.word, ignoreCase = true) }
                             lastCommitted = null
                             completed = (completed - 1).coerceAtLeast(0)
                             onUndo()
@@ -254,6 +263,11 @@ fun StudyScreen(
                     color = wl.inkMuted,
                     modifier = Modifier
                         .clickable {
+                            // "Already know it" is a finish too: the ring and the
+                            // counter must move together.
+                            if (seenToday.add(current.entry.word.lowercase())) {
+                                completed += 1
+                            }
                             onMarkKnown(current.entry)
                             queue = queue.drop(1)
                         }
@@ -262,7 +276,7 @@ fun StudyScreen(
             }
             if (total > 0) {
                 Text(
-                    text = "${total - queue.size}/$total",
+                    text = "$completed/$total",
                     fontFamily = SerifFamily,
                     fontSize = 12.5.sp,
                     color = wl.inkMuted,
@@ -1078,6 +1092,21 @@ private fun SpellingRound(
     var details by remember(index) { mutableStateOf<StudyDetails?>(null) }
     val focus = remember { FocusRequester() }
     val entry = words[index]
+    // Spelling works on letters only: "well-known" is nine letters to type,
+    // and the hyphen is shown, not entered.
+    val letters = remember(entry.word) { entry.word.filter { it.isLetter() } }
+    val letterPositions = remember(entry.word) {
+        var seen = 0
+        entry.word.map { ch ->
+            if (ch.isLetter()) {
+                val position = seen
+                seen += 1
+                position
+            } else {
+                -1
+            }
+        }
+    }
 
     LaunchedEffect(index) {
         details = StudyContent.details(entry.word)
@@ -1096,7 +1125,7 @@ private fun SpellingRound(
 
     fun check() {
         if (checked != null) return
-        val ok = typed.equals(entry.word.drop(1), ignoreCase = true)
+        val ok = typed.equals(letters.drop(1), ignoreCase = true)
         checked = ok
         if (ok) {
             correctCount += 1
@@ -1171,7 +1200,7 @@ private fun SpellingRound(
                     Spacer(Modifier.height(10.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "首字母 ${entry.word.first().uppercase()} · ${entry.word.length} 个字母",
+                            text = "首字母 ${letters.firstOrNull()?.uppercase() ?: ""} · ${letters.length} 个字母",
                             fontSize = 11.5.sp,
                             color = wl.inkMuted,
                         )
@@ -1194,15 +1223,16 @@ private fun SpellingRound(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
                             entry.word.forEachIndexed { i, ch ->
-                                val fixed = !ch.isLetter()
+                                val position = letterPositions[i]
+                                val fixed = position < 0
                                 val shown = when {
                                     fixed -> ch.toString()
-                                    i == 0 -> ch.toString()
-                                    i - 1 < typed.length -> typed[i - 1].toString()
+                                    position == 0 -> ch.toString()
+                                    position - 1 < typed.length -> typed[position - 1].toString()
                                     else -> ""
                                 }
-                                val wrong = !fixed && i > 0 && i - 1 < typed.length &&
-                                    typed[i - 1].lowercaseChar() != ch.lowercaseChar()
+                                val wrong = !fixed && position > 0 && position - 1 < typed.length &&
+                                    typed[position - 1].lowercaseChar() != ch.lowercaseChar()
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
                                     color = if (wrong) wl.coral.copy(alpha = 0.12f) else Color.Transparent,
@@ -1239,7 +1269,7 @@ private fun SpellingRound(
                             onValueChange = { text ->
                                 if (checked == null) {
                                     typed = text.filter { it.isLetter() }
-                                        .take((entry.word.length - 1).coerceAtLeast(0))
+                                        .take((letters.length - 1).coerceAtLeast(0))
                                         .lowercase()
                                 }
                             },
@@ -1294,16 +1324,16 @@ private fun SpellingRound(
                         }
                         null -> Surface(
                             shape = RoundedCornerShape(50),
-                            color = if (typed.length >= entry.word.length - 1) wl.primary else wl.surfaceAlt,
+                            color = if (typed.length >= letters.length - 1) wl.primary else wl.surfaceAlt,
                             modifier = Modifier
                                 .width(150.dp)
-                                .clickable(enabled = typed.length >= entry.word.length - 1) { check() },
+                                .clickable(enabled = typed.length >= letters.length - 1) { check() },
                         ) {
                             Text(
                                 text = "检查",
                                 textAlign = TextAlign.Center,
                                 style = MaterialTheme.typography.labelLarge,
-                                color = if (typed.length >= entry.word.length - 1) wl.onPrimary else wl.inkMuted,
+                                color = if (typed.length >= letters.length - 1) wl.onPrimary else wl.inkMuted,
                                 modifier = Modifier.padding(vertical = 12.dp),
                             )
                         }

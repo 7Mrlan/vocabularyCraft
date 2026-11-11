@@ -56,6 +56,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -119,8 +120,14 @@ fun BooksScreen(
         onDispose { soundPool.release() }
     }
 
-    var currentId by remember { mutableStateOf(books.first().id) }
-    var detailOpen by remember { mutableStateOf(false) }
+    var currentId by rememberSaveable { mutableStateOf(books.first().id) }
+    var detailOpen by rememberSaveable { mutableStateOf(false) }
+    var openedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var position by rememberSaveable { mutableFloatStateOf(0f) }
+    val settle = remember { Animatable(0f) }
+    var settling by remember { mutableStateOf(false) }
+    val shown = if (settling) settle.value else position
+    val nearest = ((shown.roundToInt() % count) + count) % count
     var detailReady by remember { mutableStateOf(false) }
     var spinning by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -158,6 +165,8 @@ fun BooksScreen(
     // going back takes one motion, not a queue.
     fun openBook() {
         if (detailOpen) return
+        // The book is chosen at the tap, not while the deck is still settling.
+        openedId = books[nearest].id
         scope.launch {
             gust.snapTo(0f)
             gust.animateTo(
@@ -179,11 +188,6 @@ fun BooksScreen(
 
     // System back closes the book before it leaves the shelf.
     BackHandler(enabled = detailOpen) { closeBook() }
-    var position by remember { mutableFloatStateOf(0f) }
-    val settle = remember { Animatable(0f) }
-    var settling by remember { mutableStateOf(false) }
-    val shown = if (settling) settle.value else position
-    val nearest = ((shown.roundToInt() % count) + count) % count
 
     var lastNearest by remember { mutableIntStateOf(0) }
     LaunchedEffect(nearest) {
@@ -331,7 +335,10 @@ fun BooksScreen(
                                             val target = (shown + d).roundToInt()
                                             settling = true
                                             scope.launch {
-                                                settle.snapTo(position)
+                                                // Take the deck where it is now, not where
+                                                // the last drag ended, or a tap mid-settle
+                                                // snaps it backwards.
+                                                settle.snapTo(settle.value)
                                                 settle.animateTo(
                                                     targetValue = target.toFloat(),
                                                     animationSpec = spring(
@@ -443,9 +450,10 @@ fun BooksScreen(
 
     if (detailReady || detailOpen) {
         BookDetail(
-            book = books[nearest],
+            book = books.firstOrNull { it.id == openedId } ?: books[nearest],
             words = words,
             cards = cards,
+            interactive = detailOpen || openProgress > 0.01f,
             onBack = { closeBook() },
             onStartStudy = { onStartStudy() },
             onOpenWord = onOpenWord,

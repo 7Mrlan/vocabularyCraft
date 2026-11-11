@@ -211,14 +211,21 @@ fun StudyScreen(
 
     var queue by remember { mutableStateOf<List<StudyItem>>(emptyList()) }
     var total by remember { mutableIntStateOf(0) }
+    var completed by remember { mutableIntStateOf(0) }
     var started by remember { mutableStateOf(false) }
     LaunchedEffect(dueItems, newItems) {
-        if (!started) {
+        // The flows start empty on a cold restore; the first real emission must
+        // be allowed to replace the empty queue while nothing was answered yet.
+        if (!started || (queue.isEmpty() && completed == 0)) {
             queue = (dueItems + newItems).distinctBy { it.word.lowercase() }
             total = queue.size
             started = true
         }
     }
+
+    // Bumped on every commit and undo: the card is rebuilt from the grade face
+    // even when the same word comes back (requeued, or undone).
+    var presentation by remember { mutableIntStateOf(0) }
 
     // Everything committed this session, so earlier words can be looked at
     // again without reopening their grade face.
@@ -229,7 +236,6 @@ fun StudyScreen(
     var spelling by remember { mutableStateOf(false) }
     var spellScore by remember { mutableIntStateOf(0) }
     var spellTotal by remember { mutableIntStateOf(0) }
-    var completed by remember { mutableIntStateOf(0) }
     var spellTaken by remember { mutableStateOf(false) }
     var lastCommitted by remember { mutableStateOf<StudyItem?>(null) }
 
@@ -260,6 +266,7 @@ fun StudyScreen(
         } else {
             rest
         }
+        presentation += 1
     }
 
     val current = queue.firstOrNull()
@@ -334,8 +341,12 @@ fun StudyScreen(
                             // is a first answer, not a silent no-op.
                             seenToday.remove(item.word.lowercase())
                             spellWords.removeAll { it.word.equals(item.word, ignoreCase = true) }
+                            // The undone rating is history now; the review list
+                            // must not keep showing it.
+                            if (history.isNotEmpty()) history.removeAt(history.lastIndex)
                             lastCommitted = null
                             completed = (completed - 1).coerceAtLeast(0)
+                            presentation += 1
                             onUndo()
                         }
                     },
@@ -413,6 +424,7 @@ fun StudyScreen(
             else -> StudyCard(
                 item = current,
                 entry = entryFor(current.word),
+                presentation = presentation,
                 progress = progress,
                 onCommit = { rating, requeue ->
                     sfx.play(rating.studySound())
@@ -587,6 +599,7 @@ private fun ReviewOverlay(
 private fun StudyCard(
     item: StudyItem,
     entry: WordEntry,
+    presentation: Int,
     progress: Float,
     onCommit: (Rating, Boolean) -> Unit,
     onReveal: () -> Unit,
@@ -597,18 +610,18 @@ private fun StudyCard(
 ) {
     val wl = WordloomTheme.colors
     val density = LocalDensity.current.density
-    var layer by remember(entry.word) { mutableStateOf(Layer.Word) }
+    var layer by remember(item.word, presentation) { mutableStateOf(Layer.Word) }
     // Once a grade is given it is locked: there is no path back to the grade
     // face, and no way to rate the same word twice.
-    var pending by remember(entry.word) { mutableStateOf<Rating?>(null) }
+    var pending by remember(item.word, presentation) { mutableStateOf<Rating?>(null) }
     // Which example the ring opens on: first for a forward swipe, last for a
     // backward one.
-    var examplesStart by remember(entry.word) { mutableIntStateOf(0) }
-    var details by remember(entry.word) { mutableStateOf<StudyDetails?>(null) }
-    var detailsFailed by remember(entry.word) { mutableStateOf(false) }
+    var examplesStart by remember(item.word, presentation) { mutableIntStateOf(0) }
+    var details by remember(item.word) { mutableStateOf<StudyDetails?>(null) }
+    var detailsFailed by remember(item.word) { mutableStateOf(false) }
 
-    LaunchedEffect(entry.word) {
-        details = StudyContent.details(entry.word)
+    LaunchedEffect(item.word) {
+        details = StudyContent.details(item.word)
         detailsFailed = details == null
         entry.audio.firstOrNull()?.let { onAutoPlay(it.url) }
     }
@@ -694,9 +707,14 @@ private fun StudyCard(
                         Layer.Word -> WordFace(
                             entry = entry,
                             onGrade = { rating ->
-                                pending = rating
-                                onReveal()
-                                layer = Layer.English
+                                // The outgoing face stays mounted during the
+                                // transition; a second tap must not overwrite
+                                // the locked grade.
+                                if (pending == null) {
+                                    pending = rating
+                                    onReveal()
+                                    layer = Layer.English
+                                }
                             },
                         )
 
@@ -1088,9 +1106,11 @@ private fun ExamplesFace(
     var index by remember(entry.word) { mutableIntStateOf(startAt.coerceIn(0, last)) }
     var direction by remember { mutableIntStateOf(1) }
     var drag by remember { mutableFloatStateOf(0f) }
+    // Details can replace the fallback list with a shorter one; never index past it.
+    val page = index.coerceIn(0, last)
 
-    LaunchedEffect(index, examples.size) {
-        examples.getOrNull(index)?.audioUrl
+    LaunchedEffect(page, examples.size) {
+        examples.getOrNull(page)?.audioUrl
             ?.takeIf { it.isNotBlank() }
             ?.let(onPlay)
     }
@@ -1109,7 +1129,7 @@ private fun ExamplesFace(
                 color = wl.ink,
             )
             Spacer(Modifier.width(6.dp))
-            examples.getOrNull(index)?.audioUrl
+            examples.getOrNull(page)?.audioUrl
                 ?.takeIf { it.isNotBlank() }
                 ?.let { url -> SpeakerButton(url = url, modifier = Modifier.size(28.dp)) }
             Spacer(Modifier.weight(1f))
@@ -1146,16 +1166,16 @@ private fun ExamplesFace(
                                 val threshold = 56.dp.toPx()
                                 when {
                                     drag > threshold -> {
-                                        if (index < last) {
+                                        if (page < last) {
                                             direction = 1
-                                            index += 1
+                                            index = page + 1
                                         } else {
                                             onCollapse()
                                         }
                                     }
                                     drag < -threshold -> {
                                         direction = -1
-                                        index = if (index > 0) index - 1 else last
+                                        index = if (page > 0) page - 1 else last
                                     }
                                 }
                                 drag = 0f
@@ -1164,15 +1184,15 @@ private fun ExamplesFace(
                     },
             ) {
                 AnimatedContent(
-                    targetState = index,
+                    targetState = page,
                     transitionSpec = {
                         val forward = direction > 0
                         (slideInHorizontally { if (forward) -it / 3 else it / 3 } + fadeIn()) togetherWith
                             (slideOutHorizontally { if (forward) it / 3 else -it / 3 } + fadeOut())
                     },
                     label = "exampleRing",
-                ) { page ->
-                    val example = examples[page]
+                ) { shown ->
+                    val example = examples[shown]
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -1202,9 +1222,9 @@ private fun ExamplesFace(
                                 Box(
                                     modifier = Modifier
                                         .padding(horizontal = 2.5.dp)
-                                        .size(if (i == page) 6.dp else 4.dp)
+                                        .size(if (i == shown) 6.dp else 4.dp)
                                         .background(
-                                            if (i == page) wl.ink else wl.outline,
+                                            if (i == shown) wl.ink else wl.outline,
                                             CircleShape,
                                         ),
                                 )

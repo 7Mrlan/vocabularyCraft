@@ -18,6 +18,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,7 +50,9 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.annotation.RawRes
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -68,6 +71,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
@@ -216,6 +220,10 @@ fun StudyScreen(
         }
     }
 
+    // Everything committed this session, so earlier words can be looked at
+    // again without reopening their grade face.
+    val history = remember { mutableStateListOf<Pair<String, Rating>>() }
+    var reviewIndex by remember { mutableStateOf<Int?>(null) }
     val seenToday = remember { mutableSetOf<String>() }
     val spellWords = remember { mutableListOf<WordEntry>() }
     var spelling by remember { mutableStateOf(false) }
@@ -232,6 +240,7 @@ fun StudyScreen(
             // Only a real commit can be undone: a requeued word answered a
             // second time writes nothing, so it must not become the target.
             lastCommitted = item
+            history.add(item.word to rating)
             completed += 1
             onRate(entryFor(item.word), rating, item.isNew)
             if (rating == Rating.Good || rating == Rating.Easy) {
@@ -261,6 +270,7 @@ fun StudyScreen(
     }
     val progress = if (total == 0) 0f else completed.toFloat() / total
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -300,6 +310,17 @@ fun StudyScreen(
                 color = wl.ink,
             )
             Spacer(Modifier.weight(1f))
+            if (history.isNotEmpty() && !spelling) {
+                Text(
+                    text = "回顾",
+                    fontFamily = SerifFamily,
+                    fontSize = 12.5.sp,
+                    color = wl.inkMuted,
+                    modifier = Modifier
+                        .wlPress { reviewIndex = history.lastIndex }
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                )
+            }
             if (current != null) {
                 IconButton(
                     onClick = {
@@ -405,6 +426,161 @@ fun StudyScreen(
             )
         }
     }
+
+    val reviewing = reviewIndex?.let { history.getOrNull(it) }
+    if (reviewing != null) {
+        ReviewOverlay(
+            word = reviewing.first,
+            rating = reviewing.second,
+            entry = entryFor(reviewing.first),
+            index = reviewIndex ?: 0,
+            total = history.size,
+            canOlder = (reviewIndex ?: 0) > 0,
+            onOlder = { reviewIndex = (reviewIndex ?: 0) - 1 },
+            onClose = { reviewIndex = null },
+        )
+    }
+    }
+}
+
+private fun Rating.label(): String = when (this) {
+    Rating.Easy -> "秒懂"
+    Rating.Good -> "认识"
+    Rating.Hard -> "模糊"
+    Rating.Again -> "忘记"
+}
+
+/**
+ * A word that was already committed, opened read-only. It never shows the grade
+ * face again: the rating is history, not a question.
+ */
+@Composable
+private fun ReviewOverlay(
+    word: String,
+    rating: Rating,
+    entry: WordEntry,
+    index: Int,
+    total: Int,
+    canOlder: Boolean,
+    onOlder: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val wl = WordloomTheme.colors
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Sits under the content: taps on empty paper stop here instead of
+        // reaching the live card below.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(wl.surface)
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            awaitPointerEvent(PointerEventPass.Initial)
+                                .changes.forEach { it.consume() }
+                        }
+                    }
+                },
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 24.dp, vertical = 18.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "回顾 ${index + 1}/$total",
+                    fontFamily = SerifFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = wl.ink,
+                )
+                Spacer(Modifier.weight(1f))
+                if (canOlder) {
+                    Text(
+                        text = "更早",
+                        fontFamily = SerifFamily,
+                        fontSize = 12.5.sp,
+                        color = wl.inkMuted,
+                        modifier = Modifier
+                            .wlPress(onClick = onOlder)
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                    )
+                }
+                Text(
+                    text = "回到当前",
+                    fontFamily = SerifFamily,
+                    fontSize = 12.5.sp,
+                    color = wl.ink,
+                    modifier = Modifier
+                        .wlPress(onClick = onClose)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                )
+            }
+            Spacer(Modifier.height(22.dp))
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = if (wl.isDark) wl.surfaceAlt else Color.White,
+                shadowElevation = 6.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+            ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = word,
+                            fontFamily = SerifFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 32.sp,
+                            color = wl.ink,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        entry.audio.firstOrNull()?.let { clip ->
+                            SpeakerButton(url = clip.url, modifier = Modifier.size(30.dp))
+                        }
+                    }
+                    entry.ipa.firstOrNull()?.let { ipa ->
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = ipa.text,
+                            fontFamily = SerifFamily,
+                            fontSize = 14.sp,
+                            color = wl.inkMuted,
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "当时选了 ${rating.label()}",
+                        fontSize = 11.5.sp,
+                        color = wl.inkMuted,
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    entry.senses.take(3).forEach { sense ->
+                        Row(modifier = Modifier.padding(bottom = 12.dp)) {
+                            Text(
+                                text = sense.partOfSpeech,
+                                fontFamily = SerifFamily,
+                                fontSize = 10.5.sp,
+                                lineHeight = 21.sp,
+                                color = wl.inkMuted,
+                                modifier = Modifier.width(54.dp),
+                            )
+                            Text(
+                                text = sense.definition,
+                                fontSize = 13.5.sp,
+                                lineHeight = 21.sp,
+                                color = wl.ink,
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+        }
+    }
 }
 
 @Composable
@@ -422,7 +598,12 @@ private fun StudyCard(
     val wl = WordloomTheme.colors
     val density = LocalDensity.current.density
     var layer by remember(entry.word) { mutableStateOf(Layer.Word) }
+    // Once a grade is given it is locked: there is no path back to the grade
+    // face, and no way to rate the same word twice.
     var pending by remember(entry.word) { mutableStateOf<Rating?>(null) }
+    // Which example the ring opens on: first for a forward swipe, last for a
+    // backward one.
+    var examplesStart by remember(entry.word) { mutableIntStateOf(0) }
     var details by remember(entry.word) { mutableStateOf<StudyDetails?>(null) }
     var detailsFailed by remember(entry.word) { mutableStateOf(false) }
 
@@ -447,15 +628,6 @@ private fun StudyCard(
             Modifier
         } else {
             Modifier
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                ) {
-                    if (pending != null && layer != Layer.Word) {
-                        layer = Layer.Word
-                        pending = null
-                    }
-                }
                 .pointerInput(entry.word, pending) {
                     var total = Offset.Zero
                     detectDragGestures(
@@ -465,11 +637,20 @@ private fun StudyCard(
                             total += amount
                         },
                         onDragEnd = {
+                            // Right is the forward gesture; left opens the ring
+                            // from its last example. With no grade yet there is
+                            // nothing to browse.
                             if (pending != null) {
                                 val t = 44.dp.toPx()
                                 layer = when {
-                                    abs(total.x) > abs(total.y) && total.x > t -> Layer.Examples
-                                    abs(total.x) > abs(total.y) && total.x < -t -> Layer.English
+                                    abs(total.x) > abs(total.y) && total.x > t -> {
+                                        examplesStart = 0
+                                        Layer.Examples
+                                    }
+                                    abs(total.x) > abs(total.y) && total.x < -t -> {
+                                        examplesStart = Int.MAX_VALUE
+                                        Layer.Examples
+                                    }
                                     total.y < -t -> Layer.Chinese
                                     total.y > t -> Layer.English
                                     else -> layer
@@ -548,6 +729,7 @@ private fun StudyCard(
                         Layer.Examples -> ExamplesFace(
                             entry = entry,
                             details = details,
+                            startAt = examplesStart,
                             onPlay = onPlay,
                             onCollapse = { layer = Layer.English },
                             onNext = {
@@ -892,6 +1074,7 @@ private fun ChineseFace(
 private fun ExamplesFace(
     entry: WordEntry,
     details: StudyDetails?,
+    startAt: Int,
     onPlay: (String) -> Unit,
     onCollapse: () -> Unit,
     onNext: () -> Unit,
@@ -901,10 +1084,13 @@ private fun ExamplesFace(
     val examples: List<StudyExample> = details?.examples.orEmpty().ifEmpty {
         entry.senses.flatMap { sense -> sense.examples.map { StudyExample(it, "") } }.take(5)
     }
-    val pager = rememberPagerState(pageCount = { examples.size.coerceAtLeast(1) })
+    val last = (examples.size - 1).coerceAtLeast(0)
+    var index by remember(entry.word) { mutableIntStateOf(startAt.coerceIn(0, last)) }
+    var direction by remember { mutableIntStateOf(1) }
+    var drag by remember { mutableFloatStateOf(0f) }
 
-    LaunchedEffect(pager.currentPage, examples.size) {
-        examples.getOrNull(pager.currentPage)?.audioUrl
+    LaunchedEffect(index, examples.size) {
+        examples.getOrNull(index)?.audioUrl
             ?.takeIf { it.isNotBlank() }
             ?.let(onPlay)
     }
@@ -923,7 +1109,7 @@ private fun ExamplesFace(
                 color = wl.ink,
             )
             Spacer(Modifier.width(6.dp))
-            examples.getOrNull(pager.currentPage)?.audioUrl
+            examples.getOrNull(index)?.audioUrl
                 ?.takeIf { it.isNotBlank() }
                 ?.let { url -> SpeakerButton(url = url, modifier = Modifier.size(28.dp)) }
             Spacer(Modifier.weight(1f))
@@ -933,56 +1119,96 @@ private fun ExamplesFace(
                 fontSize = 12.5.sp,
                 color = wl.inkMuted,
                 modifier = Modifier
-                    .clickable(onClick = onCollapse)
+                    .wlPress(onClick = onCollapse)
                     .padding(horizontal = 6.dp, vertical = 4.dp),
             )
         }
         Spacer(Modifier.height(10.dp))
+
         if (examples.isEmpty()) {
             Text("还没有例句", fontSize = 12.sp, color = wl.inkMuted)
+            Spacer(Modifier.weight(1f))
         } else {
-            HorizontalPager(
-                state = pager,
+            // A ring, not a pager: right goes forward and leaves the ring from
+            // its last example, left goes back and wraps to the last.
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
-            ) { page ->
-                val example = examples[page]
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(vertical = 8.dp),
-                ) {
-                    HighlightedSentence(
-                        sentence = example.en,
-                        word = entry.word,
-                        fontSize = 20.sp,
-                        lineHeight = 29.sp,
-                    )
-                    if (example.zh.isNotBlank()) {
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            text = example.zh,
-                            fontSize = 13.sp,
-                            lineHeight = 20.sp,
-                            color = wl.inkMuted,
+                    .weight(1f)
+                    .pointerInput(entry.word, examples.size) {
+                        detectHorizontalDragGestures(
+                            onDragStart = { drag = 0f },
+                            onHorizontalDrag = { change, amount ->
+                                change.consume()
+                                drag += amount
+                            },
+                            onDragEnd = {
+                                val threshold = 56.dp.toPx()
+                                when {
+                                    drag > threshold -> {
+                                        if (index < last) {
+                                            direction = 1
+                                            index += 1
+                                        } else {
+                                            onCollapse()
+                                        }
+                                    }
+                                    drag < -threshold -> {
+                                        direction = -1
+                                        index = if (index > 0) index - 1 else last
+                                    }
+                                }
+                                drag = 0f
+                            },
                         )
-                    }
-                    Spacer(Modifier.weight(1f))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
+                    },
+            ) {
+                AnimatedContent(
+                    targetState = index,
+                    transitionSpec = {
+                        val forward = direction > 0
+                        (slideInHorizontally { if (forward) -it / 3 else it / 3 } + fadeIn()) togetherWith
+                            (slideOutHorizontally { if (forward) it / 3 else -it / 3 } + fadeOut())
+                    },
+                    label = "exampleRing",
+                ) { page ->
+                    val example = examples[page]
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(vertical = 8.dp),
                     ) {
-                        examples.indices.forEach { i ->
-                            Box(
-                                modifier = Modifier
-                                    .padding(horizontal = 2.5.dp)
-                                    .size(if (i == page) 6.dp else 4.dp)
-                                    .background(
-                                        if (i == page) wl.ink else wl.outline,
-                                        CircleShape,
-                                    ),
+                        HighlightedSentence(
+                            sentence = example.en,
+                            word = entry.word,
+                            fontSize = 20.sp,
+                            lineHeight = 29.sp,
+                        )
+                        if (example.zh.isNotBlank()) {
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                text = example.zh,
+                                fontSize = 13.sp,
+                                lineHeight = 20.sp,
+                                color = wl.inkMuted,
                             )
+                        }
+                        Spacer(Modifier.weight(1f))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            examples.indices.forEach { i ->
+                                Box(
+                                    modifier = Modifier
+                                        .padding(horizontal = 2.5.dp)
+                                        .size(if (i == page) 6.dp else 4.dp)
+                                        .background(
+                                            if (i == page) wl.ink else wl.outline,
+                                            CircleShape,
+                                        ),
+                                )
+                            }
                         }
                     }
                 }

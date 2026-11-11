@@ -126,7 +126,7 @@ fun SpeakerButton(url: String, modifier: Modifier = Modifier) {
                 scaleY = s
             }
             .background(
-                if (playing) wl.primary.copy(alpha = 0.16f) else wl.surfaceAlt,
+                if (playing) wl.ink.copy(alpha = 0.10f) else wl.surfaceAlt,
                 CircleShape,
             )
             .clickable(

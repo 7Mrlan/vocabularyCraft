@@ -267,7 +267,7 @@ fun StudyScreen(
             .background(
                 Brush.verticalGradient(
                     listOf(
-                        wl.primary.copy(alpha = 0.07f),
+                        wl.ink.copy(alpha = 0.035f),
                         wl.surface,
                         wl.surface,
                     ),
@@ -579,9 +579,11 @@ private fun StudyCard(
                     measure.setPath(path, false)
                     val segment = Path()
                     measure.getSegment(0f, measure.length * animated, segment, true)
+                    // Ink, not the app blue: the ring is a pen mark in the
+                    // margin of a card, not a progress widget.
                     drawPath(
                         path = segment,
-                        color = wl.primary.copy(alpha = 0.14f),
+                        color = wl.ink.copy(alpha = 0.09f),
                         style = Stroke(
                             width = 8.dp.toPx(),
                             cap = androidx.compose.ui.graphics.StrokeCap.Round,
@@ -589,21 +591,21 @@ private fun StudyCard(
                     )
                     drawPath(
                         path = segment,
-                        color = wl.primary,
+                        color = wl.ink.copy(alpha = 0.78f),
                         style = Stroke(
-                            width = 3.dp.toPx(),
+                            width = 2.6.dp.toPx(),
                             cap = androidx.compose.ui.graphics.StrokeCap.Round,
                         ),
                     )
                     val head = measure.getPosition(measure.length * animated)
                     drawCircle(
-                        color = wl.primary.copy(alpha = 0.18f),
+                        color = wl.ink.copy(alpha = 0.14f),
                         radius = 6.dp.toPx(),
                         center = head,
                     )
                     drawCircle(
-                        color = wl.primary,
-                        radius = 3.dp.toPx(),
+                        color = wl.ink.copy(alpha = 0.85f),
+                        radius = 2.9.dp.toPx(),
                         center = head,
                     )
                 }

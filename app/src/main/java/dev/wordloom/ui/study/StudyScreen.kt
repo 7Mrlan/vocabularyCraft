@@ -477,17 +477,22 @@ private fun StudyCard(
                 label = "studyRing",
             )
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val path = ringPath(size.width, size.height, 24.dp.toPx(), 2.dp.toPx())
-                val measure = PathMeasure()
-                measure.setPath(path, false)
-                drawPath(
-                    path = path,
-                    color = wl.outline.copy(alpha = 0.9f),
-                    style = Stroke(width = 1.2.dp.toPx()),
-                )
                 if (animated > 0.001f) {
+                    // No track: at rest the card has one edge, and only the part
+                    // already learned is lit. Two outlines was one too many.
+                    val path = ringPath(size.width, size.height, 24.dp.toPx(), 1.5.dp.toPx())
+                    val measure = PathMeasure()
+                    measure.setPath(path, false)
                     val segment = Path()
                     measure.getSegment(0f, measure.length * animated, segment, true)
+                    drawPath(
+                        path = segment,
+                        color = wl.primary.copy(alpha = 0.14f),
+                        style = Stroke(
+                            width = 8.dp.toPx(),
+                            cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                        ),
+                    )
                     drawPath(
                         path = segment,
                         color = wl.primary,
@@ -498,8 +503,13 @@ private fun StudyCard(
                     )
                     val head = measure.getPosition(measure.length * animated)
                     drawCircle(
+                        color = wl.primary.copy(alpha = 0.18f),
+                        radius = 6.dp.toPx(),
+                        center = head,
+                    )
+                    drawCircle(
                         color = wl.primary,
-                        radius = 3.2.dp.toPx(),
+                        radius = 3.dp.toPx(),
                         center = head,
                     )
                 }

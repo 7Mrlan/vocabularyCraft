@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>词书卡组 · 三种运动轨迹</title>
+<style>
+  :root{ --paper:#f4efe7; --ink:#1c1a17; }
+  *{box-sizing:border-box}
+  body{
+    margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;gap:40px;
+    background:radial-gradient(1200px 600px at 50% 0%,#faf7f1 0%,var(--paper) 60%,#e8e0d3 100%);
+    font-family:"PingFang SC","Noto Sans SC",system-ui,sans-serif;color:var(--ink);
+    padding:40px;
+  }
+  .demo{width:320px}
+  .demo h3{margin:0 0 4px;font-size:14px;font-weight:600;letter-spacing:.02em}
+  .demo p{margin:0 0 12px;font-size:11px;line-height:17px;color:#7d7466}
+  .stage{
+    position:relative;width:320px;height:500px;border-radius:22px;overflow:hidden;
+    background:linear-gradient(180deg,#fffdf8,#f7f2e9);
+    box-shadow:0 1px 1px rgba(0,0,0,.05),0 18px 30px -18px rgba(30,20,10,.25);
+    perspective:1100px;touch-action:none;cursor:grab;
+  }
+  .stage:active{cursor:grabbing}
+  .card{
+    position:absolute;left:50%;top:44%;width:168px;height:248px;border-radius:14px;
+    transform-style:preserve-3d;will-change:transform;overflow:hidden;
+    box-shadow:0 10px 22px -10px rgba(30,20,10,.35);
+    backface-visibility:hidden;
+  }
+  .card .top{position:absolute;left:14px;top:12px;font-size:8px;letter-spacing:.16em;color:rgba(255,255,255,.82)}
+  .card .name{position:absolute;left:14px;top:34px;font-size:17px;line-height:1.16;font-weight:700;color:#fff}
+  .card .sub{position:absolute;left:14px;top:82px;font-size:9px;color:rgba(255,255,255,.78)}
+  .card .count{position:absolute;left:14px;bottom:12px;font-size:15px;font-weight:600;color:#fff}
+  .card .count small{font-size:8px;letter-spacing:.14em;opacity:.75;margin-left:5px;font-weight:400}
+  .card .art{position:absolute;right:-18px;bottom:26px;width:150px;height:150px;opacity:.95}
+  .card .rule{position:absolute;left:14px;right:44px;bottom:44px;height:1px;background:rgba(255,255,255,.4)}
+  .c0{background:linear-gradient(168deg,#2ACB9E,#0FA57F)}
+  .c1{background:linear-gradient(168deg,#FF9648,#F2671B)}
+  .c2{background:linear-gradient(168deg,#8A79FF,#5B45E8)}
+  .c3{background:linear-gradient(168deg,#FF7E90,#EC4A63)}
+  .hint{
+    position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:10px;
+    letter-spacing:.12em;color:#a79d8e;
+  }
+  .dots{position:absolute;left:0;right:0;bottom:36px;display:flex;justify-content:center;gap:6px}
+  .dots i{width:8px;height:2px;border-radius:2px;background:#d6ccbc;display:block;transition:width .2s,background .2s}
+  .dots i.on{width:18px;background:#1c1a17}
+</style>
+</head>
+<body>
+
+<div class="demo">
+  <h3>A · 圆环</h3>
+  <p>卡片沿一个看不见的圆环滑过屏幕边缘：侧卡向内转、略微变小，但没有升降、没有淡出；停下时只剩中间一张。</p>
+  <div class="stage" id="s1"></div>
+</div>
+
+<div class="demo">
+  <h3>B · 直轨</h3>
+  <p>水平直线滑动，卡片不旋转，只按距离轻微缩小；同样没有升降与淡出，停下时只剩中间一张。</p>
+  <div class="stage" id="s2"></div>
+</div>
+
+<div class="demo">
+  <h3>C · 翻页</h3>
+  <p>当前卡片绕纵轴翻走，下一张从另一侧翻入；靠"转向侧面"消失，而不是靠透明度；停下时只剩中间一张。</p>
+  <div class="stage" id="s3"></div>
+</div>
+
+<script>
+const BOOKS = [
+  {t:"通用<br>核心", k:"词书 · 第一卷", s:"日常与考试通用", n:"3000", note:"词族 · 词频排序", cls:"c0", art:"star"},
+  {t:"四六级<br>核心", k:"词书 · 第二卷", s:"CET-4/6 大纲裁剪", n:"2500", note:"词族 · CET 4/6", cls:"c1", art:"chev"},
+  {t:"考研<br>核心", k:"词书 · 第三卷", s:"考研大纲裁剪", n:"3000", note:"词族 · 考研大纲", cls:"c2", art:"peak"},
+  {t:"生词本", k:"词书 · 自建", s:"查词时自动收录", n:"动态", note:"词族 · 自动收录", cls:"c3", art:"sprout"},
+];
+
+const ART = {
+  star:`<path d="M96 6 L110 50 L156 64 L110 78 L96 122 L82 78 L36 64 L82 50 Z" fill="#fff"/><circle cx="78" cy="68" r="40" fill="#fff" opacity=".16"/>`,
+  chev:`<path d="M28 112 L78 62 L128 112 L114 126 L78 90 L42 126 Z" fill="#fff"/><path d="M46 84 L84 46 L122 84 L110 96 L84 70 L58 96 Z" fill="#fff" opacity=".78"/>`,
+  peak:`<path d="M14 128 L62 52 L86 90 L102 68 L148 128 Z" fill="#fff"/><path d="M108 34 A30 30 0 1 0 108 94 A30 30 0 1 1 108 34 Z" fill="#fff" opacity=".85"/>`,
+  sprout:`<path d="M78 132 V70" stroke="#fff" stroke-width="8" stroke-linecap="round"/><path d="M78 82 C78 54 58 38 26 34 C23 66 44 82 78 82 Z" fill="#fff"/><path d="M80 104 C80 80 99 66 130 63 C131 91 112 104 80 104 Z" fill="#fff" opacity=".8"/>`
+};
+
+function wrap(d){ d = ((d % BOOKS.length) + BOOKS.length) % BOOKS.length; return d > BOOKS.length/2 ? d - BOOKS.length : d; }
+
+function makeDemo(rootId, mode){
+  const stage = document.getElementById(rootId);
+  const dots = document.createElement('div'); dots.className = 'dots';
+  BOOKS.forEach(()=>{ const i=document.createElement('i'); dots.appendChild(i); });
+  stage.appendChild(dots);
+  const hint = document.createElement('div'); hint.className='hint'; hint.textContent='拖动试试'; stage.appendChild(hint);
+
+  const els = BOOKS.map((b,i)=>{
+    const el = document.createElement('div');
+    el.className = 'card ' + b.cls;
+    el.innerHTML = `<div class="top">${b.k}</div><div class="name">${b.t}</div>
+      <div class="sub">${b.s}</div><div class="rule"></div>
+      <div class="count">${b.n}<small>${b.note}</small></div>
+      <svg class="art" viewBox="0 0 168 150" fill="none">${ART[b.art]}</svg>`;
+    stage.appendChild(el);
+    return el;
+  });
+
+  let pos = 0, raf = null, dragging = false, lastX = 0, velocity = 0, lastT = 0;
+  const SPACING = 238;
+
+  function render(){
+    const n = Math.round(pos);
+    els.forEach((el,i)=>{
+      const d = wrap(i - pos);
+      if (Math.abs(d) > 2.2) { el.style.display='none'; return; }
+      el.style.display='block';
+      let x = d * SPACING, rot = 0, scale = 1;
+      if (mode === 'ring') { rot = -d * 36; scale = 1 - Math.abs(d) * 0.12; }
+      if (mode === 'flat') { rot = 0; scale = 1 - Math.abs(d) * 0.10; }
+      if (mode === 'flip') { x = d * 64; rot = d * 88; scale = 1; }
+      el.style.transform = `translate(-50%,-50%) translateX(${x}px) rotateY(${rot}deg) scale(${scale})`;
+      el.style.zIndex = String(10 - Math.abs(d));
+    });
+    [...dots.children].forEach((dot,i)=> dot.classList.toggle('on', i === ((n % BOOKS.length) + BOOKS.length) % BOOKS.length));
+  }
+
+  function animateTo(target, startPos, startVelocity, duration){
+    if (raf) cancelAnimationFrame(raf);
+    const t0 = performance.now();
+    function step(t){
+      const p = Math.min(1, (t - t0) / duration);
+      const e = 1 - Math.pow(1 - p, 3);
+      pos = startPos + (target - startPos) * e;
+      render();
+      if (p < 1) raf = requestAnimationFrame(step);
+    }
+    raf = requestAnimationFrame(step);
+  }
+
+  stage.addEventListener('pointerdown', e => {
+    dragging = true; stage.setPointerCapture(e.pointerId);
+    lastX = e.clientX; lastT = performance.now(); velocity = 0;
+    if (raf) cancelAnimationFrame(raf);
+  });
+  stage.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - lastX; lastX = e.clientX;
+    const now = performance.now();
+    velocity = dx / Math.max(1, now - lastT) * 16;
+    lastT = now;
+    pos -= dx / SPACING;
+    render();
+  });
+  stage.addEventListener('pointerup', e => {
+    dragging = false;
+    const projected = pos - velocity / SPACING * 0.55;
+    animateTo(Math.round(projected), pos, velocity, 420);
+    hint.style.opacity = '0';
+  });
+  stage.addEventListener('pointercancel', ()=>{ dragging=false; animateTo(Math.round(pos), pos, 0, 300); });
+  render();
+}
+
+makeDemo('s1','ring');
+makeDemo('s2','flat');
+makeDemo('s3','flip');
+</script>
+</body>
+</html>

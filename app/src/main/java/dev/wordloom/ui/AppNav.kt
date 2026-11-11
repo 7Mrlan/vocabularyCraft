@@ -107,6 +107,8 @@ fun AppNav(
             BooksScreen(
                 onBack = { nav.popBackStack() },
                 onStartStudy = { nav.navigate("study") },
+                words = mapWords,
+                cards = cards,
             )
         }
 

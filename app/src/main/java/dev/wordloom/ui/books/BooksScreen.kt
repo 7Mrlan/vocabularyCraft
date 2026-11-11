@@ -3,6 +3,8 @@ package dev.wordloom.ui.books
 import android.media.SoundPool
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -76,7 +78,12 @@ import kotlin.math.roundToInt
  * book is the only heavier haptic.
  */
 @Composable
-fun BooksScreen(onBack: () -> Unit, onStartStudy: () -> Unit) {
+fun BooksScreen(
+    onBack: () -> Unit,
+    onStartStudy: () -> Unit,
+    words: List<dev.wordloom.data.model.WordEntry> = emptyList(),
+    cards: List<dev.wordloom.data.local.CardEntity> = emptyList(),
+) {
     val wl = WordloomTheme.colors
     val books = SampleBooks
     val count = books.size
@@ -94,6 +101,35 @@ fun BooksScreen(onBack: () -> Unit, onStartStudy: () -> Unit) {
     }
 
     var currentId by remember { mutableStateOf(books.first().id) }
+    var detailOpen by remember { mutableStateOf(false) }
+    var spinning by remember { mutableStateOf(false) }
+    val openProgress by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (detailOpen) 1f else 0f,
+        animationSpec = tween(durationMillis = 400),
+        label = "bookOpen",
+    )
+    val spinAngle by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (spinning) 360f else 0f,
+        animationSpec = tween(durationMillis = 520),
+        label = "bookSpin",
+    )
+
+    // Opening is a two-beat gesture: the cover turns first, and the volume
+    // grows out of that turn. Closing runs both beats at once so going back
+    // takes one motion, not a queue.
+    fun openBook() {
+        if (detailOpen) return
+        scope.launch {
+            spinning = true
+            kotlinx.coroutines.delay(170)
+            detailOpen = true
+        }
+    }
+
+    fun closeBook() {
+        detailOpen = false
+        spinning = false
+    }
     var position by remember { mutableFloatStateOf(0f) }
     val settle = remember { Animatable(0f) }
     var settling by remember { mutableStateOf(false) }
@@ -110,12 +146,19 @@ fun BooksScreen(onBack: () -> Unit, onStartStudy: () -> Unit) {
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(wl.surface)
             .statusBarsPadding()
-            .navigationBarsPadding(),
+            .navigationBarsPadding()
+            .graphicsLayer {
+                alpha = 1f - openProgress
+                val s = 1f - openProgress * 0.06f
+                scaleX = s
+                scaleY = s
+            },
     ) {
         Row(
             modifier = Modifier
@@ -212,7 +255,8 @@ fun BooksScreen(onBack: () -> Unit, onStartStudy: () -> Unit) {
                                         // size. Same height, fully opaque — the circle is
                                         // read from the motion, not from a static row.
                                         translationX = d * pxPerPage
-                                        rotationY = (d * -34f).coerceIn(-40f, 40f)
+                                        rotationY = (d * -34f).coerceIn(-40f, 40f) +
+                                            (if (d.absoluteValue < 0.01f) spinAngle else 0f)
                                         cameraDistance = 15f * density
                                         val shrink = (1f - d.absoluteValue * 0.14f).coerceAtLeast(0.70f)
                                         scaleX = shrink
@@ -237,6 +281,8 @@ fun BooksScreen(onBack: () -> Unit, onStartStudy: () -> Unit) {
                                         } else if (spec.id != currentId) {
                                             currentId = spec.id
                                             view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                        } else {
+                                            openBook()
                                         }
                                     },
                             )
@@ -289,20 +335,52 @@ fun BooksScreen(onBack: () -> Unit, onStartStudy: () -> Unit) {
                 Spacer(Modifier.height(24.dp))
                 Surface(
                     shape = RoundedCornerShape(50),
-                    color = wl.primary,
+                    color = wl.ink,
                     modifier = Modifier
                         .fillMaxWidth(0.72f)
-                        .clickable(onClick = onStartStudy),
+                        .clickable { openBook() },
                 ) {
-                    Text(
-                        text = "开始学习",
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = wl.onPrimary,
+                    Row(
                         modifier = Modifier.padding(vertical = 14.dp),
-                    )
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "开始学习",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = wl.surface,
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = "→",
+                            fontSize = 15.sp,
+                            color = wl.surface.copy(alpha = 0.8f),
+                        )
+                    }
                 }
             }
         }
+    }
+
+    if (detailOpen || openProgress > 0.01f) {
+        BookDetail(
+            book = books[nearest],
+            words = words,
+            cards = cards,
+            onBack = { closeBook() },
+            onStartStudy = { onStartStudy() },
+            modifier = Modifier.graphicsLayer {
+                // The page is opaque almost from the first frame: it unfolds
+                // over the shelf instead of being blended with it.
+                alpha = (openProgress * 2.2f).coerceIn(0f, 1f)
+                val s = 0.72f + 0.28f * openProgress
+                scaleX = s
+                scaleY = s
+                rotationY = (1f - openProgress) * -6f
+                // Grows out of the cover, not from the middle of the screen.
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0.45f)
+            },
+        )
+    }
     }
 }

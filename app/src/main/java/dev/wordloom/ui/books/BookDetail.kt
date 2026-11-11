@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -45,9 +46,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.wordloom.R
+import kotlin.math.roundToInt
 import dev.wordloom.data.local.CardEntity
 import dev.wordloom.data.model.WordEntry
 import dev.wordloom.ui.theme.SerifFamily
+import dev.wordloom.ui.theme.WlMotion
 import dev.wordloom.ui.theme.WordloomTheme
 
 private enum class WordFilter(val label: String) {
@@ -79,6 +82,13 @@ fun BookDetail(
     val units = (total / 100).coerceAtLeast(1)
     val currentUnit = (learned / 100 + 1).coerceAtMost(units)
     val accent = book.top
+    val ratio = (learned.toFloat() / total).coerceIn(0f, 1f)
+    // Whole-book progress reads as a number, not a bar you have to squint at.
+    val percentText = when {
+        learned == 0 -> "0%"
+        ratio >= 0.1f -> "${(ratio * 100).roundToInt()}%"
+        else -> String.format(java.util.Locale.US, "%.1f%%", ratio * 100f)
+    }
 
     var filter by remember { mutableStateOf(WordFilter.All) }
 
@@ -148,18 +158,11 @@ fun BookDetail(
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
-                    text = learned.toString(),
+                    text = percentText,
                     fontFamily = SerifFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 28.sp,
                     color = wl.ink,
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = "/ $total 词",
-                    fontSize = 11.sp,
-                    color = wl.inkMuted,
-                    modifier = Modifier.padding(bottom = 5.dp),
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
@@ -169,6 +172,12 @@ fun BookDetail(
                     modifier = Modifier.padding(bottom = 5.dp),
                 )
             }
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = "已学 $learned · 共 $total 词",
+                fontSize = 11.sp,
+                color = wl.inkMuted,
+            )
             Spacer(Modifier.height(10.dp))
             Box(
                 modifier = Modifier
@@ -178,7 +187,9 @@ fun BookDetail(
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth((learned.toFloat() / total).coerceIn(0f, 1f))
+                        // At 0.3% an honest bar is a sub-pixel sliver; keep a
+                        // small cap so the first words still read as a start.
+                        .fillMaxWidth(ratio.coerceAtLeast(if (learned > 0) 0.012f else 0f))
                         .height(3.dp)
                         .background(accent, CircleShape),
                 )
@@ -261,12 +272,27 @@ fun BookDetail(
             .navigationBarsPadding()
             .padding(horizontal = 24.dp, vertical = 20.dp),
     ) {
+        val interaction = remember { MutableInteractionSource() }
+        val pressed by interaction.collectIsPressedAsState()
+        val scale by androidx.compose.animation.core.animateFloatAsState(
+            targetValue = if (pressed) 0.97f else 1f,
+            animationSpec = WlMotion.press,
+            label = "ctaPress",
+        )
         Surface(
             shape = RoundedCornerShape(50),
             color = wl.ink,
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onStartStudy),
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .clickable(
+                    interactionSource = interaction,
+                    indication = null,
+                    onClick = onStartStudy,
+                ),
         ) {
             Text(
                 text = "继续学习 · 第 $currentUnit 单元",

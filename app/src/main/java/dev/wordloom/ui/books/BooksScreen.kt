@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
@@ -22,6 +23,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -70,6 +73,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import dev.wordloom.R
 import dev.wordloom.ui.theme.SerifFamily
+import dev.wordloom.ui.theme.WlMotion
 import dev.wordloom.ui.theme.WordloomTheme
 import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
@@ -393,12 +397,27 @@ fun BooksScreen(
                 )
 
                 Spacer(Modifier.height(24.dp))
+                val ctaInteraction = remember { MutableInteractionSource() }
+                val ctaPressed by ctaInteraction.collectIsPressedAsState()
+                val ctaScale by animateFloatAsState(
+                    targetValue = if (ctaPressed) 0.97f else 1f,
+                    animationSpec = WlMotion.press,
+                    label = "ctaPress",
+                )
                 Surface(
                     shape = RoundedCornerShape(50),
                     color = wl.ink,
                     modifier = Modifier
                         .fillMaxWidth(0.72f)
-                        .clickable { openBook() },
+                        .graphicsLayer {
+                            scaleX = ctaScale
+                            scaleY = ctaScale
+                        }
+                        .clickable(
+                            interactionSource = ctaInteraction,
+                            indication = null,
+                            onClick = { openBook() },
+                        ),
                 ) {
                     Row(
                         modifier = Modifier.padding(vertical = 14.dp),

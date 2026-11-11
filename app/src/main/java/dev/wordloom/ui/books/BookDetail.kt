@@ -61,23 +61,23 @@ import dev.wordloom.ui.theme.WordloomTheme
 @Composable
 fun BookDetail(
     book: BookCoverSpec,
-    words: List<WordEntry>,
+    words: List<String>,
+    entries: Map<String, WordEntry>,
     cards: List<CardEntity>,
     onBack: () -> Unit,
     onStartStudy: () -> Unit,
-    onOpenWord: (WordEntry) -> Unit,
+    onOpenWord: (String) -> Unit,
     /** False while the page is pre-composed behind the shelf. */
     interactive: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val wl = WordloomTheme.colors
     val statusByWord = remember(cards) { BookProgress.statusMap(cards) }
-    val total = book.count.toIntOrNull() ?: words.size.coerceAtLeast(1)
-    val learned = words.count { statusByWord[it.word.lowercase()] != WordStatus.New }
+    val total = words.size.coerceAtLeast(book.count.toIntOrNull() ?: 1)
+    val learned = BookProgress.learnedCount(words, statusByWord)
     val units = BookProgress.unitCount(total)
-    val currentUnit = (learned / BookProgress.UNIT_SIZE + 1).coerceAtMost(units)
+    val currentUnit = BookProgress.currentUnitIndex(words, statusByWord) + 1
     val accent = book.top
-    val ratio = BookProgress.ratio(learned, total)
     val percentText = BookProgress.percentText(learned, total)
 
     var filter by rememberSaveable { mutableStateOf(WordFilter.All) }
@@ -156,24 +156,8 @@ fun BookDetail(
                 fontSize = 11.sp,
                 color = wl.inkMuted,
             )
-            Spacer(Modifier.height(10.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(3.dp)
-                    .background(wl.outline, CircleShape),
-            ) {
-                Box(
-                    modifier = Modifier
-                        // At 0.3% an honest bar is a sub-pixel sliver; keep a
-                        // small cap so the first words still read as a start.
-                        .fillMaxWidth(ratio.coerceAtLeast(if (learned > 0) 0.012f else 0f))
-                        .height(3.dp)
-                        .background(accent, CircleShape),
-                )
-            }
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(26.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 WordFilter.entries.forEach { item ->
                     val active = item == filter
@@ -197,8 +181,6 @@ fun BookDetail(
                     }
                 }
             }
-            Spacer(Modifier.height(10.dp))
-            Box(Modifier.fillMaxWidth().height(1.dp).background(wl.outline))
         }
 
         LazyColumn(
@@ -207,13 +189,13 @@ fun BookDetail(
                 .weight(1f),
             contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 90.dp),
         ) {
-            if (sections.isEmpty()) {
+            if (sections.isEmpty() && words.isNotEmpty()) {
                 item { FilterEmpty(filter) }
             }
             sections.forEachIndexed { index, section ->
                 item(key = "unit-${section.unit}") {
                     val inUnit = section.words.count {
-                        statusByWord[it.word.lowercase()] != WordStatus.New
+                        (statusByWord[it.lowercase()] ?: WordStatus.New) != WordStatus.New
                     }
                     UnitHeader(
                         unit = section.unit,
@@ -225,13 +207,14 @@ fun BookDetail(
                         first = index == 0,
                     )
                 }
-                items(section.words, key = { it.word }) { entry ->
+                items(section.words, key = { it }) { word ->
                     WordRow(
-                        entry = entry,
-                        status = statusByWord[entry.word.lowercase()] ?: WordStatus.New,
+                        word = word,
+                        gloss = entries[word]?.senses?.firstOrNull()?.definition.orEmpty(),
+                        status = statusByWord[word] ?: WordStatus.New,
                         accent = accent,
                         enabled = interactive,
-                        onClick = { onOpenWord(entry) },
+                        onClick = { onOpenWord(word) },
                     )
                 }
             }
@@ -298,7 +281,7 @@ private fun UnitHeader(unit: Int, detail: String, first: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = if (first) 16.dp else 26.dp, bottom = 2.dp),
+            .padding(top = if (first) 22.dp else 30.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -306,14 +289,7 @@ private fun UnitHeader(unit: Int, detail: String, first: Boolean) {
             fontSize = 10.5.sp,
             color = wl.inkMuted,
         )
-        Spacer(Modifier.width(10.dp))
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(1.dp)
-                .background(wl.outline.copy(alpha = 0.6f)),
-        )
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.weight(1f))
         Text(
             text = detail,
             fontSize = 10.5.sp,
@@ -343,7 +319,8 @@ private fun FilterEmpty(filter: WordFilter) {
 
 @Composable
 private fun WordRow(
-    entry: WordEntry,
+    word: String,
+    gloss: String,
     status: WordStatus,
     accent: Color,
     enabled: Boolean,
@@ -366,7 +343,7 @@ private fun WordRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = entry.word,
+            text = word,
             fontFamily = SerifFamily,
             fontSize = 15.sp,
             color = wl.ink,
@@ -376,7 +353,7 @@ private fun WordRow(
         )
         Spacer(Modifier.width(10.dp))
         Text(
-            text = entry.senses.firstOrNull()?.definition.orEmpty(),
+            text = gloss,
             fontSize = 11.sp,
             color = wl.inkMuted,
             maxLines = 1,

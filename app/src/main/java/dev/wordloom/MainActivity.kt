@@ -41,7 +41,7 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
 
-        val repository = (application as WordloomApp).container.repository
+        val container = (application as WordloomApp).container
 
         setContent {
             // The brand mark in the header toggles this. "system" is only the
@@ -54,7 +54,10 @@ class MainActivity : ComponentActivity() {
             }
 
             WordloomTheme(darkTheme = dark) {
-                val vm: WordloomViewModel = viewModel(factory = remember { RepositoryFactory(repository) })
+                val factory = remember {
+                    RepositoryFactory(container.repository, container.wordBooks, container.bookSelection)
+                }
+                val vm: WordloomViewModel = viewModel(factory = factory)
                 AppNav(
                     viewModel = vm,
                     onToggleTheme = {
@@ -68,8 +71,12 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private class RepositoryFactory(private val repository: WordRepository) : ViewModelProvider.Factory {
+private class RepositoryFactory(
+    private val repository: WordRepository,
+    private val wordBooks: dev.wordloom.data.wordbook.WordBookStore,
+    private val bookSelection: dev.wordloom.data.wordbook.WordBookSelection,
+) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
-        WordloomViewModel(repository) as T
+        WordloomViewModel(repository, wordBooks, bookSelection) as T
 }

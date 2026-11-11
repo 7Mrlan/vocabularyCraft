@@ -98,7 +98,7 @@ import kotlin.math.min
 private enum class Layer { Word, English, Chinese, Examples }
 
 @Immutable
-private data class StudyItem(val entry: WordEntry, val isNew: Boolean)
+private data class StudyItem(val word: String, val isNew: Boolean)
 
 /**
  * One word at a time, self-report first.
@@ -111,7 +111,10 @@ private data class StudyItem(val entry: WordEntry, val isNew: Boolean)
 @Composable
 fun StudyScreen(
     dueCards: List<CardEntity>,
-    words: List<WordEntry>,
+    /** The current unit of the selected book. */
+    newWords: List<String>,
+    entries: Map<String, WordEntry>,
+    onNeedEntry: (String) -> Unit,
     onBack: () -> Unit,
     onRate: (WordEntry, Rating, Boolean) -> Unit,
     onUndo: () -> Unit,
@@ -122,17 +125,22 @@ fun StudyScreen(
     val feedback = rememberAppFeedback()
     val player = rememberAudioPlayer()
 
-    val dueItems = remember(dueCards, words) {
-        // A due card must never disappear because its word fell out of the
-        // in-memory cache; the card's preview is enough to study it.
-        dueCards.take(60).map { card ->
-            val entry = words.firstOrNull { it.word.equals(card.word, ignoreCase = true) }
-                ?: WordEntry(word = card.word, shortBlurb = card.preview.ifBlank { null })
-            StudyItem(entry, false)
-        }
+    // A due card must never disappear because its word fell out of the entry
+    // cache; the card's own preview is enough to study it.
+    val previews = remember(dueCards) {
+        dueCards.associate { it.word.lowercase() to it.preview }
     }
-    val newItems = remember(words, dueCards) {
-        words.filter { entry -> dueCards.none { it.word.equals(entry.word, ignoreCase = true) } }
+    fun entryFor(word: String): WordEntry =
+        entries[word.lowercase()] ?: WordEntry(
+            word = word,
+            shortBlurb = previews[word.lowercase()]?.ifBlank { null },
+        )
+
+    val dueItems = remember(dueCards) {
+        dueCards.take(60).map { StudyItem(it.word.lowercase(), false) }
+    }
+    val newItems = remember(newWords, dueCards) {
+        newWords.filter { word -> dueCards.none { it.word.equals(word, ignoreCase = true) } }
             .take(10)
             .map { StudyItem(it, true) }
     }
@@ -142,7 +150,7 @@ fun StudyScreen(
     var started by remember { mutableStateOf(false) }
     LaunchedEffect(dueItems, newItems) {
         if (!started) {
-            queue = (dueItems + newItems).distinctBy { it.entry.word.lowercase() }
+            queue = (dueItems + newItems).distinctBy { it.word.lowercase() }
             total = queue.size
             started = true
         }
@@ -158,16 +166,16 @@ fun StudyScreen(
     var lastCommitted by remember { mutableStateOf<StudyItem?>(null) }
 
     fun commit(item: StudyItem, rating: Rating, requeue: Boolean) {
-        val key = item.entry.word.lowercase()
+        val key = item.word.lowercase()
         val firstToday = seenToday.add(key)
         if (firstToday) {
             // Only a real commit can be undone: a requeued word answered a
             // second time writes nothing, so it must not become the target.
             lastCommitted = item
             completed += 1
-            onRate(item.entry, rating, item.isNew)
+            onRate(entryFor(item.word), rating, item.isNew)
             if (rating == Rating.Good || rating == Rating.Easy) {
-                spellWords.add(item.entry)
+                spellWords.add(entryFor(item.word))
             }
         }
         val rest = queue.drop(1)
@@ -186,6 +194,10 @@ fun StudyScreen(
     }
 
     val current = queue.firstOrNull()
+    // The English entry may not be cached yet; ask for it as the card arrives.
+    LaunchedEffect(current?.word) {
+        current?.let { onNeedEntry(it.word) }
+    }
     val progress = if (total == 0) 0f else completed.toFloat() / total
 
     Column(
@@ -233,13 +245,13 @@ fun StudyScreen(
                         val item = lastCommitted
                         if (item != null) {
                             val rest = queue.filterNot {
-                                it.entry.word.equals(item.entry.word, ignoreCase = true)
+                                it.word.equals(item.word, ignoreCase = true)
                             }
                             queue = listOf(item) + rest
                             // Put the word back where it was so rating it again
                             // is a first answer, not a silent no-op.
-                            seenToday.remove(item.entry.word.lowercase())
-                            spellWords.removeAll { it.word.equals(item.entry.word, ignoreCase = true) }
+                            seenToday.remove(item.word.lowercase())
+                            spellWords.removeAll { it.word.equals(item.word, ignoreCase = true) }
                             lastCommitted = null
                             completed = (completed - 1).coerceAtLeast(0)
                             onUndo()
@@ -265,10 +277,10 @@ fun StudyScreen(
                         .clickable {
                             // "Already know it" is a finish too: the ring and the
                             // counter must move together.
-                            if (seenToday.add(current.entry.word.lowercase())) {
+                            if (seenToday.add(current.word.lowercase())) {
                                 completed += 1
                             }
-                            onMarkKnown(current.entry)
+                            onMarkKnown(entryFor(current.word))
                             queue = queue.drop(1)
                         }
                         .padding(horizontal = 8.dp, vertical = 6.dp),
@@ -315,6 +327,7 @@ fun StudyScreen(
 
             else -> StudyCard(
                 item = current,
+                entry = entryFor(current.word),
                 progress = progress,
                 onCommit = { rating, requeue -> commit(current, rating, requeue) },
                 onReveal = { feedback.reveal(view) },
@@ -330,6 +343,7 @@ fun StudyScreen(
 @Composable
 private fun StudyCard(
     item: StudyItem,
+    entry: WordEntry,
     progress: Float,
     onCommit: (Rating, Boolean) -> Unit,
     onReveal: () -> Unit,
@@ -340,7 +354,6 @@ private fun StudyCard(
 ) {
     val wl = WordloomTheme.colors
     val density = LocalDensity.current.density
-    val entry = item.entry
     var layer by remember(entry.word) { mutableStateOf(Layer.Word) }
     var pending by remember(entry.word) { mutableStateOf<Rating?>(null) }
     var details by remember(entry.word) { mutableStateOf<StudyDetails?>(null) }

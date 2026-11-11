@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Canvas
+import dev.wordloom.data.wordbook.WordBook
 
 enum class CoverArt { Star, Chevrons, Peak, Sprout }
 
@@ -43,61 +44,48 @@ data class BookCoverSpec(
     val subtitle: String,
     val count: String,
     val countNote: String,
-    /** Null for an auto-collected book, which has no fixed units. */
-    val units: Int?,
     val top: Color,
     val bottom: Color,
     val art: CoverArt,
 )
 
-val SampleBooks = listOf(
+/**
+ * The shelf, in reading order. Copy and colour are fixed per volume; the words
+ * behind each cover come from its asset file, keyed by [id].
+ */
+val Bookshelf: List<BookCoverSpec> = listOf(
     BookCoverSpec(
-        id = "core3000",
+        id = WordBook.Core.name,
         title = "通用\n核心",
         kicker = "词书 · 第一卷",
         subtitle = "日常与考试通用",
-        count = "3000",
-        countNote = "词族 · 词频排序",
-        units = 29,
+        count = WordBook.Core.count.toString(),
+        countNote = "词 · 词频排序",
         top = Color(0xFF2ACB9E),
         bottom = Color(0xFF0FA57F),
         art = CoverArt.Star,
     ),
     BookCoverSpec(
-        id = "cet",
+        id = WordBook.Cet.name,
         title = "四六级\n核心",
         kicker = "词书 · 第二卷",
         subtitle = "CET-4/6 大纲裁剪",
-        count = "2500",
-        countNote = "词族 · CET 4/6",
-        units = 25,
+        count = WordBook.Cet.count.toString(),
+        countNote = "词 · CET 4/6",
         top = Color(0xFFFF9648),
         bottom = Color(0xFFF2671B),
         art = CoverArt.Chevrons,
     ),
     BookCoverSpec(
-        id = "kaoyan",
+        id = WordBook.Kaoyan.name,
         title = "考研\n核心",
         kicker = "词书 · 第三卷",
         subtitle = "考研大纲裁剪",
-        count = "3000",
-        countNote = "词族 · 考研大纲",
-        units = 30,
+        count = WordBook.Kaoyan.count.toString(),
+        countNote = "词 · 考研大纲",
         top = Color(0xFF8A79FF),
         bottom = Color(0xFF5B45E8),
         art = CoverArt.Peak,
-    ),
-    BookCoverSpec(
-        id = "newWords",
-        title = "生词本",
-        kicker = "词书 · 自建",
-        subtitle = "查词时自动收录",
-        count = "动态",
-        countNote = "词族 · 自动收录",
-        units = null,
-        top = Color(0xFFFF7E90),
-        bottom = Color(0xFFEC4A63),
-        art = CoverArt.Sprout,
     ),
 )
 

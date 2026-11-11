@@ -100,12 +100,15 @@ import kotlin.math.sin
 fun BooksScreen(
     onBack: () -> Unit,
     onStartStudy: () -> Unit,
-    onOpenWord: (dev.wordloom.data.model.WordEntry) -> Unit = {},
-    words: List<dev.wordloom.data.model.WordEntry> = emptyList(),
+    onOpenWord: (String) -> Unit = {},
+    onSelectBook: (String) -> Unit = {},
+    selectedBookId: String = dev.wordloom.data.wordbook.WordBook.Core.name,
+    words: List<String> = emptyList(),
+    entries: Map<String, dev.wordloom.data.model.WordEntry> = emptyMap(),
     cards: List<dev.wordloom.data.local.CardEntity> = emptyList(),
 ) {
     val wl = WordloomTheme.colors
-    val books = SampleBooks
+    val books = Bookshelf
     val count = books.size
     val scope = rememberCoroutineScope()
 
@@ -120,10 +123,12 @@ fun BooksScreen(
         onDispose { soundPool.release() }
     }
 
-    var currentId by rememberSaveable { mutableStateOf(books.first().id) }
+    val currentId = selectedBookId
     var detailOpen by rememberSaveable { mutableStateOf(false) }
     var openedId by rememberSaveable { mutableStateOf<String?>(null) }
-    var position by rememberSaveable { mutableFloatStateOf(0f) }
+    var position by rememberSaveable {
+        mutableFloatStateOf(books.indexOfFirst { it.id == selectedBookId }.coerceAtLeast(0).toFloat())
+    }
     val settle = remember { Animatable(0f) }
     var settling by remember { mutableStateOf(false) }
     val shown = if (settling) settle.value else position
@@ -350,7 +355,7 @@ fun BooksScreen(
                                                 settling = false
                                             }
                                         } else if (spec.id != currentId) {
-                                            currentId = spec.id
+                                            onSelectBook(spec.id)
                                             view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                                         } else {
                                             openBook()
@@ -398,7 +403,7 @@ fun BooksScreen(
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "${selected.count} 个词族 · ${selected.countNote.substringAfter("·").trim()}",
+                    text = "${selected.count} 个词 · ${selected.countNote.substringAfter("·").trim()}",
                     fontSize = 11.sp,
                     color = wl.inkMuted,
                 )
@@ -452,6 +457,7 @@ fun BooksScreen(
         BookDetail(
             book = books.firstOrNull { it.id == openedId } ?: books[nearest],
             words = words,
+            entries = entries,
             cards = cards,
             interactive = detailOpen || openProgress > 0.01f,
             onBack = { closeBook() },

@@ -17,6 +17,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import dev.wordloom.data.model.WordEntry
+import dev.wordloom.ui.books.BookProgress
 import dev.wordloom.ui.books.BooksScreen
 import dev.wordloom.ui.study.StudyScreen
 import dev.wordloom.ui.home.HomeScreen
@@ -49,6 +50,20 @@ fun AppNav(
     val listWords by viewModel.listWords.collectAsStateWithLifecycle()
     val quiz by viewModel.quiz.collectAsStateWithLifecycle()
     val mapWords by viewModel.mapWords.collectAsStateWithLifecycle()
+    val book by viewModel.book.collectAsStateWithLifecycle()
+    val bookWords by viewModel.bookWords.collectAsStateWithLifecycle()
+    val studyEntries by viewModel.studyEntries.collectAsStateWithLifecycle()
+
+    val entries = remember(mapWords, studyEntries) {
+        mapWords.associateBy { it.word.lowercase() } + studyEntries
+    }
+    val bookStatus = remember(cards) { BookProgress.statusMap(cards) }
+    val currentUnit = remember(bookWords, bookStatus) {
+        BookProgress.currentUnitIndex(bookWords, bookStatus)
+    }
+    val unitWords = remember(bookWords, currentUnit) {
+        bookWords.drop(currentUnit * BookProgress.UNIT_SIZE).take(BookProgress.UNIT_SIZE)
+    }
 
     fun openWord(term: String) {
         nav.navigate("word/${Uri.encode(term)}")
@@ -107,19 +122,21 @@ fun AppNav(
             BooksScreen(
                 onBack = { nav.popBackStack() },
                 onStartStudy = { nav.navigate("study") },
-                onOpenWord = { entry ->
-                    viewModel.showWord(entry)
-                    openWord(entry.word)
-                },
-                words = mapWords,
+                onOpenWord = { word -> openWord(word) },
+                onSelectBook = viewModel::selectBook,
+                selectedBookId = book.name,
+                words = bookWords,
+                entries = entries,
                 cards = cards,
             )
         }
 
         composable("study") {
             StudyScreen(
-                dueCards = cards,
-                words = mapWords,
+                dueCards = dueCards,
+                newWords = unitWords,
+                entries = entries,
+                onNeedEntry = viewModel::prefetchForStudy,
                 onBack = { nav.popBackStack() },
                 onRate = { entry, rating, isNew -> viewModel.rateStudy(entry, rating, isNew) },
                 onUndo = viewModel::undoStudy,

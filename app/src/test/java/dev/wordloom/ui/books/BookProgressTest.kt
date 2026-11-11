@@ -1,7 +1,6 @@
 package dev.wordloom.ui.books
 
 import dev.wordloom.data.local.CardEntity
-import dev.wordloom.data.model.WordEntry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -20,10 +19,11 @@ class BookProgressTest {
         preview = "",
     )
 
-    private fun words(count: Int) = List(count) { WordEntry(word = "word$it") }
+    private fun words(count: Int) = List(count) { "word$it" }
 
     @Test
     fun `percent keeps a decimal until ten percent`() {
+        assertEquals("<0.1%", BookProgress.percentText(1, 3000))
         assertEquals("0.3%", BookProgress.percentText(10, 3000))
         assertEquals("3.3%", BookProgress.percentText(100, 3000))
         assertEquals("10%", BookProgress.percentText(300, 3000))
@@ -63,8 +63,8 @@ class BookProgressTest {
         val sections = BookProgress.sections(words(250), emptyMap(), WordFilter.All)
         assertEquals(listOf(1, 2, 3), sections.map { it.unit })
         assertEquals(listOf(100, 100, 50), sections.map { it.words.size })
-        assertEquals("word0", sections.first().words.first().word)
-        assertEquals("word249", sections.last().words.last().word)
+        assertEquals("word0", sections.first().words.first())
+        assertEquals("word249", sections.last().words.last())
     }
 
     @Test
@@ -77,11 +77,11 @@ class BookProgressTest {
         val mastered = BookProgress.sections(words, status, WordFilter.Mastered)
         assertEquals(1, mastered.size)
         assertEquals(2, mastered.first().unit)
-        assertEquals("word180", mastered.first().words.single().word)
+        assertEquals("word180", mastered.first().words.single())
 
         val learning = BookProgress.sections(words, status, WordFilter.Learning)
         assertEquals(1, learning.first().unit)
-        assertEquals("word10", learning.first().words.single().word)
+        assertEquals("word10", learning.first().words.single())
     }
 
     @Test
@@ -89,13 +89,44 @@ class BookProgressTest {
         val words = words(3)
         val status = mapOf("word1" to WordStatus.Learning, "word2" to WordStatus.Mastered)
         val fresh = BookProgress.sections(words, status, WordFilter.New).single().words
-        assertEquals(listOf("word0"), fresh.map { it.word })
+        assertEquals(listOf("word0"), fresh)
     }
 
     @Test
     fun `empty filter result produces no sections`() {
         assertTrue(BookProgress.sections(words(10), emptyMap(), WordFilter.Mastered).isEmpty())
         assertTrue(BookProgress.sections(emptyList(), emptyMap(), WordFilter.All).isEmpty())
+    }
+
+    @Test
+    fun `words without a card are never counted as learned`() {
+        val words = listOf("the", "be", "and")
+        assertEquals(0, BookProgress.learnedCount(words, emptyMap()))
+        assertEquals(
+            1,
+            BookProgress.learnedCount(words, mapOf("be" to WordStatus.Learning)),
+        )
+        assertEquals(
+            2,
+            BookProgress.learnedCount(
+                words,
+                mapOf("be" to WordStatus.Learning, "and" to WordStatus.Mastered),
+            ),
+        )
+    }
+
+    @Test
+    fun `current unit is the first one with an unlearned word`() {
+        val words = words(250)
+        assertEquals(0, BookProgress.currentUnitIndex(words, emptyMap()))
+
+        val firstUnitDone = (0 until 100).associate { "word$it" to WordStatus.Learning }
+        assertEquals(1, BookProgress.currentUnitIndex(words, firstUnitDone))
+
+        val allDone = words.associateWith { WordStatus.Mastered }
+        assertEquals(2, BookProgress.currentUnitIndex(words, allDone))
+
+        assertEquals(0, BookProgress.currentUnitIndex(emptyList(), emptyMap()))
     }
 
     @Test

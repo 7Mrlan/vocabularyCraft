@@ -10,6 +10,9 @@ import dev.wordloom.data.local.CardEntity
 import dev.wordloom.data.local.ListWithCount
 import dev.wordloom.data.model.Suggestion
 import dev.wordloom.data.model.WordEntry
+import dev.wordloom.data.wordbook.WordBook
+import dev.wordloom.data.wordbook.WordBookSelection
+import dev.wordloom.data.wordbook.WordBookStore
 import dev.wordloom.srs.DAY_MS
 import dev.wordloom.srs.Rating
 import dev.wordloom.ui.map.MapCounters
@@ -53,7 +56,11 @@ data class QuizState(
     val round: Int = 0,
 )
 
-class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
+class WordloomViewModel(
+    private val repo: WordRepository,
+    private val bookStore: WordBookStore,
+    private val bookSelection: WordBookSelection,
+) : ViewModel() {
 
     private val _wordState = MutableStateFlow<WordUiState>(WordUiState.Idle)
     val wordState: StateFlow<WordUiState> = _wordState.asStateFlow()
@@ -70,6 +77,58 @@ class WordloomViewModel(private val repo: WordRepository) : ViewModel() {
     /** Map card pool: words the person opened (daily word excluded until tapped). */
     val mapWords = repo.openedWords()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _book = MutableStateFlow(bookSelection.selected)
+    val book: StateFlow<WordBook> = _book.asStateFlow()
+
+    /** The selected book's headwords, in study order. Loaded off the main thread. */
+    private val _bookWords = MutableStateFlow<List<String>>(emptyList())
+    val bookWords: StateFlow<List<String>> = _bookWords.asStateFlow()
+
+    /**
+     * Entries fetched for study cards. Kept apart from [mapWords] so preloading a
+     * unit doesn't push ten words into "最近查过".
+     */
+    private val _studyEntries = MutableStateFlow<Map<String, WordEntry>>(emptyMap())
+    val studyEntries: StateFlow<Map<String, WordEntry>> = _studyEntries.asStateFlow()
+    private val prefetching = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
+    init {
+        loadBook(_book.value)
+    }
+
+    fun selectBook(id: String) {
+        val next = WordBook.fromId(id)
+        if (next == _book.value) return
+        _book.value = next
+        bookSelection.selected = next
+        loadBook(next)
+    }
+
+    private fun loadBook(book: WordBook) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            _bookWords.value = bookStore.words(book)
+        }
+    }
+
+    /** Pull one study word's entry in the background; the card upgrades when it lands. */
+    fun prefetchForStudy(term: String) {
+        val key = term.trim().lowercase()
+        if (key.isEmpty() || _studyEntries.value.containsKey(key) || !prefetching.add(key)) return
+        viewModelScope.launch {
+            try {
+                repo.lookup(key, markRecent = false)?.let { entry ->
+                    _studyEntries.value = _studyEntries.value + (key to entry)
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                // Offline or a dead source: the card still has its Chinese side.
+            } finally {
+                prefetching.remove(key)
+            }
+        }
+    }
 
     val cards: StateFlow<List<CardEntity>> = repo.cards()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

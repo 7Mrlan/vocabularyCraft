@@ -39,7 +39,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -87,21 +86,7 @@ fun BookDetail(
         BookProgress.sections(words, statusByWord, filter)
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            // The shelf is still mounted beneath this page while it animates;
-            // swallow pointers here so a tap on empty paper can't spin a cover
-            // hidden in the dark.
-            .pointerInput(interactive) {
-                if (!interactive) return@pointerInput
-                awaitPointerEventScope {
-                    while (true) {
-                        awaitPointerEvent().changes.forEach { it.consume() }
-                    }
-                }
-            },
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -189,6 +174,9 @@ fun BookDetail(
                 .fillMaxWidth()
                 .weight(1f),
             contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 90.dp),
+            // While the page is pre-composed behind the shelf it must not scroll:
+            // a vertical drag that fell through used to move this list unseen.
+            userScrollEnabled = interactive,
         ) {
             if (words.isEmpty()) {
                 item { EmptyBook(emptyHint ?: "这本词书还没有词") }

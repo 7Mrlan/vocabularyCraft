@@ -15,6 +15,8 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.animation.core.spring
@@ -128,6 +130,10 @@ fun BooksScreen(
 
     val currentId = selectedBookId
     var detailOpen by rememberSaveable { mutableStateOf(false) }
+    // True from the moment the fold starts until it has finished. zIndex and
+    // input blocking follow these two booleans, never the animated float, so
+    // the screen doesn't recompose on every frame of the transition.
+    var closing by remember { mutableStateOf(false) }
     var openedId by rememberSaveable { mutableStateOf<String?>(null) }
     var position by rememberSaveable {
         mutableFloatStateOf(books.indexOfFirst { it.id == selectedBookId }.coerceAtLeast(0).toFloat())
@@ -173,6 +179,7 @@ fun BooksScreen(
     // going back takes one motion, not a queue.
     fun openBook() {
         if (detailOpen) return
+        closing = false
         // The book is chosen at the tap, not while the deck is still settling.
         val target = books[nearest]
         openedId = target.id
@@ -195,6 +202,7 @@ fun BooksScreen(
     fun closeBook() {
         if (!detailOpen) return
         detailOpen = false
+        closing = true
         // The page folds back first; the cover only turns once it can be seen,
         // otherwise the spin happens behind an opaque page and the close reads
         // as a cut.
@@ -202,6 +210,10 @@ fun BooksScreen(
             kotlinx.coroutines.delay(280)
             // A quick reopen in between owns the spin now.
             if (!detailOpen) spinning = false
+        }
+        scope.launch {
+            kotlinx.coroutines.delay(420)
+            if (!detailOpen) closing = false
         }
     }
 
@@ -225,6 +237,19 @@ fun BooksScreen(
             .background(wl.surface)
             .statusBarsPadding()
             .navigationBarsPadding()
+            // While the page covers the shelf, nothing under it may react. This
+            // is a sibling of the page, so it can never interfere with the
+            // page's own scrolling — the old code blocked from inside the page
+            // and swallowed its drag events.
+            .pointerInput(detailOpen, closing) {
+                if (!detailOpen && !closing) return@pointerInput
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent(PointerEventPass.Initial)
+                            .changes.forEach { it.consume() }
+                    }
+                }
+            }
             .graphicsLayer {
                 // No fade: the page is opaque and simply grows over the shelf,
                 // so the shelf never has to be composited half-lit underneath.
@@ -488,7 +513,7 @@ fun BooksScreen(
                 // frame of the opening animation is already laid out.
                 // Stay on top until the fold is finished, then drop behind the
                 // shelf so the pre-composed page can never be hit while closed.
-                .zIndex(if (openProgress > 0.01f) 1f else -1f)
+                .zIndex(if (detailOpen || closing) 1f else -1f)
                 .graphicsLayer {
                 // Opening is opaque from the first frame. Closing stays opaque
                 // while the page folds onto the cover and only dissolves in its

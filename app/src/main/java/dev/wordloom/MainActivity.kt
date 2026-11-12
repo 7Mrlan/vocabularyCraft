@@ -60,6 +60,7 @@ class MainActivity : ComponentActivity() {
                         container.wordBooks,
                         container.bookSelection,
                         container.audioCache,
+                        container.speech,
                     )
                 }
                 val vm: WordloomViewModel = viewModel(factory = factory)
@@ -81,8 +82,9 @@ private class RepositoryFactory(
     private val wordBooks: dev.wordloom.data.wordbook.WordBookStore,
     private val bookSelection: dev.wordloom.data.wordbook.WordBookSelection,
     private val audioCache: dev.wordloom.data.audio.AudioCache,
+    private val speech: dev.wordloom.data.tts.SpeechService,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
-        WordloomViewModel(repository, wordBooks, bookSelection, audioCache) as T
+        WordloomViewModel(repository, wordBooks, bookSelection, audioCache, speech) as T
 }

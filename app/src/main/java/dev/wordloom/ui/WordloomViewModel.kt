@@ -11,6 +11,11 @@ import dev.wordloom.data.local.ListWithCount
 import dev.wordloom.data.model.Suggestion
 import dev.wordloom.data.audio.AudioCache
 import dev.wordloom.data.model.WordEntry
+import dev.wordloom.data.tts.SpeechService
+import dev.wordloom.data.tts.SpeechState
+import dev.wordloom.data.tts.TtsConfig
+import dev.wordloom.data.tts.TtsResult
+import dev.wordloom.data.tts.TtsStatus
 import dev.wordloom.data.wordbook.WordBook
 import dev.wordloom.data.wordbook.WordBookSelection
 import dev.wordloom.data.wordbook.WordBookStore
@@ -63,6 +68,7 @@ class WordloomViewModel(
     private val bookStore: WordBookStore,
     private val bookSelection: WordBookSelection,
     private val audioCache: AudioCache,
+    private val speech: SpeechService,
 ) : ViewModel() {
 
     private val _wordState = MutableStateFlow<WordUiState>(WordUiState.Idle)
@@ -195,6 +201,31 @@ class WordloomViewModel(
     suspend fun exportBackup(): String = repo.exportBackup()
 
     suspend fun importBackup(text: String): Result<Int> = repo.importBackup(text)
+
+    val ttsEnabled: Boolean get() = speech.enabled
+    val ttsStatus: TtsStatus get() = speech.status
+
+    fun saveTtsConfig(draft: TtsConfig, onResult: (Result<Unit>) -> Unit) {
+        onResult(speech.saveConfig(draft))
+    }
+
+    fun previewTts(draft: TtsConfig, text: String, onResult: (Result<Unit>) -> Unit) {
+        speech.preview(draft, text, onResult)
+    }
+
+    fun testTts(draft: TtsConfig, text: String, onResult: (Result<TtsResult>) -> Unit) {
+        speech.test(draft, text, onResult)
+    }
+
+    fun speakTts(
+        text: String,
+        fallbackUrl: String?,
+        onState: (SpeechState) -> Unit = {},
+    ) = speech.speak(text, fallbackUrl, onState)
+
+    fun prefetchTts(text: String) = speech.prefetch(text)
+
+    fun stopTts() = speech.stop()
 
     /** One round of four-choice practice, built from the local cache only. */
     fun startQuiz() {
@@ -494,5 +525,10 @@ class WordloomViewModel(
 
     fun trimCache() {
         viewModelScope.launch { attempt { repo.trimOldCache() } }
+    }
+
+    override fun onCleared() {
+        speech.stop()
+        super.onCleared()
     }
 }

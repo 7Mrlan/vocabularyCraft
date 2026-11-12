@@ -130,7 +130,7 @@ import kotlin.math.min
 private enum class Layer { Word, English, Chinese }
 
 /** A quick flick turns the page even when it travels less than the distance threshold. */
-private const val FLING_PX_PER_SECOND = 700f
+private const val FLING_DP_PER_SECOND = 700f
 
 @Immutable
 private data class StudyItem(val word: String, val isNew: Boolean)
@@ -753,10 +753,13 @@ private fun StudyCard(
         val width = ring.width
         val threshold = width * 0.16f
         val vx = gestureVelocity.calculateVelocity().x
+        // Velocity is px/s while the threshold is a physical speed: scale by
+        // density, or a 3x screen would trigger on a much slower finger.
+        val fling = FLING_DP_PER_SECOND * density
         // Distance or speed: a short, fast flick still turns the page.
         val step = when {
-            ring.offset < -threshold || vx < -FLING_PX_PER_SECOND -> 1
-            ring.offset > threshold || vx > FLING_PX_PER_SECOND -> -1
+            ring.offset < -threshold || vx < -fling -> 1
+            ring.offset > threshold || vx > fling -> -1
             else -> 0
         }
         ring.job?.cancel()

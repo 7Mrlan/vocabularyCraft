@@ -384,6 +384,28 @@ class WordloomViewModel(
         }
     }
 
+    /**
+     * The second entry point behind the bookmark (long press): saves a word to
+     * the 收藏夹 without touching its review schedule. Reported through [onDone]
+     * so the screen can confirm what happened.
+     */
+    fun toggleSaved(entry: WordEntry, onDone: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val card = runCatching { repo.card(entry.word) }.getOrNull()
+            val save = (card?.savedAt ?: 0L) == 0L
+            runCatching {
+                if (save) repo.addToDeck(entry, saved = true) else repo.clearSaved(entry.word)
+            }
+            if (save) {
+                val state = _wordState.value
+                if (state is WordUiState.Loaded && state.entry.word == entry.word) {
+                    _wordState.value = state.copy(inDeck = true)
+                }
+            }
+            onDone(save)
+        }
+    }
+
     fun review(card: CardEntity, rating: Rating, onDone: (ReviewOutcome) -> Unit) {
         viewModelScope.launch {
             onDone(repo.review(card, rating))

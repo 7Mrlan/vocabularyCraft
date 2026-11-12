@@ -202,6 +202,15 @@ fun AppNav(
                 onToggleDeck = { word: WordEntry, inDeck: Boolean ->
                     viewModel.toggleDeck(word, inDeck)
                 },
+                onToggleSaved = { word ->
+                    viewModel.toggleSaved(word) { saved ->
+                        Toast.makeText(
+                            context,
+                            if (saved) "已加入收藏夹" else "已移出收藏夹",
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                },
                 onAddToList = viewModel::addToList,
                 onCreateList = viewModel::createList,
                 onWord = ::openWord,

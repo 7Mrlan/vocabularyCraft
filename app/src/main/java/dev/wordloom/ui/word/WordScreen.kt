@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,7 +46,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -164,6 +169,8 @@ fun WordScreen(
     onBack: () -> Unit,
     onRetry: () -> Unit,
     onToggleDeck: (WordEntry, Boolean) -> Unit,
+    /** Long press on the bookmark: save to the 收藏夹 without leaving the deck. */
+    onToggleSaved: (WordEntry) -> Unit,
     onAddToList: (Long, String) -> Unit,
     onCreateList: (String, (Long) -> Unit) -> Unit,
     onWord: (String) -> Unit,
@@ -201,12 +208,35 @@ fun WordScreen(
             Spacer(Modifier.weight(1f))
             if (loadedForTerm != null) {
                 val inDeck = card != null || loadedForTerm.inDeck
-                IconButton(onClick = { onToggleDeck(loadedForTerm.entry, inDeck) }) {
+                // Tap = review deck (the old behaviour); long press = 收藏夹.
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .pointerInput(loadedForTerm.entry.word, inDeck) {
+                            detectTapGestures(
+                                onTap = { onToggleDeck(loadedForTerm.entry, inDeck) },
+                                onLongPress = { onToggleSaved(loadedForTerm.entry) },
+                            )
+                        }
+                        // Keep both actions reachable for TalkBack, which activates
+                        // nodes through semantics rather than raw touches.
+                        .semantics {
+                            onClick(label = if (inDeck) "移出复习队列" else "加入复习队列") {
+                                onToggleDeck(loadedForTerm.entry, inDeck)
+                                true
+                            }
+                            onLongClick(label = "加入或移出收藏夹") {
+                                onToggleSaved(loadedForTerm.entry)
+                                true
+                            }
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
                     Icon(
                         painter = painterResource(
                             if (inDeck) R.drawable.wl_bookmark_on else R.drawable.wl_bookmark,
                         ),
-                        contentDescription = if (inDeck) "取消收藏" else "加入复习",
+                        contentDescription = if (inDeck) "取消收藏（长按加入收藏夹）" else "加入复习（长按加入收藏夹）",
                         tint = Color.Unspecified,
                     )
                 }

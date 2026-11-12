@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Generate the app's review sounds.
 
-The palette is paper-and-ink, not arcade: soft attacks, short decays, and
-partials that sound like a struck glass or a wooden desk rather than a beep.
-Everything is synthesized here so the repository carries no third-party audio.
+The palette is paper, wood and felt, not arcade: low partials, short decays,
+a quiet master, and no bright high-frequency sparkle. Everything is synthesized
+here so the repository carries no third-party audio.
 
 Run:  python3 tools/sfx/make_sfx.py
 """
@@ -19,13 +19,16 @@ from pathlib import Path
 SR = 22050
 OUT = Path(__file__).resolve().parents[2] / "app" / "src" / "main" / "res" / "raw"
 
-# (frequency, amplitude, decay) partials for a struck-glass timbre
-GLASS = ((1.0, 1.0, 7.0), (2.01, 0.42, 9.0), (3.02, 0.18, 12.0), (4.2, 0.08, 16.0))
-WOOD = ((1.0, 1.0, 26.0), (2.7, 0.30, 34.0), (5.1, 0.12, 40.0))
-LOW = ((1.0, 1.0, 9.0), (1.98, 0.25, 12.0), (0.5, 0.35, 6.0))
+# Soft struck wood: enough body to read as an object, no bell-like top end.
+WOOD = ((1.0, 1.0, 18.0), (2.01, 0.18, 26.0), (3.8, 0.06, 34.0))
+# Felt: darker and shorter than wood.
+FELT = ((1.0, 1.0, 24.0), (1.51, 0.12, 32.0))
+# A quiet glass edge, used only for the two "got it" cues.
+GLASS = ((1.0, 1.0, 10.0), (2.01, 0.20, 14.0), (3.02, 0.05, 22.0))
 
 
-def tone(freq: float, dur: float, amp: float, partials, attack: float = 0.004) -> list[float]:
+def tone(freq: float, dur: float, amp: float, partials, attack: float = 0.006) -> list[float]:
+    """Sum decaying partials into one soft struck-note sample."""
     n = int(dur * SR)
     out = [0.0] * n
     for ratio, weight, decay in partials:
@@ -34,37 +37,49 @@ def tone(freq: float, dur: float, amp: float, partials, attack: float = 0.004) -
             continue
         for i in range(n):
             t = i / SR
-            env = math.exp(-decay * t) * (1 - math.exp(-t / attack if attack > 0 else 1))
+            env = math.exp(-decay * t) * (1 - math.exp(-t / attack))
             out[i] += amp * weight * env * math.sin(2 * math.pi * f * t + ratio)
     return out
 
 
-def swish(dur: float, amp: float, cutoff: float = 3400.0) -> list[float]:
-    """A short filtered-noise page turn."""
+def soft_tick(dur: float, amp: float, cutoff: float) -> list[float]:
+    """A pencil tip on paper: filtered noise with almost no pitch."""
     n = int(dur * SR)
     out = [0.0] * n
-    rnd = random.Random(7)
+    rnd = random.Random(11)
     y = 0.0
     alpha = min(1.0, 2 * math.pi * cutoff / SR)
     for i in range(n):
         x = rnd.uniform(-1.0, 1.0)
         y += alpha * (x - y)
         t = i / SR
-        env = math.sin(math.pi * min(1.0, t / dur)) ** 2
+        env = math.exp(-42.0 * t)
         out[i] = amp * env * y
     return out
 
 
 def mix(*parts: tuple[list[float], float]) -> list[float]:
+    """Mix offset samples, then normalize and fade the result."""
     length = max(int(offset * SR) + len(samples) for samples, offset in parts)
     out = [0.0] * length
     for samples, offset in parts:
         start = int(offset * SR)
         for i, value in enumerate(samples):
             out[start + i] += value
-    peak = max(abs(v) for v in out) or 1.0
-    scale = 0.72 / peak
-    return [v * scale for v in out]
+    return master(out)
+
+
+def master(samples: list[float], peak: float = 0.50) -> list[float]:
+    """Normalize to a quiet peak and fade the edges; no limiter artefacts."""
+    top = max(abs(v) for v in samples) or 1.0
+    scale = peak / top
+    out = [v * scale for v in samples]
+    fade = min(int(0.004 * SR), len(out) // 3)
+    for i in range(fade):
+        gain = i / fade
+        out[i] *= gain
+        out[-1 - i] *= gain
+    return out
 
 
 def write(name: str, samples: list[float]) -> None:
@@ -77,49 +92,36 @@ def write(name: str, samples: list[float]) -> None:
     print(f"  {name}.wav  {len(samples) / SR * 1000:.0f} ms  {path.stat().st_size} bytes")
 
 
-def tick(dur: float, amp: float) -> list[float]:
-    """A dry, neutral click — a pencil tip on paper, never a buzzer."""
-    n = int(dur * SR)
-    out = [0.0] * n
-    rnd = random.Random(11)
-    y = 0.0
-    alpha = min(1.0, 2 * math.pi * 2600.0 / SR)
-    for i in range(n):
-        x = rnd.uniform(-1.0, 1.0)
-        y += alpha * (x - y)
-        t = i / SR
-        env = math.exp(-34.0 * t)
-        out[i] = amp * env * (y + 0.55 * math.sin(2 * math.pi * 210.0 * t))
-    return out
-
-
 def main() -> None:
+    """Write every review cue into the app's raw resource directory."""
     OUT.mkdir(parents=True, exist_ok=True)
     print("Writing review sounds")
 
-    # 秒懂 — a bright fifth, A5 up to E6: the clearest "got it".
-    write("grade_easy", mix((tone(880.0, 0.30, 0.55, GLASS), 0.0),
-                            (tone(1318.5, 0.40, 0.50, GLASS), 0.075),
-                            (tone(2637.0, 0.16, 0.10, GLASS), 0.075)))
+    # 秒懂 — two warm wood notes a fifth apart, short and low.
+    write("grade_easy", mix((tone(523.25, 0.24, 0.52, WOOD), 0.0),
+                            (tone(783.99, 0.30, 0.44, WOOD), 0.055)))
 
-    # 认识 — the same voice a third lower and shorter: right, but no fanfare.
-    write("grade_good", mix((tone(523.25, 0.24, 0.48, GLASS), 0.0),
-                            (tone(659.25, 0.30, 0.42, GLASS), 0.065)))
+    # 认识 — one soft wood note, no fanfare.
+    write("grade_good", mix((tone(392.00, 0.20, 0.46, WOOD), 0.0),))
 
-    # 模糊 — one soft note with no lift: neither praise nor punishment.
-    write("grade_hard", mix((tone(440.0, 0.26, 0.42, GLASS), 0.0),))
+    # 模糊 — a darker felt note, shorter than "认识".
+    write("grade_hard", mix((tone(329.63, 0.17, 0.40, FELT), 0.0),))
 
-    # 忘记 — a dry tick, flat in pitch: the answer ends, nothing scolds.
-    write("grade_again", tick(0.09, 0.55))
+    # 忘记 — a muffled tick; the answer ends, nothing scolds.
+    write("grade_again", soft_tick(0.075, 0.34, 1100.0))
 
-    # 拼对 — the reward: a bright major arpeggio with a shimmer tail.
-    write("spell_right", mix((tone(1046.5, 0.30, 0.50, GLASS), 0.0),
-                             (tone(1318.5, 0.32, 0.48, GLASS), 0.085),
-                             (tone(1568.0, 0.46, 0.52, GLASS), 0.17),
-                             (tone(3136.0, 0.18, 0.10, GLASS), 0.17)))
+    # 拼对 — two low wood notes, not a major arpeggio.
+    write("spell_right", mix((tone(392.00, 0.18, 0.44, WOOD), 0.0),
+                             (tone(493.88, 0.24, 0.40, WOOD), 0.075)))
 
-    # 拼错 — the same dry tick, softer.
-    write("spell_wrong", tick(0.09, 0.40))
+    # 拼错 — the same tick, even softer.
+    write("spell_wrong", soft_tick(0.075, 0.26, 950.0))
+
+    # 四选一答对 — one soft wood note; the old chord was too celebratory.
+    write("quiz_correct", mix((tone(523.25, 0.18, 0.42, WOOD), 0.0),))
+
+    # 书架过卡 — a paper tick, off by default in the app.
+    write("gear_click", soft_tick(0.050, 0.22, 1600.0))
 
 
 if __name__ == "__main__":

@@ -57,6 +57,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
 import dev.wordloom.ui.backup.BackupSheet
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import dev.wordloom.ui.theme.wlPress
 import dev.wordloom.ui.theme.WordloomTheme
@@ -99,21 +100,24 @@ fun HomeScreen(
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
             backupBusy = true
-            val text = runCatching { onExportBackup() }.getOrNull()
-            // "wt" truncates: some providers hand back a stream that ignores a
-            // plain "w" and leaves the document at zero bytes.
-            val ok = text != null && runCatching {
-                val stream = context.contentResolver.openOutputStream(uri, "wt")
-                    ?: error("无法写入")
-                stream.use { it.write(text.toByteArray()) }
-            }.isSuccess
-            backupBusy = false
-            showBackup = false
-            Toast.makeText(
-                context,
-                if (ok) "已导出备份" else "导出失败",
-                Toast.LENGTH_SHORT,
-            ).show()
+            try {
+                val text = attempt { onExportBackup() }.getOrNull()
+                // "wt" truncates: some providers hand back a stream that ignores a
+                // plain "w" and leaves the document at zero bytes.
+                val ok = text != null && attempt {
+                    val stream = context.contentResolver.openOutputStream(uri, "wt")
+                        ?: error("无法写入")
+                    stream.use { it.write(text.toByteArray()) }
+                }.isSuccess
+                showBackup = false
+                Toast.makeText(
+                    context,
+                    if (ok) "已导出备份" else "导出失败",
+                    Toast.LENGTH_SHORT,
+                ).show()
+            } finally {
+                backupBusy = false
+            }
         }
     }
 
@@ -123,21 +127,24 @@ fun HomeScreen(
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
             backupBusy = true
-            val text = runCatching {
-                context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-            }.getOrNull()
-            val result = if (text == null) Result.failure(IllegalStateException("读不到文件"))
-            else onImportBackup(text)
-            backupBusy = false
-            showBackup = false
-            Toast.makeText(
-                context,
-                result.fold(
-                    onSuccess = { "已恢复 $it 条记录" },
-                    onFailure = { "恢复失败：${it.message}" },
-                ),
-                Toast.LENGTH_LONG,
-            ).show()
+            try {
+                val text = attempt {
+                    context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                }.getOrNull()
+                val result = if (text == null) Result.failure(IllegalStateException("读不到文件"))
+                else onImportBackup(text)
+                showBackup = false
+                Toast.makeText(
+                    context,
+                    result.fold(
+                        onSuccess = { "已合并 $it 条记录" },
+                        onFailure = { "恢复失败：${it.message}" },
+                    ),
+                    Toast.LENGTH_LONG,
+                ).show()
+            } finally {
+                backupBusy = false
+            }
         }
     }
 
@@ -319,7 +326,7 @@ fun HomeScreen(
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                text = "收藏夹里共 $totalCards 个词 · FSRS 间隔重复",
+                                text = "复习队列里共 $totalCards 个词 · FSRS 间隔重复",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = wl.inkMuted,
                             )
@@ -352,6 +359,20 @@ fun HomeScreen(
                 )
             }
         }
+
+        // CC BY-SA attribution for the word lists that ship inside the APK.
+        // Definitions themselves are fetched at runtime and never bundled.
+        item {
+            Text(
+                text = "词表：NGSL 1.2（CC BY-SA 4.0，Browne / Culligan / Phillips）" +
+                    " · CET / 考研大纲仅取词形\n词典正文在运行时抓取，不随应用分发。",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, lineHeight = 16.sp),
+                color = wl.inkMuted.copy(alpha = 0.8f),
+                modifier = Modifier
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 26.dp, bottom = 4.dp),
+            )
+        }
     }
 
     if (showBackup) {
@@ -362,6 +383,15 @@ fun HomeScreen(
             onImport = { importLauncher.launch(arrayOf("application/json")) },
         )
     }
+}
+
+/** [runCatching] that never swallows coroutine cancellation. */
+private inline fun <T> attempt(block: () -> T): Result<T> = try {
+    Result.success(block())
+} catch (cancelled: CancellationException) {
+    throw cancelled
+} catch (error: Throwable) {
+    Result.failure(error)
 }
 
 @Composable

@@ -33,7 +33,6 @@ import org.maplibre.android.style.layers.SymbolLayer
  */
 object BasemapStyle {
     const val POSITRON = "https://tiles.openfreemap.org/styles/positron"
-    const val LIBERTY = "https://tiles.openfreemap.org/styles/liberty"
 }
 
 /** Where the camera wanders when the map is left alone. */
@@ -49,7 +48,7 @@ private val TourStops = listOf(
 @Composable
 fun WorldMap(
     modifier: Modifier = Modifier,
-    styleUrl: String = BasemapStyle.LIBERTY,
+    styleUrl: String = BasemapStyle.POSITRON,
     target: LatLng = LatLng(24.0, 12.0),
     zoom: Double = 1.4,
     tour: Boolean = false,

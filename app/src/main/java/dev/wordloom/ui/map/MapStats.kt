@@ -31,21 +31,20 @@ fun MapCountersRow(
     counters: MapCounters,
     contentColor: Color = Color.White,
     modifier: Modifier = Modifier,
-    compact: Boolean = false,
 ) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(if (compact) 18.dp else 28.dp),
+        horizontalArrangement = Arrangement.spacedBy(28.dp),
         verticalAlignment = Alignment.Bottom,
     ) {
-        Counter("收藏词", counters.saved, contentColor, compact)
-        Counter("待复习", counters.due, contentColor, compact)
-        Counter("近 7 天复习", counters.reviewed, contentColor, compact)
+        Counter("收藏词", counters.saved, contentColor)
+        Counter("待复习", counters.due, contentColor)
+        Counter("近 7 天复习", counters.reviewed, contentColor)
     }
 }
 
 @Composable
-private fun Counter(label: String, value: Int, contentColor: Color, compact: Boolean) {
+private fun Counter(label: String, value: Int, contentColor: Color) {
     val animated by animateIntAsState(
         targetValue = value,
         animationSpec = tween(durationMillis = 900, easing = FastOutSlowInEasing),
@@ -56,7 +55,7 @@ private fun Counter(label: String, value: Int, contentColor: Color, compact: Boo
             text = animated.toString(),
             fontFamily = SerifFamily,
             fontWeight = FontWeight.Bold,
-            fontSize = if (compact) 22.sp else 30.sp,
+            fontSize = 30.sp,
             color = contentColor,
         )
         Spacer(Modifier.height(2.dp))

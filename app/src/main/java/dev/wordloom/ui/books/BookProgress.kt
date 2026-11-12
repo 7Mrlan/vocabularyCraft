@@ -1,6 +1,7 @@
 package dev.wordloom.ui.books
 
 import dev.wordloom.data.local.CardEntity
+import dev.wordloom.data.wordbook.WordLists
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -24,7 +25,8 @@ data class BookSection(val unit: Int, val words: List<String>)
  */
 object BookProgress {
 
-    const val UNIT_SIZE = 100
+    /** Same 100-word unit the book asset is sliced with (see [WordLists.UNIT_SIZE]). */
+    const val UNIT_SIZE = WordLists.UNIT_SIZE
 
     /** Stability in days at which a card counts as mastered on this page. */
     const val MASTERED_STABILITY = 21.0

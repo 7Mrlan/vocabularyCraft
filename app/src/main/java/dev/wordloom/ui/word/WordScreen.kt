@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -188,7 +189,8 @@ fun WordScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(wl.surface)
-            .statusBarsPadding(),
+            .statusBarsPadding()
+            .navigationBarsPadding(),
     ) {
         Row(
             modifier = Modifier
@@ -236,7 +238,7 @@ fun WordScreen(
                         painter = painterResource(
                             if (inDeck) R.drawable.wl_bookmark_on else R.drawable.wl_bookmark,
                         ),
-                        contentDescription = if (inDeck) "取消收藏（长按加入收藏夹）" else "加入复习（长按加入收藏夹）",
+                        contentDescription = if (inDeck) "移出复习队列（长按切换收藏）" else "加入复习（长按加入收藏夹）",
                         tint = Color.Unspecified,
                     )
                 }
@@ -883,7 +885,7 @@ private fun ReviewProgress(
     wl: dev.wordloom.ui.theme.WlColors,
 ) {
     val reviewed = card.reps
-    // 8 successful reviews is roughly "known" for our FSRS preset.
+    // 8 reviews (any grade) is roughly "known" for our FSRS preset.
     val fraction = (reviewed / 8f).coerceIn(0.04f, 1f)
     val dueText = when {
         card.dueAt <= System.currentTimeMillis() -> "现在就到复习时间"

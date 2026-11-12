@@ -33,7 +33,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -70,7 +69,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -140,8 +138,11 @@ fun BooksScreen(
     }
     val settle = remember { Animatable(0f) }
     var settling by remember { mutableStateOf(false) }
-    val shown = if (settling) settle.value else position
-    val nearest = ((shown.roundToInt() % count) + count) % count
+    // Where the running settle will land. The title and page dots read this
+    // integer, not the animated float, so composition stays off the animation
+    // clock; the covers read settle.value inside graphicsLayer.
+    var settleTarget by remember { mutableIntStateOf(position.roundToInt()) }
+    val nearest = (((if (settling) settleTarget else position.roundToInt()) % count) + count) % count
     var detailReady by remember { mutableStateOf(false) }
     var spinning by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -323,6 +324,7 @@ fun BooksScreen(
                                 // crosses a couple of books and rocks to rest.
                                 val pagesPerSecond = velocity / pxPerPage
                                 val target = (position - pagesPerSecond * 0.20f).roundToInt()
+                                settleTarget = target
                                 settling = true
                                 scope.launch {
                                     settle.snapTo(position)
@@ -342,67 +344,82 @@ fun BooksScreen(
                 ) {
                     books.forEachIndexed { index, base ->
                         val spec = counts[base.id]?.let { base.copy(count = it.toString()) } ?: base
-                        var d = index - shown
-                        d -= count * (d / count).roundToInt()
-                        if (d.absoluteValue < 1.42f) {
-                            BookCover(
-                                spec = spec,
-                                inReading = spec.id == currentId,
-                                artParallax = d,
-                                modifier = Modifier
-                                    .align(Alignment.Center)
-                                    .width(cardWidth)
-                                    .height(cardHeight)
-                                    .zIndex(10f - d.absoluteValue)
-                                    .graphicsLayer {
-                                        // The ring passes just outside both screen edges:
-                                        // at rest the neighbours are off-canvas, during a
-                                        // drag they swing in, turn inward and lose a little
-                                        // size. Same height, fully opaque — the circle is
-                                        // read from the motion, not from a static row.
-                                        translationX = d * pxPerPage
-                                        rotationY = (d * -34f).coerceIn(-40f, 40f) +
-                                            (if (d.absoluteValue < 0.01f) spinAngle else 0f)
-                                        cameraDistance = 15f * density
-                                        // A single swell at the halfway point of the turn, so the
-                                        // cover feels like it is throwing the gust.
-                                        val swell = if (d.absoluteValue < 0.01f) {
-                                            1f + 0.05f * sin((spinAngle / 360f) * Math.PI.toFloat())
-                                        } else {
-                                            1f
-                                        }
-                                        val shrink = (1f - d.absoluteValue * 0.14f).coerceAtLeast(0.70f)
-                                        scaleX = shrink * swell
-                                        scaleY = shrink * swell
+                        // Composition-time distance from the finger position. It
+                        // only changes during a drag; the settle animation is
+                        // read inside graphicsLayer below.
+                        var dBase = index - position
+                        dBase -= count * (dBase / count).roundToInt()
+                        // While settling, stack around the destination so the
+                        // incoming centre card stays on top for the whole spring.
+                        var dStack = index - (if (settling) settleTarget.toFloat() else position)
+                        dStack -= count * (dStack / count).roundToInt()
+                        BookCover(
+                            spec = spec,
+                            inReading = spec.id == currentId,
+                            artParallax = dBase,
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .width(cardWidth)
+                                .height(cardHeight)
+                                .zIndex(10f - dStack.absoluteValue)
+                                .graphicsLayer {
+                                    // The ring passes just outside both screen edges:
+                                    // at rest the neighbours are off-canvas, during a
+                                    // drag they swing in, turn inward and lose a little
+                                    // size. Same height, fully opaque — the circle is
+                                    // read from the motion, not from a static row.
+                                    var d = index - (if (settling) settle.value else position)
+                                    d -= count * (d / count).roundToInt()
+                                    translationX = d * pxPerPage
+                                    rotationY = (d * -34f).coerceIn(-40f, 40f) +
+                                        (if (d.absoluteValue < 0.01f) spinAngle else 0f)
+                                    cameraDistance = 15f * density
+                                    // A single swell at the halfway point of the turn, so the
+                                    // cover feels like it is throwing the gust.
+                                    val swell = if (d.absoluteValue < 0.01f) {
+                                        1f + 0.05f * sin((spinAngle / 360f) * Math.PI.toFloat())
+                                    } else {
+                                        1f
                                     }
-                                    .clickable {
-                                        if (d.absoluteValue > 0.2f) {
-                                            val target = (shown + d).roundToInt()
-                                            settling = true
-                                            scope.launch {
-                                                // Take the deck where it is now, not where
-                                                // the last drag ended, or a tap mid-settle
-                                                // snaps it backwards.
-                                                settle.snapTo(settle.value)
-                                                settle.animateTo(
-                                                    targetValue = target.toFloat(),
-                                                    animationSpec = spring(
-                                                        dampingRatio = 0.90f,
-                                                        stiffness = 240f,
-                                                    ),
-                                                )
-                                                position = ((target % count) + count) % count.toFloat()
-                                                settling = false
-                                            }
-                                        } else if (spec.id != currentId) {
-                                            onSelectBook(spec.id)
-                                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                                        } else {
-                                            openBook()
+                                    val shrink = (1f - d.absoluteValue * 0.14f).coerceAtLeast(0.70f)
+                                    scaleX = shrink * swell
+                                    scaleY = shrink * swell
+                                }
+                                .clickable {
+                                    // Use the live (possibly mid-settle) offset to
+                                    // decide side vs. centre, and pick the nearest
+                                    // representative of this card's index, so the
+                                    // ring never spins the long way round.
+                                    val anchor = if (settling) settle.value else position
+                                    var clickD = index - anchor
+                                    clickD -= count * (clickD / count).roundToInt()
+                                    if (clickD.absoluteValue > 0.2f) {
+                                        val target = (anchor + clickD).roundToInt()
+                                        settleTarget = target
+                                        settling = true
+                                        scope.launch {
+                                            // Take the deck where it is now, not where
+                                            // the last drag ended, or a tap mid-settle
+                                            // snaps it backwards.
+                                            settle.snapTo(anchor)
+                                            settle.animateTo(
+                                                targetValue = target.toFloat(),
+                                                animationSpec = spring(
+                                                    dampingRatio = 0.90f,
+                                                    stiffness = 240f,
+                                                ),
+                                            )
+                                            position = ((target % count) + count) % count.toFloat()
+                                            settling = false
                                         }
-                                    },
-                            )
-                        }
+                                    } else if (spec.id != currentId) {
+                                        onSelectBook(spec.id)
+                                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                    } else {
+                                        openBook()
+                                    }
+                                },
+                        )
                     }
                 }
             }

@@ -129,6 +129,9 @@ import kotlin.math.min
 
 private enum class Layer { Word, English, Chinese }
 
+/** A quick flick turns the page even when it travels less than the distance threshold. */
+private const val FLING_PX_PER_SECOND = 700f
+
 @Immutable
 private data class StudyItem(val word: String, val isNew: Boolean)
 
@@ -192,6 +195,8 @@ fun StudyScreen(
     /** The current unit of the selected book. */
     newWords: List<String>,
     entries: Map<String, WordEntry>,
+    /** True while a curated book's word list is still being read from assets. */
+    loading: Boolean,
     onNeedEntry: (String) -> Unit,
     onBack: () -> Unit,
     onRate: (WordEntry, Rating, Boolean) -> Unit,
@@ -424,6 +429,15 @@ fun StudyScreen(
         when {
             !started -> Unit
 
+            // A curated book is read off disk on the IO dispatcher; until it
+            // lands, "今天没有要背的词" would be a lie.
+            loading && total == 0 -> Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("正在载入词表…", fontSize = 12.sp, color = wl.inkMuted)
+            }
+
             total == 0 -> EmptyState(onBack = onBack)
 
             current == null && spelling -> SpellingRound(
@@ -462,9 +476,7 @@ fun StudyScreen(
                 onGradeTone = { rating -> sfx.play(rating.studySound()) },
                 onWrongTone = { sfx.play(StudySound.Again) },
                 onReveal = { feedback.reveal(view) },
-                onCorrect = { feedback.correct(view) },
                 onWrong = { feedback.wrong(view) },
-                onPlay = { url -> player.play(url) },
                 onAutoPlay = { url -> player.play(url) },
                 onPrefetch = { url -> player.prefetch(url) },
                 onSelect = { text, _ -> promo = text },
@@ -682,9 +694,7 @@ private fun StudyCard(
     onGradeTone: (Rating) -> Unit,
     onWrongTone: () -> Unit,
     onReveal: () -> Unit,
-    onCorrect: () -> Unit,
     onWrong: () -> Unit,
-    onPlay: (String) -> Unit,
     onAutoPlay: (String) -> Unit,
     onPrefetch: (String) -> Unit,
     onSelect: (String, Rect) -> Unit,
@@ -701,60 +711,69 @@ private fun StudyCard(
     var details by remember(item.word) { mutableStateOf<StudyDetails?>(null) }
     var detailsFailed by remember(item.word) { mutableStateOf(false) }
 
-    val examples = examplesOf(details, entry)
+    val examples = remember(details, entry) { examplesOf(details, entry) }
     val pageCount = 1 + examples.size
 
     // One horizontal ring: page 0 is the word card, pages 1..n are examples.
     val ring = remember(item.word, presentation) { RingState() }
     val page = ring.index.coerceIn(0, (pageCount - 1).coerceAtLeast(0))
-    var exampleHeard by remember(item.word, presentation) { mutableStateOf(false) }
+    val wordAudioUrl = entry.audio.firstOrNull()?.url
+    val gestureVelocity = remember { androidx.compose.ui.input.pointer.util.VelocityTracker() }
+
+    // The clip may arrive after the card is first composed (cold cache): key the
+    // autoplay on the URL, not just the word, or the very first word stays silent.
+    LaunchedEffect(item.word, wordAudioUrl) {
+        if (!wordAudioUrl.isNullOrBlank()) onAutoPlay(wordAudioUrl)
+    }
 
     LaunchedEffect(item.word) {
         details = StudyContent.details(item.word)
         detailsFailed = details == null
-        entry.audio.firstOrNull()?.let { onAutoPlay(it.url) }
-        // Warm the example clips so every page speaks the moment it lands.
-        details?.examples?.take(8)?.forEach { example ->
+    }
+
+    // Warm the first example clips only: the ring keeps three pages composed, so
+    // downloading all eight sentences per card was wasted data and IO.
+    LaunchedEffect(details) {
+        details?.examples?.take(3)?.forEach { example ->
             example.audioUrl.takeIf { it.isNotBlank() }?.let(onPrefetch)
         }
     }
 
-    LaunchedEffect(layer, page, examples) {
-        if (layer != Layer.English) return@LaunchedEffect
-        if (page == 0) {
-            if (!exampleHeard) {
-                examples.firstOrNull()?.audioUrl?.takeIf { it.isNotBlank() }?.let {
-                    onAutoPlay(it)
-                    exampleHeard = true
-                }
-            }
-        } else {
-            examples.getOrNull(page - 1)?.audioUrl?.takeIf { it.isNotBlank() }?.let(onAutoPlay)
-        }
+    // Pages 1..n speak their own example when they land. Page 0 is the entry
+    // face now, so it stays quiet (the word itself was voiced on arrival).
+    // Key on the URL, not the list: `examples` is rebuilt on every recomposition
+    // and would otherwise replay the same sentence.
+    val pageAudioUrl = if (page == 0) null else examples.getOrNull(page - 1)?.audioUrl
+    LaunchedEffect(layer, page, pageAudioUrl) {
+        if (layer != Layer.English || pageAudioUrl.isNullOrBlank()) return@LaunchedEffect
+        onAutoPlay(pageAudioUrl)
     }
 
     fun settleRing() {
         val width = ring.width
         val threshold = width * 0.16f
-        val target = when {
-            ring.offset > threshold -> width
-            ring.offset < -threshold -> -width
-            else -> 0f
+        val vx = gestureVelocity.calculateVelocity().x
+        // Distance or speed: a short, fast flick still turns the page.
+        val step = when {
+            ring.offset < -threshold || vx < -FLING_PX_PER_SECOND -> 1
+            ring.offset > threshold || vx > FLING_PX_PER_SECOND -> -1
+            else -> 0
         }
         ring.job?.cancel()
+        if (step != 0) {
+            // Turn on release instead of when the spring ends: a second fast
+            // swipe used to cancel the settle and lose the turn entirely.
+            ring.index = Math.floorMod(ring.index + step, pageCount)
+            // Shift by exactly one page so the incoming page starts where the
+            // outgoing neighbour was; the settle then only has to run to rest.
+            ring.offset += step * width
+        }
         ring.job = scope.launch {
             animate(
                 initialValue = ring.offset,
-                targetValue = target,
-                animationSpec = spring(dampingRatio = 0.88f, stiffness = 560f),
+                targetValue = 0f,
+                animationSpec = spring(dampingRatio = 0.9f, stiffness = 700f),
             ) { value, _ -> ring.offset = value }
-            if (target != 0f) {
-                // A leftward hand movement turns the page forward; this is the
-                // direction every pager uses and the one fingers arrive with.
-                val count = 1 + examplesOf(details, entry).size
-                ring.index = Math.floorMod(ring.index + if (target < 0) 1 else -1, count)
-                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-            }
             ring.offset = 0f
         }
     }
@@ -773,23 +792,23 @@ private fun StudyCard(
             var totalY = 0f
             var axis = 0
             detectDragGestures(
-                onDragStart = {
+                onDragStart = { position ->
                     totalX = 0f
                     totalY = 0f
                     axis = 0
                     // A new touch owns the offset; never fight a running settle.
                     ring.job?.cancel()
+                    gestureVelocity.resetTracking()
+                    gestureVelocity.addPosition(android.os.SystemClock.uptimeMillis(), position)
                 },
                 onDrag = { change, amount ->
-                    val slop = 14.dp.toPx()
                     totalX += amount.x
                     totalY += amount.y
-                    if (axis == 0 && (abs(totalX) > slop || abs(totalY) > slop)) {
-                        axis = when {
-                            change.isConsumed -> 3
-                            abs(totalX) > abs(totalY) -> 1
-                            else -> 2
-                        }
+                    gestureVelocity.addPosition(change.uptimeMillis, change.position)
+                    // Decide on the first movement past the touch slop. A second
+                    // 14dp threshold here is what made the card feel stuck.
+                    if (axis == 0 && (totalX != 0f || totalY != 0f)) {
+                        axis = if (abs(totalX) >= abs(totalY)) 1 else 2
                     }
                     if (axis == 1 && layer == Layer.English) {
                         change.consume()
@@ -808,6 +827,7 @@ private fun StudyCard(
                         }
                     }
                 },
+                onDragCancel = { ring.offset = 0f },
             )
         }
 
@@ -1295,32 +1315,8 @@ private fun MainFaceContent(
             }
         }
 
-        details?.examples?.firstOrNull()?.let { example ->
-            Spacer(Modifier.height(10.dp))
-            SelectableText(
-                text = example.en,
-                style = TextStyle(
-                    fontFamily = SerifFamily,
-                    fontSize = 15.sp,
-                    lineHeight = 23.sp,
-                ),
-                color = wl.ink,
-                onSelection = onSelect,
-                resetKey = resetKey,
-            )
-            if (example.zh.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = example.zh,
-                    fontSize = 12.sp,
-                    lineHeight = 19.sp,
-                    color = wl.inkMuted,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-
+        // The examples live in the horizontal ring; repeating the first one here
+        // made page 1 an exact duplicate of the main card.
         if (entry.wordFamily.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
             Text(

@@ -19,7 +19,8 @@ class AppContainer(app: Application) {
     val repository = WordRepository(source, db.dao())
     val wordBooks = WordBookStore(app)
     val bookSelection = WordBookSelection(app)
-    val audioCache = AudioCache(app)
+    // Shared with the speaker buttons so all clip downloads use one queue.
+    val audioCache = AudioCache.shared(app)
 }
 
 class WordloomApp : Application() {

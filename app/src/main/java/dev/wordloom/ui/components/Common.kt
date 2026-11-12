@@ -106,22 +106,30 @@ fun SpeakerButton(url: String, modifier: Modifier = Modifier) {
         animationSpec = WlMotion.press,
         label = "speakerPress",
     )
-    val pulse = rememberInfiniteTransition(label = "speakerPlaying")
-    val wave by pulse.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.12f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 480, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "speakerWave",
-    )
+    val pulse = if (playing) {
+        // Only animate while a clip is actually playing. An always-running
+        // infinite transition here used to tick on every visible speaker button,
+        // so a study card with three pages kept the UI thread busy every frame.
+        val transition = rememberInfiniteTransition(label = "speakerPlaying")
+        val value by transition.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.12f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 480, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "speakerWave",
+        )
+        value
+    } else {
+        1f
+    }
 
     Box(
         modifier = modifier
             .size(34.dp)
             .graphicsLayer {
-                val s = pressScale * if (playing) wave else 1f
+                val s = pressScale * if (playing) pulse else 1f
                 scaleX = s
                 scaleY = s
             }
@@ -179,7 +187,9 @@ fun PlayAllChip(
 @Composable
 fun rememberAudioPlayer(): AudioPlayer {
     val context = LocalContext.current
-    val player = remember(context) { AudioPlayer(AudioCache(context)) }
+    // Shared cache/client: several speaker buttons can share one page, and each
+    // used to build its own OkHttpClient on first prefetch.
+    val player = remember(context) { AudioPlayer(AudioCache.shared(context)) }
     DisposableEffect(player) {
         onDispose { player.release() }
     }

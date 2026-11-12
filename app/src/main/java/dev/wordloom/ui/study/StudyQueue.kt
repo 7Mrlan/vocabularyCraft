@@ -15,10 +15,14 @@ object StudyQueue {
         unit: List<String>,
         scheduled: List<CardEntity>,
         limit: Int = NEW_PER_SESSION,
-    ): List<String> =
-        unit.asSequence()
-            .filter { word -> scheduled.none { it.word.equals(word, ignoreCase = true) } }
+    ): List<String> {
+        // A unit has 100 words and the deck can hold thousands; a Set keeps this
+        // linear instead of 100 × N string comparisons on every card change.
+        val known = scheduled.mapTo(HashSet(scheduled.size)) { it.word.lowercase() }
+        return unit.asSequence()
+            .filter { it.lowercase() !in known }
             .distinctBy { it.lowercase() }
             .take(limit)
             .toList()
+    }
 }

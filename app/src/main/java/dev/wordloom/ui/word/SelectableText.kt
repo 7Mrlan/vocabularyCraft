@@ -1,5 +1,4 @@
 package dev.wordloom.ui.word
-import dev.wordloom.ui.theme.WordloomTheme
 
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -23,6 +22,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import dev.wordloom.ui.theme.WordloomTheme
 
 /**
  * A paragraph you can hold and drag across. Long-press snaps to the word under the
@@ -50,7 +50,7 @@ fun SelectableText(
 
     // Ink, not the app blue: selection is a pencil mark on paper.
     val highlight = WordloomTheme.colors.ink.copy(alpha = 0.14f)
-    val annotated = remember(text, selection) {
+    val annotated = remember(text, selection, highlight) {
         buildAnnotatedString {
             append(text)
             val r = selection

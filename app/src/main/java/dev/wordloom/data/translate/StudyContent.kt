@@ -40,7 +40,13 @@ object StudyContent {
     suspend fun details(word: String): StudyDetails? = withContext(Dispatchers.IO) {
         val key = word.trim().lowercase()
         if (key.isEmpty()) return@withContext null
-        cache[key] ?: runCatching { fetch(key) }.getOrNull()?.also { cache[key] = it }
+        cache[key] ?: try {
+            fetch(key)?.also { cache[key] = it }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     private fun fetch(word: String): StudyDetails? {

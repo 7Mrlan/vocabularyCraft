@@ -158,6 +158,7 @@ fun AppNav(
                 cards = cards,
                 newWords = unitWords,
                 entries = entries,
+                loading = autoKind == null && curatedWords.isEmpty(),
                 onNeedEntry = viewModel::prefetchForStudy,
                 onBack = { nav.popBackStack() },
                 onRate = { entry, rating, isNew -> viewModel.rateStudy(entry, rating, isNew) },

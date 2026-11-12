@@ -102,6 +102,7 @@ class WordloomViewModel(
     private val _bookEntries = MutableStateFlow<Map<String, WordEntry>>(emptyMap())
     val bookEntries: StateFlow<Map<String, WordEntry>> = _bookEntries.asStateFlow()
     private var bookEntriesJob: Job? = null
+    private var bookJob: Job? = null
     private val prefetching = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     init {
@@ -117,12 +118,16 @@ class WordloomViewModel(
 
     /** Automatic books have no word list on disk; their words come from history. */
     private fun loadBook(id: String) {
+        bookJob?.cancel()
         val curated = WordBook.entries.firstOrNull { it.name == id }
         if (curated == null) {
             _bookWords.value = emptyList()
             return
         }
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        // Clear first: switching between two curated books must not leave the
+        // previous book's words on screen (or feed them into a study session).
+        _bookWords.value = emptyList()
+        bookJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             _bookWords.value = bookStore.words(curated)
         }
     }
@@ -386,14 +391,17 @@ class WordloomViewModel(
 
     /** One rating from the study card: a new word joins the deck first. */
     fun rateStudy(entry: WordEntry, rating: Rating, isNew: Boolean, onDone: (Int?) -> Unit = {}) {
+        // The card may have been graded before its entry finished prefetching;
+        // prefer the fully loaded one so the new card keeps a real gloss.
+        val resolved = _studyEntries.value[entry.word.lowercase()] ?: entry
         viewModelScope.launch {
             runCatching {
-                val before = repo.card(entry.word)
-                if (isNew) repo.addToDeck(entry)
-                val card = repo.card(entry.word)
+                val before = repo.card(resolved.word)
+                if (isNew) repo.addToDeck(resolved)
+                val card = repo.card(resolved.word)
                 val interval = card?.let { repo.review(it, rating).intervalDays }
                 lastStudyUndo = {
-                    if (isNew) repo.removeFromDeck(entry.word) else before?.let { repo.restoreCard(it) }
+                    if (isNew) repo.removeFromDeck(resolved.word) else before?.let { repo.restoreCard(it) }
                 }
                 interval
             }.onSuccess(onDone).onFailure { onDone(null) }

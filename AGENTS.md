@@ -56,6 +56,11 @@ Wordloom：本地优先的英英词典 + FSRS 间隔重复复习 App（Android /
    `feat(scope): …` / `fix(scope): …` / `perf(scope): …` / `chore(scope): …` 等，
    描述用中文并写清「改了什么、为什么」。
 
+9. **动画与音频不要常驻。** `rememberInfiniteTransition` 这类无限动画必须放在
+   `if (playing)` 之类的状态分支里，否则一屏多个按钮会让 UI 线程每帧都在跑。
+   音频统一走 `AudioCache.shared(context)`（共享连接池 + 同 URL 并发去重），
+   不要在 composable 里各建一个 `OkHttpClient`。
+
 ---
 
 ## 验证要求

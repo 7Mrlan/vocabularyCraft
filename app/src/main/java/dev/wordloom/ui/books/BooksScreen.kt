@@ -51,6 +51,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -113,6 +114,7 @@ fun BooksScreen(
     val wl = WordloomTheme.colors
     val books = Bookshelf
     val count = books.size
+    val wheel = remember(count) { BookshelfWheel(count) }
     val scope = rememberCoroutineScope()
 
     val context = LocalContext.current
@@ -142,7 +144,13 @@ fun BooksScreen(
     // integer, not the animated float, so composition stays off the animation
     // clock; the covers read settle.value inside graphicsLayer.
     var settleTarget by remember { mutableIntStateOf(position.roundToInt()) }
-    val nearest = (((if (settling) settleTarget else position.roundToInt()) % count) + count) % count
+    // Derived state keeps the title/dots/zIndex off the per-frame drag clock:
+    // the integer only changes when the finger crosses a page midpoint.
+    val nearest by remember(wheel) {
+        derivedStateOf {
+            wheel.nearest(if (settling) settleTarget.toFloat() else position)
+        }
+    }
     var detailReady by remember { mutableStateOf(false) }
     var spinning by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -323,7 +331,7 @@ fun BooksScreen(
                                 // Velocity carries into the spring; a hard flick
                                 // crosses a couple of books and rocks to rest.
                                 val pagesPerSecond = velocity / pxPerPage
-                                val target = (position - pagesPerSecond * 0.20f).roundToInt()
+                                val target = wheel.settleTarget(position, pagesPerSecond)
                                 settleTarget = target
                                 settling = true
                                 scope.launch {
@@ -336,7 +344,7 @@ fun BooksScreen(
                                         ),
                                         initialVelocity = -pagesPerSecond,
                                     )
-                                    position = ((target % count) + count) % count.toFloat()
+                                    position = wheel.normalize(target.toFloat())
                                     settling = false
                                 }
                             },
@@ -344,32 +352,27 @@ fun BooksScreen(
                 ) {
                     books.forEachIndexed { index, base ->
                         val spec = counts[base.id]?.let { base.copy(count = it.toString()) } ?: base
-                        // Composition-time distance from the finger position. It
-                        // only changes during a drag; the settle animation is
-                        // read inside graphicsLayer below.
-                        var dBase = index - position
-                        dBase -= count * (dBase / count).roundToInt()
-                        // While settling, stack around the destination so the
-                        // incoming centre card stays on top for the whole spring.
-                        var dStack = index - (if (settling) settleTarget.toFloat() else position)
-                        dStack -= count * (dStack / count).roundToInt()
+                        // Stack order follows the nearest page, not the animated
+                        // float, so the z-order cannot flicker at a midpoint.
+                        val rank = wheel.stackOrder(index, nearest)
                         BookCover(
                             spec = spec,
                             inReading = spec.id == currentId,
-                            artParallax = dBase,
                             modifier = Modifier
                                 .align(Alignment.Center)
                                 .width(cardWidth)
                                 .height(cardHeight)
-                                .zIndex(10f - dStack.absoluteValue)
+                                .zIndex(10f - rank)
                                 .graphicsLayer {
                                     // The ring passes just outside both screen edges:
                                     // at rest the neighbours are off-canvas, during a
                                     // drag they swing in, turn inward and lose a little
                                     // size. Same height, fully opaque — the circle is
                                     // read from the motion, not from a static row.
-                                    var d = index - (if (settling) settle.value else position)
-                                    d -= count * (d / count).roundToInt()
+                                    val d = wheel.delta(
+                                        index,
+                                        if (settling) settle.value else position,
+                                    )
                                     translationX = d * pxPerPage
                                     rotationY = (d * -34f).coerceIn(-40f, 40f) +
                                         (if (d.absoluteValue < 0.01f) spinAngle else 0f)
@@ -391,8 +394,7 @@ fun BooksScreen(
                                     // representative of this card's index, so the
                                     // ring never spins the long way round.
                                     val anchor = if (settling) settle.value else position
-                                    var clickD = index - anchor
-                                    clickD -= count * (clickD / count).roundToInt()
+                                    val clickD = wheel.delta(index, anchor)
                                     if (clickD.absoluteValue > 0.2f) {
                                         val target = (anchor + clickD).roundToInt()
                                         settleTarget = target
@@ -409,7 +411,7 @@ fun BooksScreen(
                                                     stiffness = 240f,
                                                 ),
                                             )
-                                            position = ((target % count) + count) % count.toFloat()
+                                            position = wheel.normalize(target.toFloat())
                                             settling = false
                                         }
                                     } else if (spec.id != currentId) {

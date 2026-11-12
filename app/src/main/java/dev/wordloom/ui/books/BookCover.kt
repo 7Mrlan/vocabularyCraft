@@ -26,7 +26,6 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -128,16 +127,15 @@ val Bookshelf: List<BookCoverSpec> = listOf(
 
 /**
  * A book cover drawn entirely with Canvas: one bright field, one large white
- * illustration bleeding off the right edge, and type in white. The three layers
- * (field, art, type) are separate so the deck can slide them against each other
- * when the card tilts — that tiny parallax is what makes it read as an object.
+ * illustration bleeding off the right edge, and type in white. Everything is
+ * one layer: the deck transforms the whole object, so the art can never slide
+ * inside its clip and shimmer during a swipe.
  */
 @Composable
 fun BookCover(
     spec: BookCoverSpec,
     modifier: Modifier = Modifier,
     inReading: Boolean = false,
-    artParallax: Float = 0f,
 ) {
     Box(
         modifier = modifier
@@ -151,11 +149,7 @@ fun BookCover(
             .clip(RoundedCornerShape(14.dp))
             .background(Brush.verticalGradient(listOf(spec.top, spec.bottom))),
     ) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer { translationX = artParallax * 10f * density },
-        ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
             // page edge, a lighter slip on the left
             drawRoundRect(
                 color = Color.White.copy(alpha = 0.30f),

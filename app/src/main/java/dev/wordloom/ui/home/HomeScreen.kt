@@ -1,5 +1,14 @@
 package dev.wordloom.ui.home
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
@@ -15,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -40,12 +50,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import dev.wordloom.data.model.WordEntry
 import dev.wordloom.ui.components.SearchPill
 import dev.wordloom.ui.components.SpeakerButton
@@ -85,6 +99,8 @@ fun HomeScreen(
     onQuiz: () -> Unit,
     onToggleTheme: () -> Unit,
     onOpenBooks: () -> Unit,
+    onOpenVoice: () -> Unit = {},
+    ttsEnabled: Boolean = false,
 ) {
     val wl = WordloomTheme.colors
     val band = wl.primaryBright
@@ -182,6 +198,8 @@ fun HomeScreen(
                         onOpenBackup = { showBackup = true },
                         onToggleTheme = onToggleTheme,
                         onOpenBooks = onOpenBooks,
+                        onOpenVoice = onOpenVoice,
+                        ttsEnabled = ttsEnabled,
                     )
                     Spacer(Modifier.height(22.dp))
                     SearchPill(
@@ -401,105 +419,216 @@ private fun BrandRow(
     onOpenBackup: () -> Unit,
     onToggleTheme: () -> Unit,
     onOpenBooks: () -> Unit,
+    onOpenVoice: () -> Unit,
+    ttsEnabled: Boolean,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        // The mark itself flips the palette: same icon, one more job.
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .clickable(onClickLabel = "切换深浅色", onClick = onToggleTheme)
-                .padding(end = 6.dp, top = 2.dp, bottom = 2.dp),
-        ) {
-        Canvas(modifier = Modifier.size(26.dp)) {
-            val stroke = Stroke(width = 2.2f * density)
-            drawCircle(color = Color.White, radius = size.minDimension / 2.6f, style = stroke)
-            drawCircle(
-                color = Color.White,
-                radius = 2.4f * density,
-                center = Offset(size.width / 2f, size.height / 2f),
-            )
-            drawLine(
-                color = Color.White,
-                start = Offset(size.width / 2f, 0f),
-                end = Offset(size.width / 2f, size.height),
-                strokeWidth = 1.2f * density,
-            )
+    var drawerOpen by remember { mutableStateOf(false) }
+    val handleRotation by animateFloatAsState(
+        targetValue = if (drawerOpen) 45f else 0f,
+        animationSpec = tween(180),
+        label = "drawerHandle",
+    )
+    BackHandler(enabled = drawerOpen) { drawerOpen = false }
+
+    Box(modifier = Modifier.fillMaxWidth().zIndex(10f)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // The mark itself flips the palette: same icon, one more job.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable(onClickLabel = "切换深浅色", onClick = onToggleTheme)
+                    .padding(end = 6.dp, top = 2.dp, bottom = 2.dp),
+            ) {
+                Canvas(modifier = Modifier.size(26.dp)) {
+                    val stroke = Stroke(width = 2.2f * density)
+                    drawCircle(color = Color.White, radius = size.minDimension / 2.6f, style = stroke)
+                    drawCircle(
+                        color = Color.White,
+                        radius = 2.4f * density,
+                        center = Offset(size.width / 2f, size.height / 2f),
+                    )
+                    drawLine(
+                        color = Color.White,
+                        start = Offset(size.width / 2f, 0f),
+                        end = Offset(size.width / 2f, size.height),
+                        strokeWidth = 1.2f * density,
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = "Wordloom",
+                    fontFamily = SerifFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 22.sp,
+                    color = Color.White,
+                    // Three actions share this row; never let the wordmark wrap.
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            BrandCircle(R.drawable.wl_book_knockout, "词书", onOpenBooks)
+            Spacer(Modifier.width(8.dp))
+            BrandCircle(R.drawable.wl_list_knockout, "词表", onOpenLists)
+            Spacer(Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color.White.copy(alpha = 0.14f), CircleShape)
+                    .clickable(
+                        onClickLabel = if (drawerOpen) "收起工具" else "展开工具",
+                        onClick = { drawerOpen = !drawerOpen },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Canvas(
+                    Modifier
+                        .size(18.dp)
+                        .graphicsLayer { rotationZ = handleRotation },
+                ) {
+                    val stroke = 1.6f * density
+                    drawLine(
+                        Color.White,
+                        Offset(0f, size.height * 0.38f),
+                        Offset(size.width, size.height * 0.38f),
+                        stroke,
+                        StrokeCap.Round,
+                    )
+                    drawLine(
+                        Color.White,
+                        Offset(0f, size.height * 0.62f),
+                        Offset(size.width, size.height * 0.62f),
+                        stroke,
+                        StrokeCap.Round,
+                    )
+                }
+            }
         }
-        Spacer(Modifier.width(10.dp))
-        Text(
-            text = "Wordloom",
-            fontFamily = SerifFamily,
-            fontWeight = FontWeight.Bold,
-            fontSize = 22.sp,
-            color = Color.White,
-            // Four round actions already share this row; never let the wordmark
-            // wrap to a second line on a narrow screen.
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        }
-        Spacer(Modifier.weight(1f))
-        Box(
+
+        AnimatedVisibility(
+            visible = drawerOpen,
             modifier = Modifier
-                .size(36.dp)
-                .background(Color.White.copy(alpha = 0.14f), CircleShape)
-                .clickable(onClick = onOpenBooks),
-            contentAlignment = Alignment.Center,
+                .align(Alignment.TopEnd)
+                .offset(y = 50.dp)
+                .zIndex(11f),
+            enter = fadeIn(tween(150)) +
+                scaleIn(
+                    tween(200),
+                    initialScale = 0.94f,
+                    transformOrigin = TransformOrigin(1f, 0f),
+                ) +
+                slideInVertically(tween(200)) { -8 },
+            exit = fadeOut(tween(120)) +
+                scaleOut(
+                    tween(160),
+                    targetScale = 0.97f,
+                    transformOrigin = TransformOrigin(1f, 0f),
+                ),
         ) {
-            Icon(
-                painter = painterResource(R.drawable.wl_book_knockout),
-                contentDescription = "词书",
-                tint = Color.Unspecified,
-                modifier = Modifier.size(19.dp),
-            )
-        }
-        Spacer(Modifier.width(8.dp))
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .background(Color.White.copy(alpha = 0.14f), CircleShape)
-                .clickable(onClick = onOpenLists),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.wl_list_knockout),
-                contentDescription = "词表",
-                tint = Color.Unspecified,
-                modifier = Modifier.size(19.dp),
-            )
-        }
-        Spacer(Modifier.width(8.dp))
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .background(Color.White.copy(alpha = 0.14f), CircleShape)
-                .clickable(onClick = onOpenMap),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.wl_pin_knockout),
-                contentDescription = "打开学习地图",
-                tint = Color.Unspecified,
-                modifier = Modifier.size(19.dp),
-            )
-        }
-        Spacer(Modifier.width(8.dp))
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .background(Color.White.copy(alpha = 0.14f), CircleShape)
-                .clickable(onClick = onOpenBackup),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.wl_archive_knockout),
-                contentDescription = "备份与恢复",
-                tint = Color.Unspecified,
-                modifier = Modifier.size(19.dp),
-            )
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xFFFDFCF9),
+                shadowElevation = 14.dp,
+                modifier = Modifier.width(218.dp),
+            ) {
+                Column(Modifier.padding(vertical = 8.dp)) {
+                    Text(
+                        text = "工具",
+                        fontSize = 9.5.sp,
+                        letterSpacing = 1.2.sp,
+                        color = Color(0xFF8A97A8),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    )
+                    DrawerRow(
+                        R.drawable.wl_pin,
+                        "地图",
+                        "打开学习地图",
+                        onClick = { drawerOpen = false; onOpenMap() },
+                    )
+                    DrawerDivider()
+                    DrawerRow(
+                        R.drawable.wl_archive,
+                        "备份与恢复",
+                        "备份与恢复",
+                        onClick = { drawerOpen = false; onOpenBackup() },
+                    )
+                    DrawerDivider()
+                    DrawerRow(
+                        R.drawable.wl_volume,
+                        "声音",
+                        "声音设置",
+                        trailing = if (ttsEnabled) null else "未配置",
+                        onClick = { drawerOpen = false; onOpenVoice() },
+                    )
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun BrandCircle(@DrawableRes icon: Int, label: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .background(Color.White.copy(alpha = 0.14f), CircleShape)
+            .clickable(onClickLabel = label, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = label,
+            tint = Color.Unspecified,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+@Composable
+private fun DrawerRow(
+    @DrawableRes icon: Int,
+    label: String,
+    description: String,
+    trailing: String? = null,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClickLabel = description, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = null,
+            tint = Color(0xFF162941),
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = label,
+            fontFamily = SerifFamily,
+            fontSize = 15.sp,
+            color = Color(0xFF162941),
+            modifier = Modifier.weight(1f),
+        )
+        trailing?.let {
+            Text(it, fontSize = 10.sp, color = Color(0xFFF06989))
+        }
+    }
+}
+
+@Composable
+private fun DrawerDivider() {
+    Box(
+        Modifier
+            .padding(start = 46.dp, end = 16.dp)
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(Color(0xFFE8ECF2)),
+    )
 }
 
 @Composable

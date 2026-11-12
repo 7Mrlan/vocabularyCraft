@@ -4,7 +4,6 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.AtomicFile
-import org.json.JSONObject
 import java.io.File
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -32,10 +31,11 @@ class TtsConfigStore(context: Context) {
                 key(),
                 GCMParameterSpec(128, bytes.copyOfRange(0, 12)),
             )
-            val json = JSONObject(
-                cipher.doFinal(bytes.copyOfRange(12, bytes.size)).toString(Charsets.UTF_8),
+            val text = String(
+                cipher.doFinal(bytes.copyOfRange(12, bytes.size)),
+                Charsets.UTF_8,
             )
-            TtsConfig.fromJson(json)
+            TtsConfig.decode(text)
         }.getOrNull()
     }
 
@@ -43,7 +43,7 @@ class TtsConfigStore(context: Context) {
         require(config.enabled) { "AI 朗读配置不完整，请检查接口、模型和密钥" }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
-        val bytes = cipher.iv + cipher.doFinal(config.toJson().toString().toByteArray(Charsets.UTF_8))
+        val bytes = cipher.iv + cipher.doFinal(TtsConfig.encode(config).toByteArray(Charsets.UTF_8))
         val output = file.startWrite()
         try {
             output.write(bytes)

@@ -23,7 +23,7 @@ enum class Sound(@RawRes val res: Int, val gain: Float) {
 
 data class SoundSettings(
     val enabled: Boolean = true,
-    val volume: Float = 0.30f,
+    val volume: Float = 0.60f,
     val ratings: Boolean = true,
     val spelling: Boolean = true,
     val quiz: Boolean = true,
@@ -46,7 +46,10 @@ class SoundService private constructor(context: Context) {
         .setMaxStreams(4)
         .setAudioAttributes(
             AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                // Media, not sonification: on most phones the system-sound
+                // stream is muted independently, which made every cue silent
+                // even though TTS (media) played fine.
+                .setUsage(AudioAttributes.USAGE_GAME)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build(),
         )
@@ -68,6 +71,13 @@ class SoundService private constructor(context: Context) {
         // A hair of pitch variation keeps repeated ratings from sounding like a
         // machine gun; it is deliberately inaudible as a pitch change.
         pool.play(id, gain, gain, 1, 0, 0.98f + Random.nextFloat() * 0.04f)
+    }
+
+    /** Audition: honours the volume but ignores the per-group switches. */
+    fun preview(sound: Sound) {
+        val id = ids[sound] ?: return
+        val gain = (_settings.value.volume * sound.gain).coerceIn(0f, 1f)
+        pool.play(id, gain, gain, 1, 0, 1f)
     }
 
     fun setEnabled(enabled: Boolean) {
@@ -108,7 +118,7 @@ class SoundService private constructor(context: Context) {
 
     private fun load(): SoundSettings = SoundSettings(
         enabled = prefs.getBoolean(KEY_ENABLED, true),
-        volume = prefs.getFloat(KEY_VOLUME, 0.30f).coerceIn(0f, 1f),
+        volume = prefs.getFloat(KEY_VOLUME, 0.60f).coerceIn(0f, 1f),
         ratings = prefs.getBoolean(KEY_RATINGS, true),
         spelling = prefs.getBoolean(KEY_SPELLING, true),
         quiz = prefs.getBoolean(KEY_QUIZ, true),

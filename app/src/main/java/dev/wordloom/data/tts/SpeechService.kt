@@ -39,6 +39,7 @@ data class TtsStatus(
     val voiceDesign: Boolean,
     val instructions: String,
     val hasKey: Boolean,
+    val fallback: Boolean = true,
 )
 
 /**
@@ -83,6 +84,7 @@ class SpeechService(
             voiceDesign = config.voiceDesign,
             instructions = config.instructions,
             hasKey = config.key.isNotBlank(),
+            fallback = config.fallback,
         )
 
     /** Persist a complete config; a blank key reuses the saved one. */
@@ -114,7 +116,7 @@ class SpeechService(
                 require(resolved.enabled) { "AI 朗读配置不完整，请检查接口、模型和密钥" }
                 val temporary = File(directory, "preview-${System.nanoTime()}.${resolved.extension}")
                 try {
-                    client.synthesize(resolved, text, temporary)
+                    client.synthesize(resolved, resolved.requestText(text), temporary)
                     var started = false
                     playFile(temporary, "preview") { state ->
                         if (state is SpeechState.Playing) started = true
@@ -151,7 +153,7 @@ class SpeechService(
                 require(resolved.enabled) { "AI 朗读配置不完整，请检查接口、模型和密钥" }
                 val file = File(directory, "test-${System.nanoTime()}.${resolved.extension}")
                 temporary = file
-                val synthesized = client.synthesize(resolved, text, file)
+                val synthesized = client.synthesize(resolved, resolved.requestText(text), file)
                 var started = false
                 playFile(file, "test") { state ->
                     if (state is SpeechState.Playing) started = true
@@ -175,15 +177,28 @@ class SpeechService(
         scope.launch { prepare(text) }
     }
 
-    /** Play AI audio first, or the supplied URL when synthesis is unavailable. */
+    /**
+     * Play AI audio first. When the reader has turned the recorded-clip fallback
+     * off, a failed synthesis is retried once and then reported — the old URL is
+     * never played, so the voice stays the one they configured.
+     */
     fun speak(text: String, fallbackUrl: String?, onState: (SpeechState) -> Unit = {}) {
         job?.cancel()
         stopPlayer()
         job = scope.launch {
             onState(SpeechState.Loading)
-            val synthesized = if (enabled) prepare(text) else null
+            val request = config.requestText(text)
+            var synthesized = if (enabled) prepare(request) else null
+            if (synthesized == null && enabled) {
+                // One retry: transient network failures are the common case.
+                synthesized = prepare(request, force = true)
+            }
             if (synthesized != null) {
                 playFile(synthesized, "AI", onState)
+                return@launch
+            }
+            if (enabled && !config.fallback) {
+                onState(SpeechState.Failed("朗读失败，可重试"))
                 return@launch
             }
             val fallback = fallbackUrl?.takeIf { it.isNotBlank() }?.let { audioCache.fetch(it) }
@@ -193,6 +208,13 @@ class SpeechService(
                 onState(SpeechState.Failed("没有可用发音"))
             }
         }
+    }
+
+    /** Forget the stored key (the rest of the configuration is kept). */
+    fun forgetKey() {
+        stop()
+        runCatching { store.clear() }
+        config = config.copy(key = "")
     }
 
     fun stop() {
@@ -208,7 +230,8 @@ class SpeechService(
 
     private suspend fun prepare(text: String, force: Boolean = false): File? {
         if (!enabled || text.isBlank()) return null
-        val key = cacheKey(text)
+        val request = config.requestText(text)
+        val key = cacheKey(request)
         val target = File(directory, "$key.${config.extension}")
         if (!force && target.isFile && target.length() > 0) {
             // Refresh LRU position without changing the clip.
@@ -224,7 +247,7 @@ class SpeechService(
                 if (!force && target.isFile && target.length() > 0) return@withPermit target
                 val temporary = File(directory, "$key-${System.nanoTime()}.part")
                 try {
-                    client.synthesize(config, text, temporary)
+                    client.synthesize(config, request, temporary)
                     if (!temporary.isFile || temporary.length() == 0L) return@withPermit null
                     if (!temporary.renameTo(target)) {
                         temporary.copyTo(target, overwrite = true)
@@ -307,6 +330,8 @@ class SpeechService(
 
     private fun cacheKey(text: String): String {
         val identity = listOf(
+            // Bump when the request shape changes; old clips then stop matching.
+            "tts-v2",
             config.protocol.name,
             config.endpoint,
             config.model,

@@ -209,6 +209,10 @@ class WordloomViewModel(
         onResult(speech.saveConfig(draft))
     }
 
+    fun clearTtsKey() {
+        speech.forgetKey()
+    }
+
     fun previewTts(draft: TtsConfig, text: String, onResult: (Result<Unit>) -> Unit) {
         speech.preview(draft, text, onResult)
     }

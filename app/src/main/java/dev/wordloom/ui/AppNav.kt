@@ -416,6 +416,10 @@ fun AppNav(
                 }
             },
             onPreview = viewModel::previewTts,
+            onClearKey = {
+                viewModel.clearTtsKey()
+                ttsStatus = viewModel.ttsStatus
+            },
             onDismiss = {
                 showVoice = false
                 viewModel.stopTts()

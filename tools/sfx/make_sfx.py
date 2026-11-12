@@ -55,7 +55,7 @@ def soft_tick(dur: float, amp: float, cutoff: float) -> list[float]:
         t = i / SR
         env = math.exp(-42.0 * t)
         out[i] = amp * env * y
-    return master(out, peak=0.28)
+    return master(out, peak=0.65)
 
 
 def mix(*parts: tuple[list[float], float]) -> list[float]:
@@ -69,7 +69,7 @@ def mix(*parts: tuple[list[float], float]) -> list[float]:
     return master(out)
 
 
-def master(samples: list[float], peak: float = 0.50) -> list[float]:
+def master(samples: list[float], peak: float = 0.90) -> list[float]:
     """Normalize to a quiet peak and fade the edges; no limiter artefacts."""
     top = max(abs(v) for v in samples) or 1.0
     scale = peak / top

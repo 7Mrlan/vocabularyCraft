@@ -67,10 +67,13 @@ internal fun TtsSetupPage(
         mutableStateOf(status.model.ifBlank { TtsDefaults.MODEL })
     }
     var voice by rememberSaveable {
-        mutableStateOf(if (status.voice == "voicedesign") "" else status.voice)
+        mutableStateOf(
+            status.voice.takeIf { it.isNotBlank() && it != "voicedesign" }
+                ?: TtsDefaults.VOICE,
+        )
     }
     var instructions by rememberSaveable {
-        mutableStateOf(status.instructions.ifBlank { TtsDefaults.INSTRUCTIONS })
+        mutableStateOf(status.instructions)
     }
     // Deliberately not rememberSaveable: a secret must not enter saved state.
     var key by remember { mutableStateOf("") }
@@ -145,6 +148,7 @@ internal fun TtsSetupPage(
                         if (model.isBlank() || model == TtsDefaults.MODEL) {
                             endpoint = TtsDefaults.ENDPOINT
                             model = TtsDefaults.MODEL
+                            voice = TtsDefaults.VOICE
                         }
                     }
                     SetupPill("OpenAI 兼容", protocol == TtsProtocol.OPENAI) {
@@ -188,11 +192,11 @@ internal fun TtsSetupPage(
                 if (advanced) {
                     VoiceField("接口地址", endpoint, { endpoint = it }, TtsDefaults.ENDPOINT)
                     VoiceField("模型", model, { model = it }, TtsDefaults.MODEL)
-                    if (protocol == TtsProtocol.OPENAI || model != TtsDefaults.MODEL) {
+                    if (protocol == TtsProtocol.OPENAI || model != TtsConfig.VOICE_DESIGN_MODEL) {
                         VoiceField("声音", voice, { voice = it }, "例如 Chloe / Mia")
                     }
                     VoiceField(
-                        label = if (model == TtsDefaults.MODEL) "音色描述（voicedesign 必填）" else "朗读风格（选填）",
+                        label = if (model == TtsConfig.VOICE_DESIGN_MODEL) "音色描述（voicedesign 必填）" else "朗读风格（选填）",
                         value = instructions,
                         onValueChange = { instructions = it },
                         placeholder = "温润知性的成熟女声…",

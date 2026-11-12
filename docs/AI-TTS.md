@@ -5,7 +5,10 @@
 
 ## 1. 已定决策
 
-- **单词和例句都走 AI TTS**；旧 Vocabulary.com / Wiktionary 真人录音与 Youdao TTS 只作为失败/未配置时的兜底。
+- **单词和例句都走 AI TTS**；旧 Vocabulary.com / Wiktionary 真人录音与 Youdao TTS 只作为兜底。
+- **两套模板**（声音页顶部下拉）：预置英文音色（默认 `mimo-v2.5-tts` + Chloe，另有 Mia / Milo / Dean）与设计音色（`mimo-v2.5-tts-voicedesign` + 原有中文描述）。
+- **设计模板的单词补句号**：单个词在发送前加 `.`（`record` → `record.`），给生成式语音一个句子边界；句子与短语不动，预置模板按原文发送。
+- **失败回退是配置项**：默认开（合成失败用真人录音）；关闭后只用 AI 声音，失败提示并重试一次；未配置 key 时行为与以前一致。
 - **保留 design 音色**：`mimo-v2.5-tts-voicedesign` + 用户原来的中文 instructions
   （“温润知性的成熟女声，中低音，音色干净，吐字清晰，语速从容，句末自然下落，不过分甜。”）。
 - **预取 + 磁盘缓存**优先于流式；热路径一次请求，失败快速回退，不做 4 次重试。
@@ -76,8 +79,10 @@
   `protocol+endpoint+model+voice+instructions+text` 的 SHA-256 做 key；Semaphore 2；in-flight 去重；单个 MediaPlayer。
 - `ui/voice/SpeechActions.kt`：`LocalSpeechActions`，学习卡/词条页统一入口。
 - `ui/voice/SpeechButton.kt`：AI 优先，旧 URL 兜底；播放脉冲在 `graphicsLayer` 读取，不再每帧重组。
-- `ui/voice/VoiceSettingsSheet.kt`：应用内「声音」配置页；纸面、衬线、墨色按钮；MiMo voicedesign
-  推荐默认；支持试听、保存；密钥输入用密码遮罩且不回显。
+- `ui/voice/VoiceSettingsSheet.kt`：应用内「声音」配置页；顶部「朗读方式」与「音色」两个纸面下拉，
+  默认预置英文音色 + Chloe；设计模板显示音色描述。试听文本可编辑，带 record/read/lead/close/use/live
+  六个同形异读快选；密钥状态行（已保存 / 未配置）与「清除」；「合成失败时使用真人录音」开关；
+  保存后短暂显示「已保存」再关闭。音效分组下方带试听与墨色音量滑杆。
 - 入口：首页品牌行「收纳 → 声音」；首次引导第 2 屏也可配置并试听；
   学习页/词条页仍保留喇叭与自动朗读。
 - `StudyScreen`：单词/例句自动朗读走 AI；`StudyCard` 预取当前词 + 前 5 例句；队列前 3 词预取。
@@ -110,7 +115,7 @@
 
 ### 5.3 播放与预取
 
-- ✅ 配置变化 → 缓存 key 变化，旧缓存自然失效。
+- ✅ 配置变化 → 缓存 key 变化（含 `tts-v2` 格式版本与补句号后的文本），旧缓存自然失效。
 - ✅ 预取：书内页前 3 词、队列前 3 词、当前词 + 前 5 例句；并发 2；in-flight 去重。
 - ✅ 失败状态：`Loading / Playing / Failed`；失败一次后回退到旧 URL，不静默。
 - ✅ 缓存：128 MiB LRU；命中时刷新最近使用时间，正在写入/试听/测试的临时文件不参与清理。

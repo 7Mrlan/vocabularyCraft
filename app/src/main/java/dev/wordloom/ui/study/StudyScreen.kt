@@ -129,8 +129,12 @@ import kotlin.math.min
 
 private enum class Layer { Word, English, Chinese }
 
-/** A quick flick turns the page even when it travels less than the distance threshold. */
-private const val FLING_DP_PER_SECOND = 700f
+/**
+ * A quick flick turns the page even when it travels less than the distance
+ * threshold. 400 dp/s is the same order as the threshold ViewPager uses for a
+ * fling page turn, so a short, deliberate flick is enough — no long drag needed.
+ */
+private const val FLING_DP_PER_SECOND = 400f
 
 @Immutable
 private data class StudyItem(val word: String, val isNew: Boolean)
@@ -751,7 +755,9 @@ private fun StudyCard(
 
     fun settleRing() {
         val width = ring.width
-        val threshold = width * 0.16f
+        // 12% of the card: a short drag still turns the page. The velocity check
+        // below covers even shorter flicks.
+        val threshold = width * 0.12f
         val vx = gestureVelocity.calculateVelocity().x
         // Velocity is px/s while the threshold is a physical speed: scale by
         // density, or a 3x screen would trigger on a much slower finger.
@@ -961,7 +967,8 @@ private fun StudyCard(
 
 /**
  * Page 0 is the word card, the rest are its examples. The pages follow the
- * finger; releasing past a sixth of the width settles on the neighbour, and
+ * finger; releasing past about an eighth of the width — or with a quick flick —
+ * settles on the neighbour, and
  * since the ring wraps, the last example leads back to the word card.
  */
 private fun ringPath(width: Float, height: Float, radius: Float, inset: Float): Path {

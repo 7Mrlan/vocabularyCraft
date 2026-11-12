@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +29,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -35,6 +38,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.wordloom.data.audio.SoundService
 import dev.wordloom.data.tts.TtsConfig
 import dev.wordloom.data.tts.TtsDefaults
 import dev.wordloom.data.tts.TtsProtocol
@@ -44,6 +48,7 @@ import dev.wordloom.ui.theme.SansFamily
 import dev.wordloom.ui.theme.SerifFamily
 import dev.wordloom.ui.theme.WordloomTheme
 import dev.wordloom.ui.theme.wlPress
+import kotlin.math.roundToInt
 
 private const val DEFAULT_ENDPOINT = TtsDefaults.ENDPOINT
 private const val DEFAULT_MODEL = TtsDefaults.MODEL
@@ -269,8 +274,90 @@ fun VoiceSettingsSheet(
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp, lineHeight = 16.sp),
                 color = muted.copy(alpha = 0.82f),
             )
+
+            Spacer(Modifier.height(22.dp))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(wl.outline))
+            Spacer(Modifier.height(18.dp))
+            Text(
+                text = "音效",
+                fontFamily = SerifFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = ink,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "纸、木、毡的轻响；默认不响书架过卡声。",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 16.sp),
+                color = muted,
+            )
+            Spacer(Modifier.height(12.dp))
+            SoundSettingsSection()
             Spacer(Modifier.height(8.dp))
         }
+    }
+}
+
+@Composable
+private fun SoundSettingsSection() {
+    val wl = WordloomTheme.colors
+    val context = LocalContext.current
+    val sound = remember(context) { SoundService.shared(context) }
+    val settings by sound.settings.collectAsStateWithLifecycle()
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("启用音效", fontSize = 13.sp, color = wl.ink, modifier = Modifier.weight(1f))
+        SoundToggle(settings.enabled) { sound.setEnabled(it) }
+    }
+    Spacer(Modifier.height(6.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("书架过卡声", fontSize = 13.sp, color = wl.ink, modifier = Modifier.weight(1f))
+        SoundToggle(settings.pageTurn) { sound.setPageTurn(it) }
+    }
+    Spacer(Modifier.height(12.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("音量", fontSize = 11.sp, color = wl.inkMuted)
+        Spacer(Modifier.width(10.dp))
+        Slider(
+            value = settings.volume,
+            onValueChange = sound::setVolume,
+            valueRange = 0f..1f,
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = "${(settings.volume * 100).roundToInt()}%",
+            fontSize = 10.5.sp,
+            color = wl.inkMuted,
+            modifier = Modifier.width(34.dp),
+        )
+    }
+    Text(
+        text = "恢复默认",
+        fontFamily = SerifFamily,
+        fontSize = 12.sp,
+        color = wl.primary,
+        modifier = Modifier
+            .wlPress { sound.reset() }
+            .padding(vertical = 8.dp),
+    )
+}
+
+@Composable
+private fun SoundToggle(on: Boolean, onChange: (Boolean) -> Unit) {
+    val wl = WordloomTheme.colors
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = if (on) wl.ink else wl.surfaceAlt,
+        modifier = Modifier.wlPress { onChange(!on) },
+    ) {
+        Text(
+            text = if (on) "开" else "关",
+            fontFamily = SerifFamily,
+            fontSize = 11.sp,
+            color = if (on) wl.surface else wl.inkMuted,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+        )
     }
 }
 

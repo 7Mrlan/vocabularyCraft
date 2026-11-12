@@ -1,6 +1,5 @@
 package dev.wordloom.ui.books
 
-import android.media.SoundPool
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
@@ -49,7 +48,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -74,6 +72,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import dev.wordloom.R
+import dev.wordloom.data.audio.Sound
+import dev.wordloom.data.audio.SoundService
 import dev.wordloom.ui.theme.SerifFamily
 import dev.wordloom.ui.theme.WlMotion
 import dev.wordloom.ui.theme.WordloomTheme
@@ -120,13 +120,7 @@ fun BooksScreen(
     val context = LocalContext.current
     val view = LocalView.current
     val density = LocalDensity.current.density
-
-    val soundPool = remember { SoundPool.Builder().setMaxStreams(2).build() }
-    var click by remember { mutableIntStateOf(0) }
-    DisposableEffect(Unit) {
-        click = soundPool.load(context, R.raw.gear_click, 1)
-        onDispose { soundPool.release() }
-    }
+    val sounds = remember(context) { SoundService.shared(context) }
 
     val currentId = selectedBookId
     var detailOpen by rememberSaveable { mutableStateOf(false) }
@@ -232,9 +226,8 @@ fun BooksScreen(
     var lastNearest by remember { mutableIntStateOf(0) }
     LaunchedEffect(nearest) {
         if (nearest != lastNearest) {
-            val rate = if (nearest > lastNearest) 1.05f else 0.95f
             lastNearest = nearest
-            if (click != 0) soundPool.play(click, 0.26f, 0.26f, 1, 0, rate)
+            sounds.play(Sound.PageTurn)
             view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
         }
     }

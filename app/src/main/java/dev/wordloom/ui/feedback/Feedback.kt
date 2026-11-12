@@ -1,8 +1,6 @@
 package dev.wordloom.ui.feedback
 
 import android.content.Context
-import android.media.AudioAttributes
-import android.media.SoundPool
 import android.os.Build
 import android.view.HapticFeedbackConstants
 import android.view.View
@@ -10,7 +8,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
-import dev.wordloom.R
+import dev.wordloom.data.audio.Sound
+import dev.wordloom.data.audio.SoundService
 
 /**
  * Short, clear answers to a tap: a two-note chime on a correct pick, and the
@@ -19,20 +18,10 @@ import dev.wordloom.R
  */
 class AppFeedback(context: Context) {
 
-    private val sounds = SoundPool.Builder()
-        .setMaxStreams(2)
-        .setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build(),
-        )
-        .build()
-
-    private val correctChime = sounds.load(context, R.raw.quiz_correct, 1)
+    private val sounds = SoundService.shared(context)
 
     fun correct(view: View?) {
-        sounds.play(correctChime, 0.55f, 0.55f, 1, 0, 1f)
+        sounds.play(Sound.QuizCorrect)
         view.haptic(HapticFeedbackConstants.CONFIRM)
     }
 
@@ -51,7 +40,7 @@ class AppFeedback(context: Context) {
     }
 
     fun release() {
-        sounds.release()
+        // The shared SoundService is process-scoped; screens do not own it.
     }
 }
 

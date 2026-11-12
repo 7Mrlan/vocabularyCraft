@@ -1,8 +1,6 @@
 package dev.wordloom.ui.study
 import android.view.HapticFeedbackConstants
 import android.os.Build
-import android.media.SoundPool
-import android.content.Context
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -39,7 +37,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.animation.core.animate
 import androidx.compose.runtime.rememberCoroutineScope
@@ -109,6 +106,8 @@ import dev.wordloom.data.local.CardEntity
 import dev.wordloom.data.model.WordEntry
 import dev.wordloom.data.translate.StudyContent
 import dev.wordloom.data.translate.StudyDetails
+import dev.wordloom.data.audio.Sound
+import dev.wordloom.data.audio.SoundService
 import dev.wordloom.data.tts.SpeechState
 import dev.wordloom.data.translate.StudyExample
 import dev.wordloom.srs.Rating
@@ -137,48 +136,11 @@ private const val SPELLING_LIMIT = 20
 @Immutable
 private data class StudyItem(val word: String, val isNew: Boolean)
 
-/**
- * The review's voice. Four grades get four different gestures — a glass drop, a
- * wooden tick, a page turn and a closing book — so the answer is heard before
- * the screen explains it. Spelling has its own pair.
- */
-private enum class StudySound(@RawRes val res: Int, val volume: Float) {
-    Easy(R.raw.grade_easy, 0.60f),
-    Good(R.raw.grade_good, 0.55f),
-    Hard(R.raw.grade_hard, 0.45f),
-    Again(R.raw.grade_again, 0.35f),
-    SpellRight(R.raw.spell_right, 0.65f),
-    SpellWrong(R.raw.spell_wrong, 0.35f),
-}
-
-private class SoundBank(context: Context) {
-    private val pool = SoundPool.Builder().setMaxStreams(2).build()
-    private val ids = HashMap<StudySound, Int>()
-
-    init {
-        StudySound.entries.forEach { ids[it] = pool.load(context, it.res, 1) }
-    }
-
-    fun play(sound: StudySound) {
-        ids[sound]?.let { pool.play(it, sound.volume, sound.volume, 1, 0, 1f) }
-    }
-
-    fun release() = pool.release()
-}
-
-@Composable
-private fun rememberSoundBank(): SoundBank {
-    val context = LocalContext.current
-    val bank = remember { SoundBank(context.applicationContext) }
-    DisposableEffect(bank) { onDispose { bank.release() } }
-    return bank
-}
-
-private fun Rating.studySound(): StudySound = when (this) {
-    Rating.Easy -> StudySound.Easy
-    Rating.Good -> StudySound.Good
-    Rating.Hard -> StudySound.Hard
-    Rating.Again -> StudySound.Again
+private fun Rating.studySound(): Sound = when (this) {
+    Rating.Easy -> Sound.Easy
+    Rating.Good -> Sound.Good
+    Rating.Hard -> Sound.Hard
+    Rating.Again -> Sound.Again
 }
 
 /**
@@ -214,7 +176,8 @@ fun StudyScreen(
     val view = LocalView.current
     val feedback = rememberAppFeedback()
     val player = rememberAudioPlayer()
-    val sfx = rememberSoundBank()
+    val context = LocalContext.current
+    val sfx = remember(context) { SoundService.shared(context) }
     val hazeState = remember { HazeState() }
     val clipboard = LocalClipboardManager.current
     // A word picked out of the card with a long press, translated in the same
@@ -482,7 +445,7 @@ fun StudyScreen(
                 words = spellWords,
                 onPlay = { url -> player.play(url) },
                 onSound = { correct ->
-                    sfx.play(if (correct) StudySound.SpellRight else StudySound.SpellWrong)
+                    sfx.play(if (correct) Sound.SpellRight else Sound.SpellWrong)
                 },
                 onFinish = { correct ->
                     spellScore = correct
@@ -513,7 +476,7 @@ fun StudyScreen(
                     onCommit = { rating, requeue -> commit(current, rating, requeue) },
                     // The grade itself answers with its sound; the commit is silent.
                     onGradeTone = { rating -> sfx.play(rating.studySound()) },
-                    onWrongTone = { sfx.play(StudySound.Again) },
+                    onWrongTone = { sfx.play(Sound.Again) },
                     onReveal = { feedback.reveal(view) },
                     onWrong = { feedback.wrong(view) },
                     onAutoPlay = { url -> player.play(url) },

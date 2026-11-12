@@ -79,7 +79,7 @@ aapt2 dump badging app/build/outputs/apk/release/app-release.apk | findstr nativ
 > 以下数字来自 4.1 无 key 本地出包实测（2026-11-12，见 §2 表）；每次发版后如体积变化明显，
 > 同步更新这里与 `gradle/apk-budget.properties`。
 
-当前 release APK（4.1，38.07 MiB，39,918,778 字节；arm64；无 TTS key）的构成：
+当前 release APK（4.1，38.01 MiB，39,858,470 字节；arm64；无 TTS key）的构成：
 
 | 部分 | 未压缩体积 |
 |---|---|

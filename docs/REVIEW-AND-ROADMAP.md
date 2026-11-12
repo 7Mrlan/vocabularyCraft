@@ -8,13 +8,13 @@
 
 - `v4.0.0` 的三个提交已推送到 `main` / `animation`，tag `v4.0.0` 已推；
   **GitHub Release 未创建**（按用户要求暂停；账号计费导致 Actions 不可用）。
-- 4.1 的 TTS/播放/预取/配置/引导改动**尚未提交**，工作区未暂存；本地已构建无 key 的
+- 4.1 的 TTS/播放/预取/配置/引导/书架/手势/音效改动已提交并推送到 `animation`；本地已构建无 key 的
   `Wordloom-4.1-arm64.apk`（同 `app/build/outputs/apk/release/app-release.apk`；versionCode 14 /
-  versionName 4.1，arm64，38.07 MiB，SHA-256
-  `21ce37ebb18958e240e6a03eb2ef485b69e923f6391fb253ad36f22b22dcd175`）。
+  versionName 4.1，arm64，38.01 MiB，SHA-256
+  `081a80306cc5465b5ab00b923b242f7fbadfcdb27b3e33ea5808fa54a7c6ffb0`）。
 - 该 4.1 包的 BuildConfig 六个 TTS 字段全为空，APK 内不含用户 key；密钥改由应用内配置写入
   Android Keystore 加密文件。之前含 key 的本地测试包只用于验证，**不再作为交付物**。
-- 正式 release 必须是空 key；可配置 TTS 已落地，首次引导是下一步第一优先。
+- 正式 release 必须是空 key；发布前仍需真机走查延迟、帧率、音频焦点、深色模式。
 - `v4.0.0` tag 不要移动；后续发 `4.1` / `4.1.1`，由维护者决定何时创建 Release。
 
 ## 2. 已完成 / 部分完成 / 未完成

@@ -42,6 +42,12 @@ class TtsConfigTest {
     }
 
     @Test
+    fun `a long single token still gets its full stop`() {
+        val word = "pneumonoultramicroscopicsilicovolcanoconiosis"
+        assertEquals("$word.", design().requestText(word))
+    }
+
+    @Test
     fun `preset voices never rewrite the text`() {
         assertEquals("record", preset().requestText("record"))
         assertEquals("Never make your students feel ignorant.", preset().requestText("Never make your students feel ignorant."))

@@ -178,6 +178,7 @@ fun StudyScreen(
     val player = rememberAudioPlayer()
     val context = LocalContext.current
     val sfx = remember(context) { SoundService.shared(context) }
+    val speech = LocalSpeechActions.current
     val hazeState = remember { HazeState() }
     val clipboard = LocalClipboardManager.current
     // A word picked out of the card with a long press, translated in the same
@@ -446,7 +447,17 @@ fun StudyScreen(
             ) {
                 SpellingRound(
                     words = spellWords,
-                    onPlay = { url -> player.play(url) },
+                    onSpeak = { word ->
+                        // The spelling cue follows the same AI/fallback switch as
+                        // every other word: a recorded clip must not slip through
+                        // when the reader chose an AI-only voice.
+                        val clip = entryFor(word).audio.firstOrNull()?.url
+                        if (speech != null && speech.enabled) {
+                            speech.speak(word, clip) { }
+                        } else if (!clip.isNullOrBlank()) {
+                            player.play(clip)
+                        }
+                    },
                     onSound = { correct ->
                         sfx.play(if (correct) Sound.SpellRight else Sound.SpellWrong)
                     },
@@ -1650,7 +1661,7 @@ private fun DoneState(
 @Composable
 private fun SpellingRound(
     words: List<WordEntry>,
-    onPlay: (String) -> Unit,
+    onSpeak: (String) -> Unit,
     onSound: (Boolean) -> Unit,
     onFinish: (Int) -> Unit,
 ) {
@@ -1712,7 +1723,7 @@ private fun SpellingRound(
         )
         if (ok) {
             correctCount += 1
-            entry.audio.firstOrNull()?.url?.takeIf { it.isNotBlank() }?.let(onPlay)
+            onSpeak(entry.word)
         }
     }
 

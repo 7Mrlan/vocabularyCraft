@@ -38,10 +38,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -108,7 +106,7 @@ fun VoiceSettingsSheet(
     }
     var presetVoice by remember {
         mutableStateOf(
-            status.voice.takeIf { it.isNotBlank() && it != "voicedesign" }
+            status.voice.takeIf { it in TtsDefaults.VOICES.map { voice -> voice.first } }
                 ?: TtsDefaults.VOICE,
         )
     }
@@ -145,7 +143,9 @@ fun VoiceSettingsSheet(
             protocol = TtsProtocol.MIMO,
             model = TtsDefaults.PRESET_MODEL,
             voice = presetVoice,
-            instructions = "",
+            // Kept even though the preset request ignores it, so switching back
+            // to Design restores the description instead of the default.
+            instructions = designInstructions.trim(),
             key = key.trim(),
             fallback = fallback,
         )
@@ -329,6 +329,9 @@ fun VoiceSettingsSheet(
                         color = wl.coral,
                         modifier = Modifier
                             .wlPress {
+                                // Clearing cancels any running preview; without
+                                // this the sheet would stay "busy" forever.
+                                busy = false
                                 onClearKey()
                                 keyCleared = true
                                 message = "已清除密钥"
@@ -405,6 +408,11 @@ fun VoiceSettingsSheet(
                             validate(candidate)?.let {
                                 failed = true
                                 message = it
+                                return@wlPress
+                            }
+                            if (previewText.isBlank()) {
+                                failed = true
+                                message = "请填写试听文本"
                                 return@wlPress
                             }
                             busy = true

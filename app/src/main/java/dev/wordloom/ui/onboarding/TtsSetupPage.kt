@@ -89,6 +89,7 @@ internal fun TtsSetupPage(
         voice = voice.trim(),
         instructions = instructions.trim(),
         key = key.trim(),
+        fallback = status.fallback,
     )
 
     fun validate(config: TtsConfig): String? {
@@ -169,7 +170,7 @@ internal fun TtsSetupPage(
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = if (protocol == TtsProtocol.MIMO) {
-                        "默认使用 MiMo voicedesign 音色；密钥只保存在本机。"
+                        "默认使用 MiMo 预置英文音色（Chloe）；密钥只保存在本机。"
                     } else {
                         "按 OpenAI /audio/speech 兼容格式请求；密钥只保存在本机。"
                     },

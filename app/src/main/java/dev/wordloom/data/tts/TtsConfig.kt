@@ -47,7 +47,7 @@ data class TtsConfig(
     fun requestText(text: String): String {
         val trimmed = text.trim()
         if (!voiceDesign) return trimmed
-        if (trimmed.isEmpty() || trimmed.length > 40) return trimmed
+        if (trimmed.isEmpty()) return trimmed
         if (trimmed.any { it.isWhitespace() }) return trimmed
         if (trimmed.last() in ".!?,;:\"'") return trimmed
         return "$trimmed."
@@ -78,7 +78,10 @@ data class TtsConfig(
         val root = JSONObject().put("model", model)
         if (protocol == TtsProtocol.MIMO) {
             val messages = JSONArray()
-            if (instructions.isNotBlank()) {
+            // Preset voices reject the design description; only the design
+            // template carries it. Keeping it stored lets a switch back to
+            // Design restore the reader's own words.
+            if (voiceDesign && instructions.isNotBlank()) {
                 messages.put(JSONObject().put("role", "user").put("content", instructions.trim()))
             }
             messages.put(JSONObject().put("role", "assistant").put("content", text))
@@ -111,21 +114,6 @@ data class TtsConfig(
 
         internal fun decode(text: String): TtsConfig? =
             runCatching { storage.decodeFromString(TtsConfig.serializer(), text) }.getOrNull()
-
-        internal fun fromJson(json: JSONObject): TtsConfig {
-            val protocol = runCatching {
-                TtsProtocol.valueOf(json.optString("protocol", "MIMO").uppercase())
-            }.getOrDefault(TtsProtocol.MIMO)
-            return TtsConfig(
-                endpoint = json.optString("endpoint", ""),
-                protocol = protocol,
-                model = json.optString("model", ""),
-                voice = json.optString("voice", ""),
-                instructions = json.optString("instructions", ""),
-                key = json.optString("key", ""),
-                fallback = json.optBoolean("fallback", true),
-            )
-        }
 
         fun fromBuildConfig(): TtsConfig {
             val protocol = runCatching {
@@ -166,7 +154,7 @@ object TtsDefaults {
         protocol = TtsProtocol.MIMO,
         model = MODEL,
         voice = VOICE,
-        instructions = "",
+        instructions = INSTRUCTIONS,
         key = key,
     )
 }

@@ -7,9 +7,8 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to attach the APK to (e.g. v0.2.1)"
+        description: "Existing tag to attach the APK to (e.g. vX.Y.Z)"
         required: true
-        default: "v0.2.1"
 
 permissions:
   contents: write
@@ -45,10 +44,15 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Run unit tests
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
+
       # No local.properties on CI, so the build falls back to the debug signing
       # config (see app/build.gradle.kts). That produces an installable APK for
       # device verification; a store-signed build still needs the keystore.
-      # The release variant ships arm64-v8a only, so the APK stays around 50 MiB
+      # The release variant ships arm64-v8a only, so the APK stays around 38 MiB
       # instead of carrying four ABIs' worth of native code.
       - name: Build release APK
         run: |
@@ -81,7 +85,7 @@ jobs:
             echo "::error::no native-code reported; the APK layout changed, check the ABI filter"
             exit 1
           fi
-          if ! echo "$ABIS" | grep -q "native-code: 'arm64-v8a'"; then
+          if ! echo "$ABIS" | grep -qE "native-code:.*'arm64-v8a'"; then
             echo "::error::release APK must contain arm64-v8a (see docs/BUILD.md section 2)"
             exit 1
           fi

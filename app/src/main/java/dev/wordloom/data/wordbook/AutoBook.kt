@@ -34,7 +34,7 @@ enum class AutoBook(
         kicker = "词书 · 自建",
         subtitle = "你亲手存下的词",
         countNote = "词 · 收藏时间",
-        emptyHint = "收藏夹还是空的。在词条页点右上角书签，词就会收进来。",
+        emptyHint = "收藏夹还是空的。在词条页长按右上角书签，词就会收进来。",
     );
 
     companion object {

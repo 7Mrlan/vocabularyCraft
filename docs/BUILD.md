@@ -55,7 +55,8 @@ ndk {
 |---|---|---|
 | v0.1.x（四 ABI，但只有 MapLibre） | 60.1 MiB | |
 | v0.2.0（加了 ML Kit 翻译） | 121.2 MiB | 体积翻倍的原因就在这里 |
-| v0.2.0 之前 + arm64 限制 | **37.7 MiB** | 当前版本 |
+| v0.2.0 之前 + arm64 限制 | 37.7 MiB | 当时的 arm64 版 |
+| v4.0.0（arm64，本地实测） | **38.0 MiB** | 当前版本（39,836,042 字节） |
 
 **规则**：
 
@@ -75,12 +76,15 @@ aapt2 dump badging app/build/outputs/apk/release/app-release.apk | findstr nativ
 
 ## 3. 体积账与体检
 
-当前 release APK（37.7 MiB）的构成：
+> 以下数字来自 v4.0.0 本地出包实测（2026-11-12，见 §2 表）；每次发版后如体积变化明显，
+> 同步更新这里与 `gradle/apk-budget.properties`。
+
+当前 release APK（38.0 MiB，39,836,042 字节）的构成：
 
 | 部分 | 未压缩体积 |
 |---|---|
 | `lib/arm64-v8a/*`（ML Kit + MapLibre） | 28.2 MiB |
-| `classes.dex` + `classes2.dex` + `classes3.dex` | 23.6 MiB |
+| `classes.dex` + `classes2.dex` + `classes3.dex` | 24.0 MiB |
 | `res/` + `assets/` | 0.5 MiB |
 
 想看真实构成，解压统计：
@@ -146,6 +150,7 @@ apksigner verify --verbose --print-certs app/build/outputs/apk/release/app-relea
 - **环境**：GitHub 托管的 `ubuntu-latest`，JDK 17 + Android SDK 35；
 - **产物**：`app/build/outputs/apk/release/app-release.apk`，同时上传为 Actions artifact
   并自动挂到对应的 GitHub Release；
+- **测试**：先跑 `:app:testDebugUnitTest`，通过后才构建 release APK；
 - **门禁**：`Verify APK (ABI rule + size baseline)` 步骤做两类检查，性质不同：
   - **ABI 是硬规则**：用 `aapt2` 读出 APK 的 `native-code`，必须只有 `arm64-v8a`。
     多一个 ABI 就让 CI 失败——因为同一份原生库多打几份是纯浪费，手机只加载自己那份。
@@ -167,11 +172,14 @@ apksigner verify --verbose --print-certs app/build/outputs/apk/release/app-relea
 ## 7. 发布前检查清单
 
 - [ ] `./gradlew :app:assembleDebug` 通过（至少证明能编译）
+- [ ] `./gradlew :app:testDebugUnitTest` 通过
 - [ ] `./gradlew :app:assembleRelease` 通过，产出 `app-release.apk`
 - [ ] `aapt2 dump badging`：versionCode / versionName 正确、`native-code` 只有 `arm64-v8a`
 - [ ] 体积对比 `gradle/apk-budget.properties` 的基线：超了没关系（只是提醒），
       但要能说清多出来的体积花在什么功能上，并在 release notes 里写一句
 - [ ] `apksigner verify`：签名符合预期（debug 或 release keystore）
 - [ ] 真机安装并走一遍：首页、深浅色切换、查词与跳转、复习评分、四选一练习、地图巡航、备份导出/导入
+- [ ] 词书：切换三本内置书与三本自动书，开卷 / 合卷、单元列表、词内状态筛选
+- [ ] 学习卡：四档评分、例句环左右翻页、中文层、撤销、「熟知」、拼写检查
 - [ ] 长按选词翻译：**联网**（有道）与**断网**（ML Kit 端上模型）各试一次
 - [ ] Release 资产已替换：`gh release upload v<version> <apk> --clobber`

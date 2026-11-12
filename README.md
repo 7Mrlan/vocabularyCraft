@@ -9,7 +9,7 @@
 
 ---
 
-## 现在能做什么（v0.2）
+## 现在能做什么（v4）
 
 | 功能 | 状态 |
 |---|---|
@@ -28,9 +28,13 @@
 | FSRS-5 间隔重复复习（四档评分） | ✅ |
 | 本地缓存（30 天 TTL） | ✅ |
 | 词表（新建 / 加词 / 详情带释义 / 移除） | ✅ |
+| 词书（通用核心 / 四六级 / 考研，各 2500–3000 词） | ✅ |
+| 自动词书（查过的词 / 错词本 / 收藏夹） | ✅ |
+| 学习卡（词面四档评分 → 例句环 / 中文层） | ✅ |
+| 拼写检查（本轮「认识 / 秒懂」的词，最多 20 个，结束后可选） | ✅ |
 | 每日一词 | ✅ |
 | 拖拽 / 缩放世界地图（MapLibre + OpenFreeMap，无需 token） | ✅ |
-| 地图自动巡航：每次移动换一张收藏词卡（词随镜头走） | ✅ |
+| 地图自动巡航：每次移动换一张查过的词卡（词随镜头走） | ✅ |
 | 深色模式 | ✅ 全站（词条页有独立的深色调色板，见 `WordLook`） |
 | 离线包 / CSV 导入 | ⬜ 路线图 |
 
@@ -166,7 +170,9 @@ adb shell settings put global http_proxy 10.0.2.2:7890   # 换成你的代理端
 | FSRS 落库 | ✅ `stability=3.173`、`difficulty=5.282`、`due=3 天后`，与公式手算一致 |
 | 地图 | ✅ 瓦片加载、英文标签、自动巡航（欧→东亚镜头移动已验证）、轮播词卡切换 |
 
-> 截图在词书与学习流程完工后统一重拍，现在不保留过期界面图。
+> v4 的词书 / 学习卡 / 拼写尚未补真机验证记录；上表仍是 v0.2 查词链路的记录。
+>
+> v4 的界面截图尚未补拍；过期界面图不保留。
 
 ## 目录结构
 
@@ -178,16 +184,21 @@ app/src/main/java/dev/wordloom/
 │   ├── remote/VocabularyComSource.kt  Vocabulary.com definition.ajax 解析（当前默认）
 │   ├── remote/WiktionarySource.kt     Wiktionary 实现（REST + parse + opensearch，兜底）
 │   ├── local/                         Room：词典缓存 / 复习卡片 / 词表
+│   ├── wordbook/                      三本内置词书 + 三本自动词书的派生
+│   ├── translate/                     有道 / ML Kit 翻译与学习卡中文内容
+│   ├── audio/AudioCache.kt            共享音频缓存与连接池
 │   └── WordRepository.kt              缓存策略 / 收藏 / 复习落库 / 词表 CRUD
 ├── srs/
 │   ├── Fsrs.kt                        FSRS-5 公式
 │   └── Scheduler.kt                   评分 → 下次到期时间
 └── ui/
     ├── theme/                         设计令牌（配色/字体，见 docs/DESIGN.md）
-    ├── components/Waves.kt            波浪分割 / 搜索波纹
+    ├── components/                    波浪 / 公共按钮 / 底部抽屉
     ├── home/ search/ word/ review/    主流程界面
+    ├── books/ study/ quiz/            书架、学习卡与拼写、四选一练习
     ├── lists/                         词表列表 / 详情 / 加词弹窗
     ├── map/                           可拖拽世界地图 + 自动巡航（MapLibre）
+    ├── backup/ feedback/              备份抽屉 / 触感与音效
     └── WordloomViewModel.kt           单一状态源
 ```
 
@@ -198,17 +209,19 @@ app/src/main/java/dev/wordloom/
 | `AGENTS.md` | 给 AI 助手的硬性约定（ABI 策略、依赖卫生、错误语义、深浅色规则） |
 | `docs/DESIGN.md` | 设计系统：配色令牌、字体、动效、图标、深色模式 |
 | `docs/BUILD.md` | 构建、体积与发布：工具链、**为什么 release 只打 arm64-v8a**、签名、CI、发布前检查清单 |
+| `docs/WORDBOOKS.md` | 词书范围、来源与实施记录 |
+| `docs/LEARNING.md` / `docs/LEARNING-2.md` | 背单词系统的调研与设计（历史方案，部分未实现） |
 | `RESEARCH.md` | 早期可行性研究（存档，非当前实现） |
 
 ## 发布
 
-1. 改 `app/build.gradle.kts`：`versionCode` +1，`versionName` 升一个补丁位（0.2.0 → 0.2.1）
+1. 改 `app/build.gradle.kts`：`versionCode` +1，`versionName` 升一个补丁位（4.0.0 → 4.0.1）
 2. `./gradlew :app:assembleRelease`（签名读 `local.properties`，缺省回退 debug 签名）
 3. `gh release create v<versionName> app/build/outputs/apk/release/app-release.apk`
 4. 若只是替换已有版本的资产：`gh release upload v<versionName> <apk> --clobber`
 
 > **release 只打 arm64-v8a**（debug 仍是全 ABI，模拟器可用）。MapLibre 与 ML Kit 翻译各带
-> 一份原生库，单 ABI 合计约 28 MiB；四个 ABI 全塞进一个 APK 会让包体从 ~50 MiB 涨到 ~117 MiB，
+> 一份原生库，单 ABI 合计约 28 MiB（v4.0.0 实测 APK 38.0 MiB）；四个 ABI 全塞进一个 APK 会让包体涨到 ~117 MiB，
 > 而手机只加载其中一份。需要 32 位旧机时把 `abiFilters` 加上 `armeabi-v7a`，需要模拟器时用 debug 包。
 >
 > 仓库里还有 `.github/workflows/release.yml`：推送 `v*` 标签即可在 GitHub 云端构建并上传 APK。
@@ -217,11 +230,13 @@ app/src/main/java/dev/wordloom/
 
 1. **CSV 导入词表**：粘贴 / 选文件导入，去重后批量落库
 2. **离线包**：预打包 WordNet 子集（约 10 万词），无网可查
-3. **发布准备**：补充 LICENSE、切回 Wiktionary 数据源、隐私说明（无采集）
+3. **发布准备**：切回 Wiktionary 数据源、隐私说明（无采集）
 
 ## 许可
 
-- 应用代码：MIT
+- 应用代码：MIT（见 [LICENSE](LICENSE)）
+- 内置词表：NGSL 1.2（CC BY-SA 4.0，Browne / Culligan / Phillips），首页底部保留署名；
+  CET / 考研大纲只取词形，不带原表释义
 - 词典正文：**不随仓库分发**。默认 Vocabulary.com 源为个人自用，正文版权归 IXL Learning；
   公开发布请切到 `WiktionarySource`（CC BY-SA 4.0）
 - 音频：`audio.vocabulary.com`（Vocabulary.com 源）/ Wikimedia Commons（Wiktionary 源）

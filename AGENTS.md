@@ -10,7 +10,7 @@ Wordloom：本地优先的英英词典 + FSRS 间隔重复复习 App（Android /
 ```bash
 ./gradlew :app:assembleDebug          # 编译验证
 ./gradlew :app:assembleRelease        # 出包（release 只打 arm64-v8a）
-./gradlew :app:assembleDebug --tests  # 单元测试（若新增）
+./gradlew :app:testDebugUnitTest      # 单元测试
 ```
 
 工作分支是 `animation`，**不要直接改 `main`**；改动先落在 `animation`，验证后由维护者合并。

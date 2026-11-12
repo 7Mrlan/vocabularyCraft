@@ -24,4 +24,4 @@ python3 tools/wordbooks/build_wordbooks.py
 - NGSL 1.2 stats — https://www.newgeneralservicelist.com/new-general-service-list
 - CET-4 / CET-6 / 考研 / COCA 20000 — https://github.com/mahavivo/english-wordlists
 
-NGSL 采用 CC BY-SA 4.0，应用内「关于」与 README 都要保留署名。
+NGSL 采用 CC BY-SA 4.0，应用内首页底部与 README 都要保留署名。

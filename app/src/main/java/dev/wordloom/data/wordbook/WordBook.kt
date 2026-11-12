@@ -55,8 +55,4 @@ class WordBookStore(private val context: Context) {
             .bufferedReader()
             .use { WordLists.parse(it.readText()) }
     }
-
-    @Synchronized
-    fun unit(book: WordBook, unitIndex: Int): List<String> =
-        WordLists.unit(words(book), unitIndex)
 }

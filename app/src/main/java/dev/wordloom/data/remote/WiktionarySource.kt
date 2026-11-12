@@ -415,7 +415,7 @@ class WiktionarySource(
 
     companion object {
         private const val USER_AGENT =
-            "Wordloom/0.2.1 (https://github.com/7Mrlan/vocabularyCraft-) OkHttp"
+            "Wordloom (https://github.com/7Mrlan/vocabularyCraft-) OkHttp"
 
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)

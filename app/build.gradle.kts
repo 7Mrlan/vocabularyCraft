@@ -15,6 +15,17 @@ val localProps = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }
 
+// Local TTS bootstrap is debug-only; the release variant gets empty strings so a
+// key typed into local.properties can never be compiled into a published APK.
+val ttsKeys = listOf("endpoint", "protocol", "model", "voice", "instructions", "key")
+
+// Local-only switch for a TTS test APK: ./gradlew :app:assembleRelease -PttsLocal
+// Normal release builds (and CI) keep every TTS field empty.
+val ttsLocal = project.hasProperty("ttsLocal")
+
+fun String.buildConfigString(): String =
+    "\"" + replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\""
+
 android {
     namespace = "dev.wordloom"
     compileSdk = 35
@@ -23,8 +34,8 @@ android {
         applicationId = "dev.wordloom"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "4.0.0"
+        versionCode = 14
+        versionName = "4.1"
     }
 
     signingConfigs {
@@ -40,7 +51,32 @@ android {
     }
 
     buildTypes {
+        debug {
+            ttsKeys.forEach { key ->
+                buildConfigField(
+                    "String",
+                    "TTS_${key.uppercase()}",
+                    localProps.getProperty("wordloom.tts.$key").orEmpty().buildConfigString(),
+                )
+            }
+            // Debug is arm64-only too; the x86 emulator is not used on this
+            // machine, and four ABI copies made every debug APK 122 MiB.
+            ndk {
+                abiFilters += listOf("arm64-v8a")
+            }
+        }
         release {
+            ttsKeys.forEach { key ->
+                buildConfigField(
+                    "String",
+                    "TTS_${key.uppercase()}",
+                    if (ttsLocal) {
+                        localProps.getProperty("wordloom.tts.$key").orEmpty().buildConfigString()
+                    } else {
+                        "\"\""
+                    },
+                )
+            }
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = if (localProps.getProperty("wordloom.storeFile") != null) {
@@ -48,11 +84,10 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
-            // Release builds go to real phones, and every phone since 2017 is
-            // arm64. MapLibre (12.6 MiB) and ML Kit translate (15.6 MiB) ship
-            // native code per ABI: bundling all four ABIs took the APK from
-            // 60 MiB to 117 MiB for nothing — a phone only ever loads one.
-            // Debug keeps every ABI so the x86 emulator still works.
+            // Every build type is arm64-only: MapLibre and ML Kit ship native
+            // code per ABI, and bundling four copies took the APK from ~38 MiB
+            // to 122 MiB for nothing — a phone only ever loads one. If an x86
+            // emulator is ever needed again, remove the filter for that build.
             ndk {
                 abiFilters += listOf("arm64-v8a")
             }
@@ -70,6 +105,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {

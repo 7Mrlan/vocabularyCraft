@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.random.Random
 
+private const val DEFAULT_VOLUME = 0.60f
+
 enum class Sound(@RawRes val res: Int, val gain: Float) {
     Easy(R.raw.grade_easy, 0.62f),
     Good(R.raw.grade_good, 0.55f),
@@ -23,7 +25,7 @@ enum class Sound(@RawRes val res: Int, val gain: Float) {
 
 data class SoundSettings(
     val enabled: Boolean = true,
-    val volume: Float = 0.60f,
+    val volume: Float = DEFAULT_VOLUME,
     val ratings: Boolean = true,
     val spelling: Boolean = true,
     val quiz: Boolean = true,
@@ -118,7 +120,7 @@ class SoundService private constructor(context: Context) {
 
     private fun load(): SoundSettings = SoundSettings(
         enabled = prefs.getBoolean(KEY_ENABLED, true),
-        volume = prefs.getFloat(KEY_VOLUME, 0.60f).coerceIn(0f, 1f),
+        volume = prefs.getFloat(KEY_VOLUME, DEFAULT_VOLUME).coerceIn(0f, 1f),
         ratings = prefs.getBoolean(KEY_RATINGS, true),
         spelling = prefs.getBoolean(KEY_SPELLING, true),
         quiz = prefs.getBoolean(KEY_QUIZ, true),

@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.wordloom.data.tts.TtsConfig
+import dev.wordloom.data.tts.TtsDraft
 import dev.wordloom.data.tts.TtsDefaults
 import dev.wordloom.data.tts.TtsProtocol
 import dev.wordloom.data.tts.TtsResult
@@ -82,24 +83,15 @@ internal fun TtsSetupPage(
     var message by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf(false) }
 
-    fun draft(): TtsConfig = TtsConfig(
-        endpoint = endpoint.trim(),
+    fun draft(): TtsDraft = TtsDraft(
+        endpoint = endpoint,
         protocol = protocol,
-        model = model.trim(),
-        voice = voice.trim(),
-        instructions = instructions.trim(),
-        key = key.trim(),
+        model = model,
+        voice = voice,
+        instructions = instructions,
+        key = key,
         fallback = status.fallback,
     )
-
-    fun validate(config: TtsConfig): String? {
-        if (config.endpoint.isBlank()) return "请填写接口地址"
-        if (config.model.isBlank()) return "请填写模型名称"
-        if (config.key.isBlank() && !status.hasKey) return "请填写 API 密钥"
-        if (config.protocol == TtsProtocol.OPENAI && config.voice.isBlank()) return "请填写声音名称"
-        if (config.voiceDesign && config.instructions.isBlank()) return "请填写音色描述"
-        return null
-    }
 
     Column(
         modifier = Modifier
@@ -225,7 +217,7 @@ internal fun TtsSetupPage(
                 modifier = Modifier.weight(1f),
                 onClick = {
                     val candidate = draft()
-                    validate(candidate)?.let {
+                    candidate.validate(status.hasKey)?.let {
                         failed = true
                         message = it
                         return@SetupAction
@@ -233,7 +225,7 @@ internal fun TtsSetupPage(
                     busy = true
                     failed = false
                     message = "正在合成试听…"
-                    onTest(candidate, TtsDefaults.PREVIEW) { result ->
+                    onTest(candidate.toConfig(), TtsDefaults.PREVIEW) { result ->
                         busy = false
                         failed = result.isFailure
                         message = result.fold(
@@ -253,7 +245,7 @@ internal fun TtsSetupPage(
                 modifier = Modifier.weight(1.15f),
                 onClick = {
                     val candidate = draft()
-                    validate(candidate)?.let {
+                    candidate.validate(status.hasKey)?.let {
                         failed = true
                         message = it
                         return@SetupAction
@@ -261,7 +253,7 @@ internal fun TtsSetupPage(
                     busy = true
                     failed = false
                     message = null
-                    onSave(candidate) { result ->
+                    onSave(candidate.toConfig()) { result ->
                         busy = false
                         result.fold(
                             onSuccess = {

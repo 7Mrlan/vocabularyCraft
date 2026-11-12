@@ -39,8 +39,14 @@ class TtsConfigStore(context: Context) {
         }.getOrNull()
     }
 
-    fun save(config: TtsConfig) = synchronized(lock) {
-        require(config.enabled) { "AI 朗读配置不完整，请检查接口、模型和密钥" }
+    fun save(config: TtsConfig, allowKeyless: Boolean = false) = synchronized(lock) {
+        if (!allowKeyless) {
+            require(config.enabled) { "AI 朗读配置不完整，请检查接口、模型和密钥" }
+        } else {
+            require(config.endpoint.isNotBlank() && config.model.isNotBlank()) {
+                "AI 朗读配置不完整，请检查接口和模型"
+            }
+        }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
         val bytes = cipher.iv + cipher.doFinal(TtsConfig.encode(config).toByteArray(Charsets.UTF_8))

@@ -36,7 +36,6 @@ data class TtsStatus(
     val protocol: String,
     val model: String,
     val voice: String,
-    val voiceDesign: Boolean,
     val instructions: String,
     val hasKey: Boolean,
     val fallback: Boolean = true,
@@ -66,7 +65,11 @@ class SpeechService(
     private var player: MediaPlayer? = null
 
     @Volatile
-    private var config: TtsConfig = store.load()?.takeIf { it.enabled } ?: bootstrap
+    private var config: TtsConfig = store.load() ?: bootstrap
+
+    /** The last synthesis failure, shown when the recorded fallback is off. */
+    @Volatile
+    private var lastError: String? = null
 
     init {
         scope.launch(Dispatchers.IO) { TtsCache.prune(directory) }
@@ -80,8 +83,7 @@ class SpeechService(
             endpoint = config.endpoint,
             protocol = config.protocol.name,
             model = config.model,
-            voice = if (config.voiceDesign) "voicedesign" else config.voice,
-            voiceDesign = config.voiceDesign,
+            voice = config.voice,
             instructions = config.instructions,
             hasKey = config.key.isNotBlank(),
             fallback = config.fallback,
@@ -187,18 +189,22 @@ class SpeechService(
         stopPlayer()
         job = scope.launch {
             onState(SpeechState.Loading)
-            val request = config.requestText(text)
-            var synthesized = if (enabled) prepare(request) else null
+            var synthesized = if (enabled) prepare(text) else null
             if (synthesized == null && enabled) {
                 // One retry: transient network failures are the common case.
-                synthesized = prepare(request, force = true)
+                synthesized = prepare(text, force = true)
             }
             if (synthesized != null) {
                 playFile(synthesized, "AI", onState)
                 return@launch
             }
             if (enabled && !config.fallback) {
-                onState(SpeechState.Failed("朗读失败，可重试"))
+                val reason = lastError?.takeIf { it.isNotBlank() }
+                onState(
+                    SpeechState.Failed(
+                        if (reason != null) "朗读失败：$reason" else "朗读失败，可重试",
+                    ),
+                )
                 return@launch
             }
             val fallback = fallbackUrl?.takeIf { it.isNotBlank() }?.let { audioCache.fetch(it) }
@@ -210,11 +216,19 @@ class SpeechService(
         }
     }
 
-    /** Forget the stored key (the rest of the configuration is kept). */
-    fun forgetKey() {
+    /**
+     * Forget the stored key and keep the rest of the configuration. A keyless
+     * config is still written, so the endpoint, model and voice survive the
+     * next launch; synthesis simply stays disabled until a new key is entered.
+     */
+    fun forgetKey(): Boolean {
         stop()
-        runCatching { store.clear() }
-        config = config.copy(key = "")
+        val cleared = config.copy(key = "")
+        val saved = runCatching { store.save(cleared, allowKeyless = true) }
+            .onFailure { android.util.Log.w("Wordloom", "clear TTS key failed", it) }
+            .isSuccess
+        config = cleared
+        return saved
     }
 
     fun stop() {
@@ -258,7 +272,8 @@ class SpeechService(
                 } catch (cancelled: CancellationException) {
                     temporary.delete()
                     throw cancelled
-                } catch (_: Throwable) {
+                } catch (error: Throwable) {
+                    lastError = error.message
                     temporary.delete()
                     null
                 }

@@ -10,11 +10,12 @@
 - **设计模板的单词补句号**：单个词在发送前加 `.`（`record` → `record.`），给生成式语音一个句子边界；句子与短语不动，预置模板按原文发送。
 - **失败回退是配置项**：默认开（合成失败用真人录音）；关闭后只用 AI 声音，失败提示并重试一次；未配置 key 时行为与以前一致。
 - **设计描述始终保留**：预置模板保存时也把描述存进配置，但预置请求不发送它（预置音色不接受描述）；切回设计模板时原样恢复。
-- **保留 design 音色**：`mimo-v2.5-tts-voicedesign` + 用户原来的中文 instructions
-  （“温润知性的成熟女声，中低音，音色干净，吐字清晰，语速从容，句末自然下落，不过分甜。”）。
-- **预取 + 磁盘缓存**优先于流式；热路径一次请求，失败快速回退，不做 4 次重试。
+- **design 音色保留为第二套模板**：`mimo-v2.5-tts-voicedesign` + 用户原来的中文 instructions
+  （“温润知性的成熟女声，中低音，音色干净，吐字清晰，语速从容，句末自然下落，不过分甜。”），
+  但不再是默认；默认是预置英文音色。
+- **预取 + 磁盘缓存**优先于流式；合成失败重试一次，然后按回退配置处理。
 - **最终 release 不含 key**；可配置 TTS 必须在应用内完成（加密存储），不能把 key 编进 APK。
-- 试听/测试抽屉已从产品 UI 移除；不再保留 `testTts`、`VoiceSheet`、旧测试 APK。
+- 试听只在「声音」页与首启引导里，没有独立的测试抽屉；引导页的 `testTts` 仅用于配置时试听。
 
 ## 2. MiMo 官方模型与音色
 
@@ -67,11 +68,13 @@
 
 - **非流式延迟差距很小**，网络波动大于模型差异；用户喜欢的 design 音色可以保留。
 - 真正拉开差距的是流式首包。design 无法有效流式；要首次 <1 s 只能换 `mimo-v2.5-tts` 的英文预置音色（Mia/Milo/Dean）+ `pcm16`。
-- 当前选择：**design + 预取/缓存**；首次冷合成约 1.8 s，之后命中缓存接近 0。
+- 当前默认：**预置英文音色 + 预取/缓存**；design 仍可在声音页切回。首次冷合成约 1.9 s，之后命中缓存接近 0。
 
 ## 4. 当前实现（4.1，工作区）
 
-- `data/tts/TtsConfig.kt`：endpoint / protocol / model / voice / instructions / key；MIMO/OpenAI 请求体；URL 归一化。
+- `data/tts/TtsConfig.kt`：endpoint / protocol / model / voice / instructions / key / fallback；
+  MIMO/OpenAI 请求体；URL 归一化；`requestText()`（设计模板单字补句号）；
+  `TtsDraft`（两个配置页共用的转换与校验）；加密存储用 kotlinx.serialization。
 - `data/tts/TtsClient.kt`：一次请求，无重试；MiMo JSON/base64 音频解析；WAV/MP3 校验；10/30/45 s 超时。
 - `data/tts/TtsConfigStore.kt`：Android Keystore AES/GCM + `AtomicFile`，文件 `filesDir/tts.encrypted`；
   key 只在这里落盘，且已在 `backup_rules.xml` / `data_extraction_rules.xml` 中排除出云备份与设备迁移。
@@ -106,19 +109,22 @@
 - 连接/试听错误要像 ebook 的 `safeAiSpeechTestMessage` 一样打码（Bearer、sk-、用户 key）；
   当前错误信息只来自 `TtsClient` 的状态码/简短原因，不回显请求头或 key。
 
-### 5.2 应用内配置 UI（✅ 朗读页；⏳ 音效页）
+### 5.2 应用内配置 UI（✅ 朗读页与音效页）
 
-- 已实现「声音」底部抽屉的朗读页：引擎（MiMo / OpenAI 兼容）、endpoint、model、voice、
-  instructions、key、试听、保存；默认值按 MiMo voicedesign 推荐音色。
-- 入口：首页品牌行「收纳 → 声音」；首次引导后续直接复用此页。
-- 音效页仍待做：总音量、评分/拼写/练习/书架开关、安静模式、恢复默认；与朗读页共用同一个 sheet。
+- 「声音」底部抽屉：顶部「朗读方式」下拉（预置英文音色 / 设计音色）与「音色」下拉
+  （Chloe / Mia / Milo / Dean）；引擎（MiMo / OpenAI 兼容）、endpoint、key、
+  「合成失败时使用真人录音」开关；试听文本可编辑并带六个同形异读快选。
+- 密钥状态行（已保存 / 未配置）与「清除」；保存后短暂显示「已保存」。
+- 音效页：总音量（墨色滑杆）、评分/拼写/练习/书架分组开关、分组试听、恢复默认。
+- 入口：首页品牌行「收纳 → 声音」；首次引导第 2 屏配置朗读。
 - 视觉：纸面、衬线标题、细墨线、圆形墨色按钮；没有 Material 灰色设置面板。
 
 ### 5.3 播放与预取
 
 - ✅ 配置变化 → 缓存 key 变化（含 `tts-v2` 格式版本与补句号后的文本），旧缓存自然失效。
 - ✅ 预取：书内页前 3 词、队列前 3 词、当前词 + 前 5 例句；并发 2；in-flight 去重。
-- ✅ 失败状态：`Loading / Playing / Failed`；失败一次后回退到旧 URL，不静默。
+- ✅ 失败状态：`Loading / Playing / Failed`；重试一次后，按「合成失败时使用真人录音」
+  决定回退旧 URL 还是提示失败（提示里带服务端原因，如 401 / 超时）。
 - ✅ 缓存：128 MiB LRU；命中时刷新最近使用时间，正在写入/试听/测试的临时文件不参与清理。
 - ✅ 音频焦点：`AudioFocus` 请求 transient focus；来电或其他播放器接管时停止当前 clip，
   播放结束/取消立即 abandon。
@@ -127,7 +133,7 @@
 
 ### 5.4 英文质量
 
-- design 音色是用户偏好；英文是否口音由用户试听决定。
+- 预置英文音色为默认；design 音色是用户偏好，英文是否口音由用户试听决定。
 - 若需要稳定英文母语感：用 `mimo-v2.5-tts + Chloe/Mia`，或保留 design 音色但加
   “native English pronunciation” 的英文补充指令（需实测音色是否漂移）。
 - 单词真人录音仍可作为兜底；但用户已决定 AI 优先。

@@ -51,6 +51,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.wordloom.data.audio.Sound
 import dev.wordloom.data.audio.SoundService
 import dev.wordloom.data.tts.TtsConfig
+import dev.wordloom.data.tts.TtsDraft
 import dev.wordloom.data.tts.TtsDefaults
 import dev.wordloom.data.tts.TtsProtocol
 import dev.wordloom.data.tts.TtsStatus
@@ -128,45 +129,36 @@ fun VoiceSettingsSheet(
 
     val hasKey = status.hasKey && !keyCleared
 
-    fun draft(): TtsConfig = when {
-        protocol == TtsProtocol.OPENAI -> TtsConfig(
-            endpoint = endpoint.trim(),
+    fun draft(): TtsDraft = when {
+        protocol == TtsProtocol.OPENAI -> TtsDraft(
+            endpoint = endpoint,
             protocol = protocol,
-            model = openAiModel.trim(),
-            voice = openAiVoice.trim(),
-            instructions = designInstructions.trim(),
-            key = key.trim(),
+            model = openAiModel,
+            voice = openAiVoice,
+            instructions = designInstructions,
+            key = key,
             fallback = fallback,
         )
-        template == TtsTemplate.Preset -> TtsConfig(
-            endpoint = endpoint.trim(),
+        template == TtsTemplate.Preset -> TtsDraft(
+            endpoint = endpoint,
             protocol = TtsProtocol.MIMO,
             model = TtsDefaults.PRESET_MODEL,
             voice = presetVoice,
             // Kept even though the preset request ignores it, so switching back
             // to Design restores the description instead of the default.
-            instructions = designInstructions.trim(),
-            key = key.trim(),
+            instructions = designInstructions,
+            key = key,
             fallback = fallback,
         )
-        else -> TtsConfig(
-            endpoint = endpoint.trim(),
+        else -> TtsDraft(
+            endpoint = endpoint,
             protocol = TtsProtocol.MIMO,
             model = TtsConfig.VOICE_DESIGN_MODEL,
             voice = "",
-            instructions = designInstructions.trim(),
-            key = key.trim(),
+            instructions = designInstructions,
+            key = key,
             fallback = fallback,
         )
-    }
-
-    fun validate(config: TtsConfig): String? {
-        if (config.endpoint.isBlank()) return "请填写接口地址"
-        if (config.model.isBlank()) return "请填写模型名称"
-        if (config.key.isBlank() && !hasKey) return "请填写 API 密钥"
-        if (config.protocol == TtsProtocol.OPENAI && config.voice.isBlank()) return "请填写声音名称"
-        if (config.voiceDesign && config.instructions.isBlank()) return "请填写音色描述"
-        return null
     }
 
     WlSheet(onDismiss = onDismiss) {
@@ -405,7 +397,7 @@ fun VoiceSettingsSheet(
                         .weight(1f)
                         .wlPress(enabled = !busy) {
                             val candidate = draft()
-                            validate(candidate)?.let {
+                            candidate.validate(hasKey)?.let {
                                 failed = true
                                 message = it
                                 return@wlPress
@@ -418,7 +410,7 @@ fun VoiceSettingsSheet(
                             busy = true
                             message = "正在合成试听…"
                             failed = false
-                            onPreview(candidate, previewText) { result ->
+                            onPreview(candidate.toConfig(), previewText) { result ->
                                 busy = false
                                 failed = result.isFailure
                                 message = result.fold(
@@ -443,7 +435,7 @@ fun VoiceSettingsSheet(
                         .weight(1.15f)
                         .wlPress(enabled = !busy && !saved) {
                             val candidate = draft()
-                            validate(candidate)?.let {
+                            candidate.validate(hasKey)?.let {
                                 failed = true
                                 message = it
                                 return@wlPress
@@ -451,7 +443,7 @@ fun VoiceSettingsSheet(
                             busy = true
                             failed = false
                             message = null
-                            onSave(candidate) { result ->
+                            onSave(candidate.toConfig()) { result ->
                                 busy = false
                                 result.fold(
                                     onSuccess = {

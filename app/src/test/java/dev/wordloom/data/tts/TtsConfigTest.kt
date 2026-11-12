@@ -63,8 +63,22 @@ class TtsConfigTest {
     }
 
     @Test
-    fun `template is derived from the model`() {
-        assertEquals(TtsTemplate.Design, design().template)
-        assertEquals(TtsTemplate.Preset, preset().template)
+    fun `draft validation matches what the service will accept`() {
+        val draft = TtsDraft(
+            endpoint = "https://example.com/v1",
+            protocol = TtsProtocol.MIMO,
+            model = TtsDefaults.PRESET_MODEL,
+            voice = TtsDefaults.VOICE,
+            instructions = "",
+            key = "",
+        )
+        assertEquals("请填写 API 密钥", draft.validate(hasSavedKey = false))
+        assertEquals(null, draft.validate(hasSavedKey = true))
+
+        val design = draft.copy(model = TtsConfig.VOICE_DESIGN_MODEL, instructions = "")
+        assertEquals("请填写音色描述", design.validate(hasSavedKey = true))
+
+        val openAi = draft.copy(protocol = TtsProtocol.OPENAI, voice = "")
+        assertEquals("请填写声音名称", openAi.validate(hasSavedKey = true))
     }
 }

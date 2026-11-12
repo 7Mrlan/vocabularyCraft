@@ -33,9 +33,6 @@ data class TtsConfig(
     val voiceDesign: Boolean
         get() = protocol == TtsProtocol.MIMO && model == VOICE_DESIGN_MODEL
 
-    val template: TtsTemplate
-        get() = if (voiceDesign) TtsTemplate.Design else TtsTemplate.Preset
-
     /**
      * The text the service actually receives (and the cache is keyed on).
      *
@@ -135,7 +132,6 @@ data class TtsConfig(
 object TtsDefaults {
     const val ENDPOINT = "https://api.xiaomimimo.com/v1"
     const val PRESET_MODEL = "mimo-v2.5-tts"
-    const val DESIGN_MODEL = TtsConfig.VOICE_DESIGN_MODEL
     const val MODEL = PRESET_MODEL
     const val VOICE = "Chloe"
     val VOICES = listOf(
@@ -149,12 +145,42 @@ object TtsDefaults {
     const val PREVIEW = "Never make your students feel ignorant."
     val PREVIEW_WORDS = listOf("record", "read", "lead", "close", "use", "live")
 
-    fun recommended(key: String = "") = TtsConfig(
-        endpoint = ENDPOINT,
-        protocol = TtsProtocol.MIMO,
-        model = MODEL,
-        voice = VOICE,
-        instructions = INSTRUCTIONS,
-        key = key,
+}
+
+/**
+ * The editable state of both TTS setup screens. Keeping the conversion and the
+ * validation here is what stops the sheet and the onboarding page from slowly
+ * disagreeing about what a valid config is.
+ */
+data class TtsDraft(
+    val endpoint: String,
+    val protocol: TtsProtocol,
+    val model: String,
+    val voice: String,
+    val instructions: String,
+    val key: String,
+    val fallback: Boolean = true,
+) {
+    fun toConfig(): TtsConfig = TtsConfig(
+        endpoint = endpoint.trim(),
+        protocol = protocol,
+        model = model.trim(),
+        voice = voice.trim(),
+        instructions = instructions.trim(),
+        key = key.trim(),
+        fallback = fallback,
     )
+
+    fun validate(hasSavedKey: Boolean): String? {
+        if (endpoint.isBlank()) return "请填写接口地址"
+        if (model.isBlank()) return "请填写模型名称"
+        if (key.isBlank() && !hasSavedKey) return "请填写 API 密钥"
+        if (protocol == TtsProtocol.OPENAI && voice.isBlank()) return "请填写声音名称"
+        if (protocol == TtsProtocol.MIMO && model == TtsConfig.VOICE_DESIGN_MODEL &&
+            instructions.isBlank()
+        ) {
+            return "请填写音色描述"
+        }
+        return null
+    }
 }

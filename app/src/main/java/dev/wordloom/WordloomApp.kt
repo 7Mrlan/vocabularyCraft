@@ -7,6 +7,9 @@ import dev.wordloom.data.remote.DictionarySource
 import dev.wordloom.data.remote.VocabularyComSource
 import dev.wordloom.data.audio.AudioCache
 import dev.wordloom.data.translate.TranslationService
+import dev.wordloom.data.tts.SpeechService
+import dev.wordloom.data.tts.TtsConfig
+import dev.wordloom.data.tts.TtsConfigStore
 import dev.wordloom.data.wordbook.WordBookSelection
 import dev.wordloom.data.wordbook.WordBookStore
 
@@ -21,6 +24,16 @@ class AppContainer(app: Application) {
     val bookSelection = WordBookSelection(app)
     // Shared with the speaker buttons so all clip downloads use one queue.
     val audioCache = AudioCache.shared(app)
+
+    // Debug builds may bootstrap a local TTS endpoint from local.properties;
+    // release builds get empty BuildConfig values and never read that file.
+    // The encrypted store is the real source and always wins when present.
+    val speech = SpeechService(
+        app,
+        TtsConfig.fromBuildConfig(),
+        TtsConfigStore(app),
+        audioCache,
+    )
 }
 
 class WordloomApp : Application() {

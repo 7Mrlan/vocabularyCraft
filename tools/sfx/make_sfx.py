@@ -55,7 +55,7 @@ def soft_tick(dur: float, amp: float, cutoff: float) -> list[float]:
         t = i / SR
         env = math.exp(-42.0 * t)
         out[i] = amp * env * y
-    return out
+    return master(out, peak=0.28)
 
 
 def mix(*parts: tuple[list[float], float]) -> list[float]:

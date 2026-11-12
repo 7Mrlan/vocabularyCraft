@@ -66,6 +66,10 @@ class SpeechService(
     @Volatile
     private var config: TtsConfig = store.load()?.takeIf { it.enabled } ?: bootstrap
 
+    init {
+        scope.launch(Dispatchers.IO) { TtsCache.prune(directory) }
+    }
+
     val enabled: Boolean get() = config.enabled
 
     val status: TtsStatus
@@ -197,7 +201,11 @@ class SpeechService(
         if (!enabled || text.isBlank()) return null
         val key = cacheKey(text)
         val target = File(directory, "$key.${config.extension}")
-        if (!force && target.isFile && target.length() > 0) return target
+        if (!force && target.isFile && target.length() > 0) {
+            // Refresh LRU position without changing the clip.
+            target.setLastModified(System.currentTimeMillis())
+            return target
+        }
 
         val existing = if (!force) inFlight[key] else null
         if (existing != null) return existing.await()
@@ -213,6 +221,7 @@ class SpeechService(
                         temporary.copyTo(target, overwrite = true)
                         temporary.delete()
                     }
+                    TtsCache.prune(directory, keep = target)
                     target
                 } catch (cancelled: CancellationException) {
                     temporary.delete()

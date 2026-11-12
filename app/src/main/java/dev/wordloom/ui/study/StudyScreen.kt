@@ -13,7 +13,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -112,7 +112,6 @@ import dev.wordloom.data.translate.StudyDetails
 import dev.wordloom.data.tts.SpeechState
 import dev.wordloom.data.translate.StudyExample
 import dev.wordloom.srs.Rating
-import dev.wordloom.ui.components.SpeakerButton
 import dev.wordloom.ui.components.rememberAudioPlayer
 import dev.wordloom.ui.feedback.rememberAppFeedback
 import dev.wordloom.ui.voice.LocalSpeechActions
@@ -121,7 +120,6 @@ import dev.wordloom.ui.voice.SpeechButton
 import dev.wordloom.ui.theme.SerifFamily
 import dev.wordloom.ui.theme.wlPress
 import dev.wordloom.ui.theme.WordloomTheme
-import kotlin.math.abs
 import kotlin.math.min
 
 private enum class Layer { Word, English, Chinese }
@@ -671,7 +669,11 @@ private fun ReviewOverlay(
                         )
                         Spacer(Modifier.width(8.dp))
                         entry.audio.firstOrNull()?.let { clip ->
-                            SpeakerButton(url = clip.url, modifier = Modifier.size(30.dp))
+                            SpeechButton(
+                                text = word,
+                                fallbackUrl = clip.url,
+                                modifier = Modifier.size(30.dp),
+                            )
                         }
                     }
                     entry.ipa.firstOrNull()?.let { ipa ->
@@ -871,46 +873,24 @@ private fun StudyCard(
         val cardWidth = minOf(maxWidth * 0.92f, 360.dp)
         val cardHeight = minOf(maxHeight * 0.88f, 500.dp)
 
+        // Horizontal only. The Chinese/English switch is a button, so a
+        // vertical scroll can never be mistaken for a layer change and the
+        // first diagonal movement never locks the card out of paging.
         val cardGestures = Modifier.pointerInput(item.word, layer, pageCount) {
-            var totalX = 0f
-            var totalY = 0f
-            var axis = 0
-            detectDragGestures(
+            if (layer != Layer.English) return@pointerInput
+            detectHorizontalDragGestures(
                 onDragStart = { position ->
-                    totalX = 0f
-                    totalY = 0f
-                    axis = 0
                     // A new touch owns the offset; never fight a running settle.
                     ring.job?.cancel()
                     gestureVelocity.resetTracking()
                     gestureVelocity.addPosition(android.os.SystemClock.uptimeMillis(), position)
                 },
-                onDrag = { change, amount ->
-                    totalX += amount.x
-                    totalY += amount.y
+                onHorizontalDrag = { change, amount ->
                     gestureVelocity.addPosition(change.uptimeMillis, change.position)
-                    // Decide on the first movement past the touch slop. A second
-                    // 14dp threshold here is what made the card feel stuck.
-                    if (axis == 0 && (totalX != 0f || totalY != 0f)) {
-                        axis = if (abs(totalX) >= abs(totalY)) 1 else 2
-                    }
-                    if (axis == 1 && layer == Layer.English) {
-                        change.consume()
-                        ring.offset = (ring.offset + amount.x).coerceIn(-ring.width, ring.width)
-                    }
+                    change.consume()
+                    ring.offset = (ring.offset + amount).coerceIn(-ring.width, ring.width)
                 },
-                onDragEnd = {
-                    val t = 56.dp.toPx()
-                    if (axis == 1 && layer == Layer.English) {
-                        settleRing()
-                    } else if (axis == 2) {
-                        if (totalY < -t && layer == Layer.English) {
-                            layer = Layer.Chinese
-                        } else if (totalY > t && layer == Layer.Chinese) {
-                            layer = Layer.English
-                        }
-                    }
-                },
+                onDragEnd = { settleRing() },
                 onDragCancel = { ring.offset = 0f },
             )
         }
@@ -1840,8 +1820,9 @@ private fun SpellingRound(
                         )
                         Spacer(Modifier.width(8.dp))
                         entry.audio.firstOrNull()?.let { clip ->
-                            SpeakerButton(
-                                url = clip.url,
+                            SpeechButton(
+                                text = entry.word,
+                                fallbackUrl = clip.url,
                                 modifier = Modifier.size(28.dp),
                             )
                         }

@@ -11,26 +11,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.graphicsLayer
-import dev.wordloom.ui.theme.WlMotion
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
@@ -40,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import dev.wordloom.data.audio.AudioCache
+import dev.wordloom.data.audio.AudioFocus
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -90,70 +76,6 @@ fun SearchPill(
     }
 }
 
-@Composable
-fun SpeakerButton(url: String, modifier: Modifier = Modifier) {
-    val player = rememberAudioPlayer()
-    val wl = WordloomTheme.colors
-    var playing by remember { mutableStateOf(false) }
-    // Pull the clip while the card is being read, so the first tap has nothing
-    // to download.
-    LaunchedEffect(url) { player.prefetch(url) }
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
-        targetValue = if (pressed) 0.90f else 1f,
-        animationSpec = WlMotion.press,
-        label = "speakerPress",
-    )
-    val pulse = if (playing) {
-        // Only animate while a clip is actually playing. An always-running
-        // infinite transition here used to tick on every visible speaker button,
-        // so a study card with three pages kept the UI thread busy every frame.
-        val transition = rememberInfiniteTransition(label = "speakerPlaying")
-        val value by transition.animateFloat(
-            initialValue = 1f,
-            targetValue = 1.12f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 480, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "speakerWave",
-        )
-        value
-    } else {
-        1f
-    }
-
-    Box(
-        modifier = modifier
-            .size(34.dp)
-            .graphicsLayer {
-                val s = pressScale * if (playing) pulse else 1f
-                scaleX = s
-                scaleY = s
-            }
-            .background(
-                if (playing) wl.ink.copy(alpha = 0.10f) else wl.surfaceAlt,
-                CircleShape,
-            )
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-            ) {
-                playing = true
-                player.play(url) { playing = false }
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            painter = painterResource(R.drawable.wl_volume),
-            contentDescription = "播放发音",
-            tint = Color.Unspecified,
-            modifier = Modifier.size(18.dp),
-        )
-    }
-}
-
 /** Small outlined pill that plays every pronunciation clip in sequence. */
 @Composable
 fun PlayAllChip(
@@ -188,15 +110,19 @@ fun rememberAudioPlayer(): AudioPlayer {
     val context = LocalContext.current
     // Shared cache/client: several speaker buttons can share one page, and each
     // used to build its own OkHttpClient on first prefetch.
-    val player = remember(context) { AudioPlayer(AudioCache.shared(context)) }
+    val player = remember(context) { AudioPlayer(AudioCache.shared(context), context) }
     DisposableEffect(player) {
         onDispose { player.release() }
     }
     return player
 }
 
-class AudioPlayer(private val cache: AudioCache) {
+class AudioPlayer(
+    private val cache: AudioCache,
+    context: android.content.Context,
+) {
 
+    private val focus = AudioFocus(context)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var mediaPlayer: MediaPlayer? = null
     private var job: Job? = null
@@ -236,7 +162,14 @@ class AudioPlayer(private val cache: AudioCache) {
             val finish = {
                 runCatching { player.release() }
                 if (mediaPlayer === player) mediaPlayer = null
+                focus.abandon()
                 if (continuation.isActive) continuation.resume(Unit)
+            }
+            if (!focus.request { finish() }) {
+                runCatching { player.release() }
+                if (mediaPlayer === player) mediaPlayer = null
+                if (continuation.isActive) continuation.resume(Unit)
+                return@suspendCancellableCoroutine
             }
             runCatching {
                 player.setAudioAttributes(
@@ -254,6 +187,7 @@ class AudioPlayer(private val cache: AudioCache) {
             continuation.invokeOnCancellation {
                 runCatching { player.release() }
                 if (mediaPlayer === player) mediaPlayer = null
+                focus.abandon()
             }
         }
     }
@@ -266,5 +200,6 @@ class AudioPlayer(private val cache: AudioCache) {
     private fun releasePlayer() {
         runCatching { mediaPlayer?.release() }
         mediaPlayer = null
+        focus.abandon()
     }
 }

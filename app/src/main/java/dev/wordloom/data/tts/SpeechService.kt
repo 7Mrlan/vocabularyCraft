@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import dev.wordloom.data.audio.AudioCache
+import dev.wordloom.data.audio.AudioFocus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -55,6 +56,7 @@ class SpeechService(
     private val appContext = context.applicationContext
     private val directory = File(appContext.cacheDir, "tts").apply { mkdirs() }
     private val client = TtsClient()
+    private val audioFocus = AudioFocus(appContext)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val gate = Semaphore(2)
     private val inFlight = ConcurrentHashMap<String, Deferred<File?>>()
@@ -234,10 +236,18 @@ class SpeechService(
             val finish = {
                 runCatching { media.release() }
                 if (player === media) player = null
+                audioFocus.abandon()
                 if (continuation.isActive) {
                     onState(SpeechState.Idle)
                     continuation.resume(Unit)
                 }
+            }
+            if (!audioFocus.request { finish() }) {
+                runCatching { media.release() }
+                if (player === media) player = null
+                onState(SpeechState.Failed("音频被其他应用占用"))
+                continuation.resume(Unit)
+                return@suspendCancellableCoroutine
             }
             try {
                 media.setAudioAttributes(
@@ -264,6 +274,7 @@ class SpeechService(
             continuation.invokeOnCancellation {
                 runCatching { media.release() }
                 if (player === media) player = null
+                audioFocus.abandon()
             }
         }
     }
@@ -271,6 +282,7 @@ class SpeechService(
     private fun stopPlayer() {
         runCatching { player?.release() }
         player = null
+        audioFocus.abandon()
     }
 
     private fun cacheKey(text: String): String {

@@ -62,7 +62,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import dev.wordloom.data.model.WordEntry
 import dev.wordloom.ui.components.SearchPill
-import dev.wordloom.ui.components.SpeakerButton
 import dev.wordloom.ui.components.WaveDivider
 import dev.wordloom.ui.theme.SerifFamily
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -783,7 +782,10 @@ private fun DailyWordCard(
                 )
                 Spacer(Modifier.width(10.dp))
                 entry.audio.firstOrNull()?.let { clip ->
-                    SpeakerButton(url = clip.url)
+                    dev.wordloom.ui.voice.SpeechButton(
+                        text = entry.word,
+                        fallbackUrl = clip.url,
+                    )
                 }
             }
 

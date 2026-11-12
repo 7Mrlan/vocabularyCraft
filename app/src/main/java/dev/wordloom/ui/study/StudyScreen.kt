@@ -843,8 +843,10 @@ private fun StudyCard(
                             (slideInVertically(spec) { if (down) it else -it }) togetherWith
                                 (slideOutVertically(spec) { if (down) -it else it })
                         } else {
-                            (slideInVertically(spec) { it / 12 }) togetherWith
-                                (slideOutVertically(spec) { -it / 12 })
+                            // Full-height travel: a shallow slide leaves both
+                            // faces legible on top of each other for a beat.
+                            (slideInVertically(spec) { it }) togetherWith
+                                (slideOutVertically(spec) { -it })
                         }
                     },
                     label = "studyLayer",
@@ -1342,10 +1344,13 @@ private fun ChineseFace(
     onWrong: () -> Unit,
 ) {
     val wl = WordloomTheme.colors
+    Column(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp, vertical = 22.dp),
+            .weight(1f)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp)
+            .padding(top = 22.dp, bottom = 10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -1417,14 +1422,14 @@ private fun ChineseFace(
             )
         }
 
-        Spacer(Modifier.weight(1f))
-        RatedActions(
-            alternateLabel = "英文",
-            onAlternate = onToggleEnglish,
-            onNext = onNext,
-            onWrong = onWrong,
-        )
-        Spacer(Modifier.height(16.dp))
+    }
+    RatedActions(
+        alternateLabel = "英文",
+        onAlternate = onToggleEnglish,
+        onNext = onNext,
+        onWrong = onWrong,
+    )
+    Spacer(Modifier.height(16.dp))
     }
 }
 

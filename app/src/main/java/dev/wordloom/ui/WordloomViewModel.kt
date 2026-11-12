@@ -36,8 +36,6 @@ sealed interface WordUiState {
         val entry: WordEntry,
         val inDeck: Boolean,
         val requestedTerm: String = entry.word,
-        /** True when the reader bookmarked it (the 收藏夹). */
-        val saved: Boolean = false,
     ) : WordUiState
     data class NotFound(val term: String) : WordUiState
     data class Failed(val term: String, val message: String) : WordUiState
@@ -270,21 +268,13 @@ class WordloomViewModel(
 
     /** Seeds the page from an entry we already hold, so it opens without a spinner. */
     fun showWord(entry: WordEntry) {
-        val known = cards.value.firstOrNull { it.word.equals(entry.word, ignoreCase = true) }
-        _wordState.value = WordUiState.Loaded(
-            entry = entry,
-            inDeck = known != null,
-            requestedTerm = entry.word,
-            saved = (known?.savedAt ?: 0L) > 0L,
-        )
+        val knownInDeck = cards.value.any { it.word.equals(entry.word, ignoreCase = true) }
+        _wordState.value = WordUiState.Loaded(entry, knownInDeck, entry.word)
         viewModelScope.launch {
-            val card = runCatching { repo.card(entry.word) }.getOrNull()
+            val inDeck = runCatching { repo.card(entry.word) != null }.getOrDefault(knownInDeck)
             val state = _wordState.value
             if (state is WordUiState.Loaded && state.entry.word.equals(entry.word, ignoreCase = true)) {
-                _wordState.value = state.copy(
-                    inDeck = if (card != null) true else state.inDeck,
-                    saved = if (card != null) card.savedAt > 0L else state.saved,
-                )
+                _wordState.value = state.copy(inDeck = inDeck)
             }
         }
     }
@@ -319,13 +309,8 @@ class WordloomViewModel(
                 _wordState.value = if (entry == null || (!entry.hasContent && entry.ipa.isEmpty())) {
                     WordUiState.NotFound(cleaned)
                 } else {
-                    val card = runCatching { repo.card(entry.word) }.getOrNull()
-                    WordUiState.Loaded(
-                        entry = entry,
-                        inDeck = card != null,
-                        requestedTerm = cleaned,
-                        saved = (card?.savedAt ?: 0L) > 0L,
-                    )
+                    val inDeck = runCatching { repo.card(entry.word) != null }.getOrDefault(false)
+                    WordUiState.Loaded(entry, inDeck, cleaned)
                 }
             }.onFailure { error ->
                 _wordState.value = WordUiState.Failed(cleaned, error.message ?: "查询失败")
@@ -388,24 +373,13 @@ class WordloomViewModel(
         }
     }
 
-    /**
-     * The bookmark: adds the word to the deck on first tap and to the 收藏夹
-     * (savedAt) on every save. Un-bookmarking clears savedAt but leaves the
-     * review card — and its FSRS progress — alone.
-     */
-    fun toggleDeck(entry: WordEntry, currentlySaved: Boolean) {
+    /** Bookmark toggle: adds the word to the review deck (and the 收藏夹). */
+    fun toggleDeck(entry: WordEntry, currentlyInDeck: Boolean) {
         viewModelScope.launch {
-            if (currentlySaved) {
-                repo.clearSaved(entry.word)
-            } else {
-                repo.addToDeck(entry, saved = true)
-            }
+            if (currentlyInDeck) repo.removeFromDeck(entry.word) else repo.addToDeck(entry)
             val state = _wordState.value
             if (state is WordUiState.Loaded && state.entry.word == entry.word) {
-                _wordState.value = state.copy(
-                    inDeck = if (currentlySaved) state.inDeck else true,
-                    saved = !currentlySaved,
-                )
+                _wordState.value = state.copy(inDeck = !currentlyInDeck)
             }
         }
     }

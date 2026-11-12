@@ -200,13 +200,13 @@ fun WordScreen(
             // No word text here: the 36sp headline right below already says it.
             Spacer(Modifier.weight(1f))
             if (loadedForTerm != null) {
-                val saved = loadedForTerm.saved
-                IconButton(onClick = { onToggleDeck(loadedForTerm.entry, saved) }) {
+                val inDeck = card != null || loadedForTerm.inDeck
+                IconButton(onClick = { onToggleDeck(loadedForTerm.entry, inDeck) }) {
                     Icon(
                         painter = painterResource(
-                            if (saved) R.drawable.wl_bookmark_on else R.drawable.wl_bookmark,
+                            if (inDeck) R.drawable.wl_bookmark_on else R.drawable.wl_bookmark,
                         ),
-                        contentDescription = if (saved) "取消收藏" else "加入收藏",
+                        contentDescription = if (inDeck) "取消收藏" else "加入复习",
                         tint = Color.Unspecified,
                     )
                 }

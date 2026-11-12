@@ -220,12 +220,6 @@ class WordRepository(
 
     suspend fun removeFromDeck(word: String) = dao.deleteCard(word.lowercase())
 
-    /** Drops the bookmark but keeps the card and its review progress. */
-    suspend fun clearSaved(word: String) {
-        val key = word.lowercase()
-        dao.card(key)?.let { dao.putCard(it.copy(savedAt = 0L)) }
-    }
-
     suspend fun review(card: CardEntity, rating: Rating): ReviewOutcome {
         val outcome = Scheduler.review(
             CardProgress(

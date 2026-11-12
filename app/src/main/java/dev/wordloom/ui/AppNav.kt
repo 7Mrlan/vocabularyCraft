@@ -199,8 +199,8 @@ fun AppNav(
                 lists = lists,
                 onBack = { nav.popBackStack() },
                 onRetry = { viewModel.loadWord(term, forceRefresh = true) },
-                onToggleDeck = { word: WordEntry, saved: Boolean ->
-                    viewModel.toggleDeck(word, saved)
+                onToggleDeck = { word: WordEntry, inDeck: Boolean ->
+                    viewModel.toggleDeck(word, inDeck)
                 },
                 onAddToList = viewModel::addToList,
                 onCreateList = viewModel::createList,

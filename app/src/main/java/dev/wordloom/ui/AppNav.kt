@@ -5,10 +5,13 @@ import android.widget.Toast
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
@@ -26,9 +29,14 @@ import dev.wordloom.ui.home.HomeScreen
 import dev.wordloom.ui.lists.ListDetailScreen
 import dev.wordloom.ui.lists.ListsScreen
 import dev.wordloom.ui.map.MapScreen
+import dev.wordloom.ui.onboarding.OnboardingScreen
+import dev.wordloom.ui.onboarding.OnboardingStore
 import dev.wordloom.ui.quiz.QuizScreen
 import dev.wordloom.ui.review.ReviewScreen
 import dev.wordloom.ui.search.SearchScreen
+import dev.wordloom.ui.voice.LocalSpeechActions
+import dev.wordloom.ui.voice.SpeechActions
+import dev.wordloom.ui.voice.VoiceSettingsSheet
 import dev.wordloom.ui.word.SynonymsScreen
 import dev.wordloom.ui.word.WordScreen
 
@@ -39,6 +47,14 @@ fun AppNav(
 ) {
     val nav = rememberNavController()
     val context = LocalContext.current
+    val onboarding = remember(context) { OnboardingStore(context) }
+    // Read the flag once: completing the guide navigates explicitly, and a
+    // changing start destination would rebuild the graph mid-session.
+    val startDestination = remember { if (onboarding.done) "home" else "onboarding" }
+    var showVoice by remember { mutableStateOf(false) }
+    // The service holds the truth; this mirror keeps the home row and the sheet
+    // in sync after a save without turning the whole screen into a flow.
+    var ttsStatus by remember { mutableStateOf(viewModel.ttsStatus) }
 
     val wordState by viewModel.wordState.collectAsStateWithLifecycle()
     val suggest by viewModel.suggest.collectAsStateWithLifecycle()
@@ -107,9 +123,18 @@ fun AppNav(
         openWord(term)
     }
 
+    val speechActions = remember(ttsStatus.enabled) {
+        SpeechActions(
+            enabled = ttsStatus.enabled,
+            speak = { text, fallbackUrl, onState -> viewModel.speakTts(text, fallbackUrl, onState) },
+            prefetch = { text -> viewModel.prefetchTts(text) },
+        )
+    }
+
+    CompositionLocalProvider(LocalSpeechActions provides speechActions) {
     NavHost(
         navController = nav,
-        startDestination = "home",
+        startDestination = startDestination,
         // No page transition at all. A full-screen slide cost a frame here and
         // there on real hardware and read as a hitch; switching instantly is
         // smoother than a transition that stutters.
@@ -118,6 +143,28 @@ fun AppNav(
         popEnterTransition = { EnterTransition.None },
         popExitTransition = { ExitTransition.None },
     ) {
+        composable("onboarding") {
+            OnboardingScreen(
+                status = ttsStatus,
+                onSaveTts = { draft, onResult ->
+                    viewModel.saveTtsConfig(draft) { result ->
+                        ttsStatus = viewModel.ttsStatus
+                        if (result.isSuccess) onboarding.markTtsConfigured()
+                        onResult(result)
+                    }
+                },
+                onTestTts = viewModel::testTts,
+                onFinish = { skipped, openBooks ->
+                    onboarding.complete(skipped)
+                    ttsStatus = viewModel.ttsStatus
+                    nav.navigate("home") {
+                        popUpTo("onboarding") { inclusive = true }
+                    }
+                    if (openBooks) nav.navigate("books")
+                },
+            )
+        }
+
         composable("home") {
             HomeScreen(
                 dueCount = dueCount,
@@ -137,6 +184,8 @@ fun AppNav(
                 onQuiz = { nav.navigate("quiz") },
                 onToggleTheme = onToggleTheme,
                 onOpenBooks = { nav.navigate("books") },
+                onOpenVoice = { showVoice = true },
+                ttsEnabled = ttsStatus.enabled,
             )
         }
 
@@ -176,6 +225,7 @@ fun AppNav(
                 },
                 onUndo = viewModel::undoStudy,
                 onMarkKnown = viewModel::markKnown,
+                speechActions = speechActions,
             )
         }
 
@@ -340,5 +390,23 @@ fun AppNav(
                 onRestart = viewModel::startQuiz,
             )
         }
+    }
+    }
+
+    if (showVoice) {
+        VoiceSettingsSheet(
+            status = ttsStatus,
+            onSave = { draft, onResult ->
+                viewModel.saveTtsConfig(draft) { result ->
+                    ttsStatus = viewModel.ttsStatus
+                    onResult(result)
+                }
+            },
+            onPreview = viewModel::previewTts,
+            onDismiss = {
+                showVoice = false
+                viewModel.stopTts()
+            },
+        )
     }
 }

@@ -100,6 +100,7 @@ fun HomeScreen(
     onOpenBooks: () -> Unit,
     onOpenVoice: () -> Unit = {},
     ttsEnabled: Boolean = false,
+    onReplayOnboarding: () -> Unit = {},
 ) {
     val wl = WordloomTheme.colors
     val band = wl.primaryBright
@@ -199,6 +200,7 @@ fun HomeScreen(
                         onOpenBooks = onOpenBooks,
                         onOpenVoice = onOpenVoice,
                         ttsEnabled = ttsEnabled,
+                        onReplayOnboarding = onReplayOnboarding,
                     )
                     Spacer(Modifier.height(22.dp))
                     SearchPill(
@@ -420,6 +422,7 @@ private fun BrandRow(
     onOpenBooks: () -> Unit,
     onOpenVoice: () -> Unit,
     ttsEnabled: Boolean,
+    onReplayOnboarding: () -> Unit,
 ) {
     var drawerOpen by remember { mutableStateOf(false) }
     val handleRotation by animateFloatAsState(
@@ -559,6 +562,20 @@ private fun BrandRow(
                         "声音设置",
                         trailing = if (ttsEnabled) null else "未配置",
                         onClick = { drawerOpen = false; onOpenVoice() },
+                    )
+                    DrawerDivider()
+                    Text(
+                        text = "重新看引导",
+                        fontFamily = SerifFamily,
+                        fontSize = 12.sp,
+                        color = Color(0xFF8A97A8),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClickLabel = "重新看引导") {
+                                drawerOpen = false
+                                onReplayOnboarding()
+                            }
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
                     )
                 }
             }

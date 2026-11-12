@@ -157,8 +157,14 @@ fun AppNav(
                 onFinish = { skipped, openBooks ->
                     onboarding.complete(skipped)
                     ttsStatus = viewModel.ttsStatus
-                    nav.navigate("home") {
-                        popUpTo("onboarding") { inclusive = true }
+                    // First launch replaces onboarding with home; replaying
+                    // from the drawer simply pops back to the existing home.
+                    if (nav.previousBackStackEntry?.destination?.route == "home") {
+                        nav.popBackStack()
+                    } else {
+                        nav.navigate("home") {
+                            popUpTo("onboarding") { inclusive = true }
+                        }
                     }
                     if (openBooks) nav.navigate("books")
                 },
@@ -186,6 +192,10 @@ fun AppNav(
                 onOpenBooks = { nav.navigate("books") },
                 onOpenVoice = { showVoice = true },
                 ttsEnabled = ttsStatus.enabled,
+                onReplayOnboarding = {
+                    onboarding.reset()
+                    nav.navigate("onboarding")
+                },
             )
         }
 

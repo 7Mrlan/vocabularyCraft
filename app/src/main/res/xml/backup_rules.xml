@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The encrypted TTS file is device-bound; never copy it into a backup. -->
+<full-backup-content>
+    <exclude domain="file" path="tts.encrypted" />
+    <exclude domain="file" path="tts.encrypted.bak" />
+</full-backup-content>

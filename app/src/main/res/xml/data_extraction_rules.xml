@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ cloud backup and device transfer: keep the TTS secret local. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="tts.encrypted" />
+        <exclude domain="file" path="tts.encrypted.bak" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="tts.encrypted" />
+        <exclude domain="file" path="tts.encrypted.bak" />
+    </device-transfer>
+</data-extraction-rules>

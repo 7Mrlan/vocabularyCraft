@@ -67,8 +67,9 @@ import dev.wordloom.ui.WordUiState
 import dev.wordloom.data.local.CardEntity
 import dev.wordloom.srs.DAY_MS
 import dev.wordloom.ui.components.PlayAllChip
-import dev.wordloom.ui.components.SpeakerButton
 import dev.wordloom.ui.components.rememberAudioPlayer
+import dev.wordloom.ui.voice.LocalSpeechActions
+import dev.wordloom.ui.voice.SpeechButton
 import dev.wordloom.ui.theme.SansFamily
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
@@ -355,6 +356,7 @@ private fun WordContent(
     val wl = WordloomTheme.colors
     val look = if (wl.isDark) DarkLook else LightLook
     val player = rememberAudioPlayer()
+    val speech = LocalSpeechActions.current
     val clipboard = LocalClipboardManager.current
     val density = LocalDensity.current.density
     var resetKey by remember { mutableLongStateOf(0L) }
@@ -462,7 +464,9 @@ private fun WordContent(
                         if (usClips.isNotEmpty() || usIpa != null) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(text = "🇺🇸", fontSize = 16.sp)
-                                usClips.forEach { clip -> SpeakerButton(url = clip.url) }
+                                usClips.forEach { clip ->
+                                    SpeechButton(text = entry.word, fallbackUrl = clip.url)
+                                }
                                 if (usIpa != null) {
                                     Text(
                                         text = usIpa,
@@ -480,7 +484,7 @@ private fun WordContent(
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(text = "🇬🇧", fontSize = 16.sp)
                                 if (ukAudio != null) {
-                                    SpeakerButton(url = ukAudio.url)
+                                    SpeechButton(text = entry.word, fallbackUrl = ukAudio.url)
                                 }
                                 if (ukIpa != null) {
                                     Text(
@@ -496,7 +500,9 @@ private fun WordContent(
                         // Wiktionary does not tag a region: list the clips without a
                         // flag rather than putting them under one we cannot vouch for.
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            entry.audio.forEach { clip -> SpeakerButton(url = clip.url) }
+                            entry.audio.forEach { clip ->
+                                SpeechButton(text = entry.word, fallbackUrl = clip.url)
+                            }
                             if (entry.ipa.isNotEmpty()) {
                                 Text(
                                     text = entry.ipa.joinToString(" · ") { it.text },
@@ -509,7 +515,9 @@ private fun WordContent(
                     }
 
                     // Play every available clip back to back, US then UK.
-                    if (entry.audio.size > 1) {
+                    // "Play all" is a sequence of the old human clips; with AI
+                    // reading enabled the word buttons already use the AI voice.
+                    if (entry.audio.size > 1 && speech?.enabled != true) {
                         PlayAllChip(color = look.link) {
                             player.playAll(entry.audio.map { it.url })
                         }

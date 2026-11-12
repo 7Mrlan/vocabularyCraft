@@ -29,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +52,7 @@ import dev.wordloom.data.model.WordEntry
 import dev.wordloom.ui.theme.SerifFamily
 import dev.wordloom.ui.theme.WlMotion
 import dev.wordloom.ui.theme.WordloomTheme
+import dev.wordloom.ui.voice.LocalSpeechActions
 
 /**
  * The inside of a book: one number for the whole volume, then the words in it.
@@ -72,6 +74,7 @@ fun BookDetail(
     modifier: Modifier = Modifier,
 ) {
     val wl = WordloomTheme.colors
+    val speech = LocalSpeechActions.current
     val statusByWord = remember(cards) { BookProgress.statusMap(cards) }
     val total = words.size.coerceAtLeast(book.count.toIntOrNull() ?: 1)
     val learned = BookProgress.learnedCount(words, statusByWord)
@@ -84,6 +87,14 @@ fun BookDetail(
 
     val sections = remember(words, cards, filter) {
         BookProgress.sections(words, statusByWord, filter)
+    }
+
+    // Start the first unit's AI clips while the reader is still on the book
+    // page, so opening the study card does not wait for a cold synthesis.
+    LaunchedEffect(words.take(3), speech?.enabled) {
+        if (speech != null && speech.enabled) {
+            words.take(3).forEach { word -> speech.prefetch(word) }
+        }
     }
 
     Box(modifier = modifier.fillMaxSize()) {

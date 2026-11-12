@@ -38,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.animation.core.animate
@@ -108,11 +109,15 @@ import dev.wordloom.data.local.CardEntity
 import dev.wordloom.data.model.WordEntry
 import dev.wordloom.data.translate.StudyContent
 import dev.wordloom.data.translate.StudyDetails
+import dev.wordloom.data.tts.SpeechState
 import dev.wordloom.data.translate.StudyExample
 import dev.wordloom.srs.Rating
 import dev.wordloom.ui.components.SpeakerButton
 import dev.wordloom.ui.components.rememberAudioPlayer
 import dev.wordloom.ui.feedback.rememberAppFeedback
+import dev.wordloom.ui.voice.LocalSpeechActions
+import dev.wordloom.ui.voice.SpeechActions
+import dev.wordloom.ui.voice.SpeechButton
 import dev.wordloom.ui.theme.SerifFamily
 import dev.wordloom.ui.theme.wlPress
 import dev.wordloom.ui.theme.WordloomTheme
@@ -201,6 +206,11 @@ fun StudyScreen(
     onRate: (WordEntry, Rating, Boolean) -> Unit,
     onUndo: () -> Unit,
     onMarkKnown: (WordEntry) -> Unit,
+    speechActions: SpeechActions = SpeechActions(
+        enabled = false,
+        speak = { _, _, _ -> },
+        prefetch = {},
+    ),
 ) {
     val wl = WordloomTheme.colors
     val view = LocalView.current
@@ -330,7 +340,12 @@ fun StudyScreen(
     // The English entry may not be cached yet. Ask for the current card and the
     // next two, so their clips are already on disk by the time they are tapped.
     LaunchedEffect(queue.firstOrNull()?.word, queue.size) {
-        queue.take(3).forEach { onNeedEntry(it.word) }
+        queue.take(3).forEach { item ->
+            onNeedEntry(item.word)
+            // Warm the first three AI clips as soon as the queue exists, not
+            // when the card is first composed.
+            speechActions.prefetch(item.word)
+        }
     }
     val progress = if (total == 0) 0f else completed.toFloat() / total
 
@@ -491,21 +506,23 @@ fun StudyScreen(
                 onBack = onBack,
             )
 
-            else -> StudyCard(
-                item = current,
-                entry = entryFor(current.word),
-                presentation = presentation,
-                progress = progress,
-                onCommit = { rating, requeue -> commit(current, rating, requeue) },
-                // The grade itself answers with its sound; the commit is silent.
-                onGradeTone = { rating -> sfx.play(rating.studySound()) },
-                onWrongTone = { sfx.play(StudySound.Again) },
-                onReveal = { feedback.reveal(view) },
-                onWrong = { feedback.wrong(view) },
-                onAutoPlay = { url -> player.play(url) },
-                onPrefetch = { url -> player.prefetch(url) },
-                onSelect = { text, _ -> promo = text },
-            )
+            else -> CompositionLocalProvider(LocalSpeechActions provides speechActions) {
+                StudyCard(
+                    item = current,
+                    entry = entryFor(current.word),
+                    presentation = presentation,
+                    progress = progress,
+                    onCommit = { rating, requeue -> commit(current, rating, requeue) },
+                    // The grade itself answers with its sound; the commit is silent.
+                    onGradeTone = { rating -> sfx.play(rating.studySound()) },
+                    onWrongTone = { sfx.play(StudySound.Again) },
+                    onReveal = { feedback.reveal(view) },
+                    onWrong = { feedback.wrong(view) },
+                    onAutoPlay = { url -> player.play(url) },
+                    onPrefetch = { url -> player.prefetch(url) },
+                    onSelect = { text, _ -> promo = text },
+                )
+            }
         }
     }
 
@@ -734,6 +751,7 @@ private fun StudyCard(
     val density = LocalDensity.current.density
     val view = LocalView.current
     val scope = rememberCoroutineScope()
+    val speech = LocalSpeechActions.current
 
     var layer by remember(item.word, presentation) { mutableStateOf(Layer.Word) }
     // Once a grade is given it is locked: there is no path back to the grade
@@ -751,10 +769,20 @@ private fun StudyCard(
     val wordAudioUrl = entry.audio.firstOrNull()?.url
     val gestureVelocity = remember { androidx.compose.ui.input.pointer.util.VelocityTracker() }
 
-    // The clip may arrive after the card is first composed (cold cache): key the
-    // autoplay on the URL, not just the word, or the very first word stays silent.
-    LaunchedEffect(item.word, wordAudioUrl) {
-        if (!wordAudioUrl.isNullOrBlank()) onAutoPlay(wordAudioUrl)
+    // AI first, so a brand-new book's first word is voiced even before its entry
+    // (and its human clip URL) has been fetched. The old URL remains the fallback.
+    var wordSpoken by remember(item.word) { mutableStateOf(false) }
+    LaunchedEffect(item.word, wordAudioUrl, speech?.enabled) {
+        if (wordSpoken) return@LaunchedEffect
+        if (speech != null && speech.enabled) {
+            wordSpoken = true
+            speech.speak(item.word, wordAudioUrl) { state ->
+                if (state is SpeechState.Failed) wordSpoken = false
+            }
+        } else if (!wordAudioUrl.isNullOrBlank()) {
+            wordSpoken = true
+            onAutoPlay(wordAudioUrl)
+        }
     }
 
     LaunchedEffect(item.word) {
@@ -762,22 +790,42 @@ private fun StudyCard(
         detailsFailed = details == null
     }
 
-    // Warm the first example clips only: the ring keeps three pages composed, so
-    // downloading all eight sentences per card was wasted data and IO.
-    LaunchedEffect(details) {
-        details?.examples?.take(3)?.forEach { example ->
-            example.audioUrl.takeIf { it.isNotBlank() }?.let(onPrefetch)
+    // Warm the current card's word and the next few example sentences. With AI
+    // enabled this is synthesis, not a URL download; with AI off it is the old
+    // human/Youdao clip prefetch.
+    LaunchedEffect(item.word, speech?.enabled) {
+        if (speech != null && speech.enabled) speech.prefetch(item.word)
+    }
+    LaunchedEffect(details, speech?.enabled) {
+        if (speech != null && speech.enabled) {
+            details?.examples?.take(5)?.forEach { example -> speech.prefetch(example.en) }
+        } else {
+            details?.examples?.take(3)?.forEach { example ->
+                example.audioUrl.takeIf { it.isNotBlank() }?.let(onPrefetch)
+            }
         }
     }
 
     // Pages 1..n speak their own example when they land. Page 0 is the entry
     // face now, so it stays quiet (the word itself was voiced on arrival).
-    // Key on the URL, not the list: `examples` is rebuilt on every recomposition
-    // and would otherwise replay the same sentence.
-    val pageAudioUrl = if (page == 0) null else examples.getOrNull(page - 1)?.audioUrl
-    LaunchedEffect(layer, page, pageAudioUrl) {
-        if (layer != Layer.English || pageAudioUrl.isNullOrBlank()) return@LaunchedEffect
-        onAutoPlay(pageAudioUrl)
+    val pageExample = if (page == 0) null else examples.getOrNull(page - 1)
+    val pageAudioUrl = pageExample?.audioUrl
+    var pageSpokenKey by remember(item.word, page) { mutableStateOf<String?>(null) }
+    LaunchedEffect(layer, page, pageAudioUrl, pageExample?.en, speech?.enabled) {
+        if (layer != Layer.English) return@LaunchedEffect
+        val example = pageExample ?: return@LaunchedEffect
+        val sentence = example.en
+        if (sentence.isBlank() || pageSpokenKey == sentence) return@LaunchedEffect
+        if ((speech != null && speech.enabled) || !pageAudioUrl.isNullOrBlank()) {
+            pageSpokenKey = sentence
+            if (speech != null && speech.enabled) {
+                speech.speak(sentence, pageAudioUrl) { state ->
+                    if (state is SpeechState.Failed) pageSpokenKey = null
+                }
+            } else {
+                pageAudioUrl?.let(onAutoPlay)
+            }
+        }
     }
 
     fun settleRing() {
@@ -1205,7 +1253,9 @@ private fun WordFace(entry: WordEntry, onGrade: (Rating) -> Unit) {
                 )
                 Spacer(Modifier.width(8.dp))
             }
-            entry.audio.firstOrNull()?.let { clip -> SpeakerButton(url = clip.url) }
+            entry.audio.firstOrNull()?.let { clip ->
+                SpeechButton(text = entry.word, fallbackUrl = clip.url)
+            }
         }
         Spacer(Modifier.weight(1f))
         GradeRow(onGrade)
@@ -1289,7 +1339,11 @@ private fun MainFaceContent(
             )
             Spacer(Modifier.width(8.dp))
             entry.audio.firstOrNull()?.let { clip ->
-                SpeakerButton(url = clip.url, modifier = Modifier.size(30.dp))
+                SpeechButton(
+                    text = entry.word,
+                    fallbackUrl = clip.url,
+                    modifier = Modifier.size(30.dp),
+                )
             }
         }
         entry.ipa.firstOrNull()?.let { ipa ->
@@ -1395,7 +1449,11 @@ private fun ChineseFace(
             )
             Spacer(Modifier.width(8.dp))
             entry.audio.firstOrNull()?.let { clip ->
-                SpeakerButton(url = clip.url, modifier = Modifier.size(30.dp))
+                SpeechButton(
+                    text = entry.word,
+                    fallbackUrl = clip.url,
+                    modifier = Modifier.size(30.dp),
+                )
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -1487,9 +1545,11 @@ private fun ExamplePage(
                 color = wl.ink,
             )
             Spacer(Modifier.width(6.dp))
-            example.audioUrl.takeIf { it.isNotBlank() }?.let { url ->
-                SpeakerButton(url = url, modifier = Modifier.size(28.dp))
-            }
+            SpeechButton(
+                text = example.en,
+                fallbackUrl = example.audioUrl.takeIf { it.isNotBlank() },
+                modifier = Modifier.size(28.dp),
+            )
         }
         Spacer(Modifier.height(18.dp))
         HighlightedSentence(

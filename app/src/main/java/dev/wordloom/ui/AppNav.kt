@@ -71,7 +71,10 @@ fun AppNav(
     }
 
     // Glosses for the open book, including words studied but never opened.
-    LaunchedEffect(bookWords) { viewModel.loadCachedEntries(bookWords) }
+    // Key on membership, not list order: rating a word reorders the automatic
+    // books but does not require re-reading thousands of cached rows.
+    val bookWordSet = remember(bookWords) { bookWords.toSet() }
+    LaunchedEffect(bookWordSet) { viewModel.loadCachedEntries(bookWords) }
     val entries = remember(mapWords, studyEntries, cachedEntries) {
         mapWords.associateBy { it.word.lowercase() } + cachedEntries + studyEntries
     }
@@ -153,6 +156,9 @@ fun AppNav(
         }
 
         composable("study") {
+            // Prefetched entries are only useful while the session is open; drop
+            // them when the reader leaves instead of growing the map forever.
+            DisposableEffect(Unit) { onDispose { viewModel.clearStudyEntries() } }
             StudyScreen(
                 dueCards = dueCards,
                 cards = cards,
@@ -161,7 +167,13 @@ fun AppNav(
                 loading = autoKind == null && curatedWords.isEmpty(),
                 onNeedEntry = viewModel::prefetchForStudy,
                 onBack = { nav.popBackStack() },
-                onRate = { entry, rating, isNew -> viewModel.rateStudy(entry, rating, isNew) },
+                onRate = { entry, rating, isNew ->
+                    viewModel.rateStudy(entry, rating, isNew) { interval ->
+                        if (interval == null) {
+                            Toast.makeText(context, "评分未保存，请重试", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
                 onUndo = viewModel::undoStudy,
                 onMarkKnown = viewModel::markKnown,
             )
@@ -203,7 +215,12 @@ fun AppNav(
                     viewModel.toggleDeck(word, inDeck)
                 },
                 onToggleSaved = { word ->
-                    viewModel.toggleSaved(word) { saved ->
+                    viewModel.toggleSaved(
+                        word,
+                        onFailed = {
+                            Toast.makeText(context, "收藏操作失败，请重试", Toast.LENGTH_SHORT).show()
+                        },
+                    ) { saved ->
                         Toast.makeText(
                             context,
                             if (saved) "已加入收藏夹" else "已移出收藏夹",
@@ -302,7 +319,13 @@ fun AppNav(
             ReviewScreen(
                 dueCards = dueCards,
                 onBack = { nav.popBackStack() },
-                onRate = { card, rating -> viewModel.review(card, rating) {} },
+                onRate = { card, rating ->
+                    viewModel.review(card, rating) { outcome ->
+                        if (outcome == null) {
+                            Toast.makeText(context, "评分未保存，请重试", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
                 onOpenWord = ::openWord,
                 onQuiz = { nav.navigate("quiz") },
             )

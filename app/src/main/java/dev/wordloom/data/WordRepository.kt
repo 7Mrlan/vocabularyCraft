@@ -1,11 +1,12 @@
 package dev.wordloom.data
 
+import androidx.room.withTransaction
 import dev.wordloom.data.local.CachedWordEntity
 import dev.wordloom.data.local.CardEntity
 import dev.wordloom.data.local.WordListEntity
 import dev.wordloom.data.local.ListWithCount
 import dev.wordloom.data.local.ListWordEntity
-import dev.wordloom.data.local.WordloomDao
+import dev.wordloom.data.local.WordloomDb
 import dev.wordloom.data.model.Suggestion
 import dev.wordloom.data.model.WordEntry
 import dev.wordloom.data.remote.DictionarySource
@@ -23,8 +24,9 @@ import kotlinx.serialization.json.Json
 
 class WordRepository(
     private val source: DictionarySource,
-    private val dao: WordloomDao,
+    private val db: WordloomDb,
 ) {
+    private val dao = db.dao()
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val cacheTtl = 30 * DAY_MS
 
@@ -78,7 +80,14 @@ class WordRepository(
                 word = key,
                 json = json.encodeToString(WordEntry.serializer(), entry),
                 fetchedAt = entry.fetchedAt,
-                recentAt = if (markRecent) System.currentTimeMillis() else 0L,
+                // A background fetch (daily word / study prefetch) must not erase
+                // the fact that this word was opened before: upsert replaces the
+                // whole row, so carry the old recentAt forward.
+                recentAt = if (markRecent) {
+                    System.currentTimeMillis()
+                } else {
+                    cached?.recentAt ?: 0L
+                },
             )
         )
         return entry
@@ -144,8 +153,6 @@ class WordRepository(
         try {
             val file = json.decodeFromString(BackupFile.serializer(), text)
             require(file.version <= 2) { "备份文件版本过新" }
-
-            file.words.forEach { dao.putWord(it) }
             // v1 backups predate the bookmark flag: keep their old behaviour so
             // the 收藏夹 does not look empty after a restore.
             val cards = if (file.version <= 1) {
@@ -153,20 +160,58 @@ class WordRepository(
             } else {
                 file.cards
             }
-            cards.forEach { dao.putCard(it) }
 
-            val existing = dao.allLists().associateBy { it.name to it.createdAt }
-            val idMap = mutableMapOf<Long, Long>()
-            file.lists.forEach { list ->
-                val match = existing[list.name to list.createdAt]
-                val newId = match?.id ?: dao.putListRaw(list.copy(id = 0))
-                idMap[list.id] = newId
+            // One transaction: a malformed row halfway through must not leave
+            // half of the backup merged into the live database.
+            val imported = db.withTransaction {
+                // Newer cache rows win; an old backup must not overwrite a
+                // definition (or its recentAt) that has been refreshed since.
+                val existingWords = mutableMapOf<String, CachedWordEntity>()
+                file.words.map { it.word }.chunked(800).forEach { chunk ->
+                    dao.cachedWordsFor(chunk).forEach { existingWords[it.word] = it }
+                }
+                var words = 0
+                file.words.forEach { incoming ->
+                    val old = existingWords[incoming.word]
+                    if (old == null || incoming.fetchedAt >= old.fetchedAt) {
+                        // A background fetch row may carry recentAt = 0; importing
+                        // it must not erase when the reader last opened the word.
+                        val merged = if (old == null) {
+                            incoming
+                        } else {
+                            incoming.copy(recentAt = maxOf(incoming.recentAt, old.recentAt))
+                        }
+                        dao.putWord(merged)
+                        existingWords[incoming.word] = merged
+                        words += 1
+                    }
+                }
+
+                // Cards are merged, not replaced: keep the more advanced FSRS
+                // state and never lose a manual bookmark from either side.
+                val existingCards = dao.allCards().associateBy { it.word }.toMutableMap()
+                cards.forEach { incoming ->
+                    val merged = mergeCard(existingCards[incoming.word], incoming)
+                    dao.putCard(merged)
+                    existingCards[incoming.word] = merged
+                }
+
+                val existing = dao.allLists().associateBy { it.name to it.createdAt }
+                val idMap = mutableMapOf<Long, Long>()
+                file.lists.forEach { list ->
+                    val match = existing[list.name to list.createdAt]
+                    val newId = match?.id ?: dao.putListRaw(list.copy(id = 0))
+                    idMap[list.id] = newId
+                }
+                var listWords = 0
+                file.listWords.forEach { row ->
+                    val target = idMap[row.listId] ?: return@forEach
+                    dao.addToList(row.copy(listId = target))
+                    listWords += 1
+                }
+                words + cards.size + file.lists.size + listWords
             }
-            file.listWords.forEach { row ->
-                val target = idMap[row.listId] ?: return@forEach
-                dao.addToList(row.copy(listId = target))
-            }
-            Result.success(file.cards.size + file.lists.size)
+            Result.success(imported)
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
         } catch (error: Throwable) {
@@ -280,6 +325,19 @@ class WordRepository(
     suspend fun removeFromList(listId: Long, word: String) = dao.removeFromList(listId, word)
 
     suspend fun trimOldCache() = dao.trimCache(System.currentTimeMillis() - 90 * DAY_MS)
+
+    /** The more advanced review state wins; bookmarks are the union of both. */
+    private fun mergeCard(existing: CardEntity?, incoming: CardEntity): CardEntity {
+        if (existing == null) return incoming
+        val incomingIsNewer =
+            incoming.reps > existing.reps || incoming.lastReviewAt > existing.lastReviewAt
+        val base = if (incomingIsNewer) incoming else existing
+        return base.copy(
+            savedAt = maxOf(existing.savedAt, incoming.savedAt),
+            addedAt = if (existing.addedAt > 0L) existing.addedAt else incoming.addedAt,
+            preview = base.preview.ifBlank { existing.preview.ifBlank { incoming.preview } },
+        )
+    }
 
     private fun decode(entity: CachedWordEntity): WordEntry? =
         runCatching { json.decodeFromString(WordEntry.serializer(), entity.json) }.getOrNull()

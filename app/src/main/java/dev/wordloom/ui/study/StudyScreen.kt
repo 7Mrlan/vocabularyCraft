@@ -7,18 +7,13 @@ import android.content.Context
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,8 +30,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -69,7 +62,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.draw.alpha
@@ -135,6 +127,9 @@ private enum class Layer { Word, English, Chinese }
  * fling page turn, so a short, deliberate flick is enough — no long drag needed.
  */
 private const val FLING_DP_PER_SECOND = 400f
+
+/** A long review session must not turn into a 500-word spelling test. */
+private const val SPELLING_LIMIT = 20
 
 @Immutable
 private data class StudyItem(val word: String, val isNew: Boolean)
@@ -218,14 +213,16 @@ fun StudyScreen(
     // glass card the word page uses.
     var promo by remember { mutableStateOf<String?>(null) }
     var promoTranslation by remember { mutableStateOf<String?>(null) }
+    var promoFailure by remember { mutableStateOf<String?>(null) }
     var promoLoading by remember { mutableStateOf(false) }
     LaunchedEffect(promo) {
         val text = promo ?: return@LaunchedEffect
         promoLoading = true
         promoTranslation = null
+        promoFailure = null
         TranslationService.translate(text).fold(
             onSuccess = { promoTranslation = it },
-            onFailure = { promoTranslation = null },
+            onFailure = { promoFailure = it.message ?: "翻译失败" },
         )
         promoLoading = false
     }
@@ -241,8 +238,10 @@ fun StudyScreen(
             shortBlurb = previews[word.lowercase()]?.ifBlank { null },
         )
 
+    // Every due card belongs in this session: a 60-card cap made the final
+    // screen say "today is done" while the rest of the queue was still due.
     val dueItems = remember(dueCards) {
-        dueCards.take(60).map { StudyItem(it.word.lowercase(), false) }
+        dueCards.map { StudyItem(it.word.lowercase(), false) }
     }
     val newItems = remember(newWords, cards) {
         StudyQueue.newWords(newWords, cards).map { StudyItem(it, true) }
@@ -253,12 +252,21 @@ fun StudyScreen(
     var completed by remember { mutableIntStateOf(0) }
     var started by remember { mutableStateOf(false) }
     LaunchedEffect(dueItems, newItems) {
-        // The flows start empty on a cold restore; the first real emission must
-        // be allowed to replace the empty queue while nothing was answered yet.
-        if (!started || (queue.isEmpty() && completed == 0)) {
-            queue = (dueItems + newItems).distinctBy { it.word.lowercase() }
+        val incoming = (dueItems + newItems).distinctBy { it.word.lowercase() }
+        // The flows start empty on a cold restore. Before the first answer,
+        // merge newly arrived cards instead of dropping them just because a
+        // new-word batch already filled the queue.
+        if (!started) {
+            queue = incoming
             total = queue.size
             started = true
+        } else if (completed == 0) {
+            val known = queue.mapTo(HashSet(queue.size)) { it.word.lowercase() }
+            val fresh = incoming.filter { it.word.lowercase() !in known }
+            if (fresh.isNotEmpty()) {
+                queue = queue + fresh
+                total = queue.size
+            }
         }
     }
 
@@ -279,6 +287,9 @@ fun StudyScreen(
     var lastCommitted by remember { mutableStateOf<StudyItem?>(null) }
 
     fun commit(item: StudyItem, rating: Rating, requeue: Boolean) {
+        // A stale tap callback must not drop the next card; the committed item
+        // is always the head of the queue.
+        if (!queue.firstOrNull()?.word.equals(item.word, ignoreCase = true)) return
         val key = item.word.lowercase()
         val firstToday = seenToday.add(key)
         if (firstToday) {
@@ -288,9 +299,16 @@ fun StudyScreen(
             history.add(item.word to rating)
             completed += 1
             onRate(entryFor(item.word), rating, item.isNew)
-            if (rating == Rating.Good || rating == Rating.Easy) {
+            if ((rating == Rating.Good || rating == Rating.Easy) &&
+                spellWords.size < SPELLING_LIMIT
+            ) {
                 spellWords.add(entryFor(item.word))
             }
+        } else {
+            // A requeued word's second answer writes nothing to the schedule, so
+            // it cannot be undone. Leaving the previous word's target here made
+            // 撤销 revert a different card than the one on screen.
+            lastCommitted = null
         }
         val rest = queue.drop(1)
         queue = if (requeue) {
@@ -413,6 +431,9 @@ fun StudyScreen(
                             if (seenToday.add(current.word.lowercase())) {
                                 completed += 1
                             }
+                            // 熟知 is a finish, not a rating: nothing is left to
+                            // undo, and the previous word's undo must not fire.
+                            lastCommitted = null
                             onMarkKnown(entryFor(current.word))
                             queue = queue.drop(1)
                         }
@@ -501,7 +522,7 @@ fun StudyScreen(
             GlassTranslateCard(
                 source = chosen,
                 translation = promoTranslation,
-                failure = null,
+                failure = promoFailure,
                 loading = promoLoading,
                 hazeState = hazeState,
                 onCopy = {
@@ -510,7 +531,13 @@ fun StudyScreen(
                 onCopySource = { clipboard.setText(AnnotatedString(chosen)) },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(horizontal = 16.dp, vertical = 96.dp),
+                    .padding(horizontal = 16.dp, vertical = 96.dp)
+                    // Consume taps on the card itself; otherwise the scrim
+                    // behind it treats a tap on the translation as "dismiss".
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { },
             )
         }
     }

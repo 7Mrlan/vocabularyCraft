@@ -70,13 +70,20 @@ fun ReviewScreen(
     val feedback = rememberAppFeedback()
     var queue by remember { mutableStateOf<List<CardEntity>>(emptyList()) }
     var reviewed by remember { mutableIntStateOf(0) }
+    // Words already answered in this sitting. A card can still be in the DB as
+    // due for a moment after the tap, so dueCards must never re-add it.
+    val ratedWords = remember { mutableSetOf<String>() }
     // The flow starts as an empty list, so "no cards" and "not read yet" look
     // identical until the first emission lands.
     var loaded by remember { mutableStateOf(false) }
 
     LaunchedEffect(dueCards) {
         loaded = true
-        if (queue.isEmpty() && dueCards.isNotEmpty()) queue = dueCards
+        // Append cards that became due while this screen is open; keep the
+        // already-queued order so the current card never jumps.
+        val known = queue.mapTo(HashSet(queue.size)) { it.word }
+        val fresh = dueCards.filter { it.word !in known && it.word !in ratedWords }
+        if (fresh.isNotEmpty()) queue = queue + fresh
     }
 
     val current = queue.firstOrNull()
@@ -289,6 +296,16 @@ fun ReviewScreen(
 
             Spacer(Modifier.height(20.dp))
 
+            fun rate(rating: Rating) {
+                // A fast double-tap must not rate the same card twice and drop
+                // the next card with the stale callback.
+                if (!ratedWords.add(current.word)) return
+                feedback.commit(view)
+                onRate(current, rating)
+                queue = queue.drop(1)
+                reviewed += 1
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -300,11 +317,7 @@ fun ReviewScreen(
                     background = wl.coralSoft,
                     contentColor = wl.coral,
                     enabled = revealed,
-                    onClick = {
-                        feedback.commit(view)
-                        onRate(current, Rating.Again)
-                        queue = queue.drop(1); reviewed += 1
-                    },
+                    onClick = { rate(Rating.Again) },
                 )
                 RatingButton(
                     modifier = Modifier.weight(1f),
@@ -313,11 +326,7 @@ fun ReviewScreen(
                     background = wl.surfaceAlt,
                     contentColor = wl.ink,
                     enabled = revealed,
-                    onClick = {
-                        feedback.commit(view)
-                        onRate(current, Rating.Hard)
-                        queue = queue.drop(1); reviewed += 1
-                    },
+                    onClick = { rate(Rating.Hard) },
                 )
                 RatingButton(
                     modifier = Modifier.weight(1f),
@@ -326,11 +335,7 @@ fun ReviewScreen(
                     background = wl.primary,
                     contentColor = wl.onPrimary,
                     enabled = revealed,
-                    onClick = {
-                        feedback.commit(view)
-                        onRate(current, Rating.Good)
-                        queue = queue.drop(1); reviewed += 1
-                    },
+                    onClick = { rate(Rating.Good) },
                 )
                 RatingButton(
                     modifier = Modifier.weight(1f),
@@ -339,11 +344,7 @@ fun ReviewScreen(
                     background = wl.mint,
                     contentColor = wl.mintInk,
                     enabled = revealed,
-                    onClick = {
-                        feedback.commit(view)
-                        onRate(current, Rating.Easy)
-                        queue = queue.drop(1); reviewed += 1
-                    },
+                    onClick = { rate(Rating.Easy) },
                 )
             }
             Spacer(Modifier.height(16.dp))

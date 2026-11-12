@@ -16,7 +16,7 @@ class AppContainer(app: Application) {
     /** Connects to Vocabulary.com directly with fallback to Wiktionary. */
     val source: DictionarySource = VocabularyComSource()
 
-    val repository = WordRepository(source, db.dao())
+    val repository = WordRepository(source, db)
     val wordBooks = WordBookStore(app)
     val bookSelection = WordBookSelection(app)
     // Shared with the speaker buttons so all clip downloads use one queue.
@@ -30,6 +30,7 @@ class WordloomApp : Application() {
         super.onCreate()
         // MapLibre must be initialised once, before any MapView is created.
         runCatching { org.maplibre.android.MapLibre.getInstance(this) }
+            .onFailure { android.util.Log.w("Wordloom", "MapLibre init failed", it) }
         TranslationService.init()
     }
 }

@@ -18,6 +18,7 @@ import dev.wordloom.srs.DAY_MS
 import dev.wordloom.srs.Rating
 import dev.wordloom.ui.map.MapCounters
 import dev.wordloom.srs.ReviewOutcome
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -128,7 +129,7 @@ class WordloomViewModel(
         // previous book's words on screen (or feed them into a study session).
         _bookWords.value = emptyList()
         bookJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            _bookWords.value = bookStore.words(curated)
+            attempt { bookStore.words(curated) }.onSuccess { _bookWords.value = it }
         }
     }
 
@@ -139,9 +140,14 @@ class WordloomViewModel(
             return
         }
         bookEntriesJob = viewModelScope.launch {
-            val found = repo.cachedEntriesFor(words)
+            val found = attempt { repo.cachedEntriesFor(words) }.getOrElse { return@launch }
             _bookEntries.value = found.associateBy { it.word.lowercase() }
         }
+    }
+
+    /** Drop entries prefetched for a finished study session so they cannot pile up. */
+    fun clearStudyEntries() {
+        _studyEntries.value = emptyMap()
     }
 
     /** Pull one study word's entry in the background; the card upgrades when it lands. */
@@ -197,7 +203,7 @@ class WordloomViewModel(
         quizLoading = true
         viewModelScope.launch {
             try {
-                val entries = runCatching { repo.cachedEntries().first() }.getOrElse { emptyList() }
+                val entries = attempt { repo.cachedEntries().first() }.getOrElse { emptyList() }
                 val previous = _quiz.value
                 _quiz.value = QuizState(QuizBuilder.build(entries), previous.round + 1)
             } finally {
@@ -213,7 +219,8 @@ class WordloomViewModel(
         .map { list ->
             val now = System.currentTimeMillis()
             MapCounters(
-                saved = list.size,
+                // 收藏 = a manual bookmark, not every card a study session added.
+                saved = list.count { it.savedAt > 0L },
                 due = list.count { it.dueAt <= now },
                 reviewed = list.count { it.reps > 0 && it.lastReviewAt >= now - 7 * DAY_MS },
             )
@@ -230,27 +237,35 @@ class WordloomViewModel(
     fun loadDailyWord() {
         viewModelScope.launch {
             val term = dev.wordloom.data.DailyWord.pick()
-            _dailyWord.value = runCatching { repo.lookup(term, markRecent = false) }.getOrNull()
+            _dailyWord.value = attempt { repo.lookup(term, markRecent = false) }.getOrNull()
         }
     }
 
     fun createList(name: String, onCreated: (Long) -> Unit = {}) {
         if (name.isBlank()) return
-        viewModelScope.launch { onCreated(repo.createList(name)) }
+        viewModelScope.launch {
+            attempt { repo.createList(name) }.onSuccess(onCreated)
+        }
     }
 
     fun addToList(listId: Long, word: String) {
-        viewModelScope.launch { repo.addToList(listId, word) }
+        viewModelScope.launch { attempt { repo.addToList(listId, word) } }
     }
 
     fun removeFromList(listId: Long, word: String) {
-        viewModelScope.launch { repo.removeFromList(listId, word) }
+        viewModelScope.launch { attempt { repo.removeFromList(listId, word) } }
     }
 
     fun openList(listId: Long) {
         listJob?.cancel()
         listJob = viewModelScope.launch {
-            repo.wordsInList(listId).collect { _listWords.value = it }
+            try {
+                repo.wordsInList(listId).collect { _listWords.value = it }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                // A broken query leaves the previous rows on screen.
+            }
         }
     }
 
@@ -263,7 +278,7 @@ class WordloomViewModel(
     private var listJob: Job? = null
 
     fun addDailyToDeck(entry: WordEntry) {
-        viewModelScope.launch { repo.addToDeck(entry) }
+        viewModelScope.launch { attempt { repo.addToDeck(entry) } }
     }
 
     /** Seeds the page from an entry we already hold, so it opens without a spinner. */
@@ -271,7 +286,7 @@ class WordloomViewModel(
         val knownInDeck = cards.value.any { it.word.equals(entry.word, ignoreCase = true) }
         _wordState.value = WordUiState.Loaded(entry, knownInDeck, entry.word)
         viewModelScope.launch {
-            val inDeck = runCatching { repo.card(entry.word) != null }.getOrDefault(knownInDeck)
+            val inDeck = attempt { repo.card(entry.word) != null }.getOrDefault(knownInDeck)
             val state = _wordState.value
             if (state is WordUiState.Loaded && state.entry.word.equals(entry.word, ignoreCase = true)) {
                 _wordState.value = state.copy(inDeck = inDeck)
@@ -309,7 +324,7 @@ class WordloomViewModel(
                 _wordState.value = if (entry == null || (!entry.hasContent && entry.ipa.isEmpty())) {
                     WordUiState.NotFound(cleaned)
                 } else {
-                    val inDeck = runCatching { repo.card(entry.word) != null }.getOrDefault(false)
+                    val inDeck = attempt { repo.card(entry.word) != null }.getOrDefault(false)
                     WordUiState.Loaded(entry, inDeck, cleaned)
                 }
             }.onFailure { error ->
@@ -376,7 +391,10 @@ class WordloomViewModel(
     /** Bookmark toggle: adds the word to the review deck (and the 收藏夹). */
     fun toggleDeck(entry: WordEntry, currentlyInDeck: Boolean) {
         viewModelScope.launch {
-            if (currentlyInDeck) repo.removeFromDeck(entry.word) else repo.addToDeck(entry)
+            val changed = attempt {
+                if (currentlyInDeck) repo.removeFromDeck(entry.word) else repo.addToDeck(entry)
+            }
+            if (changed.isFailure) return@launch
             val state = _wordState.value
             if (state is WordUiState.Loaded && state.entry.word == entry.word) {
                 _wordState.value = state.copy(inDeck = !currentlyInDeck)
@@ -389,12 +407,26 @@ class WordloomViewModel(
      * the 收藏夹 without touching its review schedule. Reported through [onDone]
      * so the screen can confirm what happened.
      */
-    fun toggleSaved(entry: WordEntry, onDone: (Boolean) -> Unit = {}) {
+    fun toggleSaved(
+        entry: WordEntry,
+        onFailed: () -> Unit = {},
+        onDone: (Boolean) -> Unit = {},
+    ) {
         viewModelScope.launch {
-            val card = runCatching { repo.card(entry.word) }.getOrNull()
+            val lookedUp = attempt { repo.card(entry.word) }
+            if (lookedUp.isFailure) {
+                onFailed()
+                return@launch
+            }
+            val card = lookedUp.getOrNull()
             val save = (card?.savedAt ?: 0L) == 0L
-            runCatching {
+            val written = attempt {
                 if (save) repo.addToDeck(entry, saved = true) else repo.clearSaved(entry.word)
+            }
+            // Do not confirm a bookmark that never reached the database.
+            if (written.isFailure) {
+                onFailed()
+                return@launch
             }
             if (save) {
                 val state = _wordState.value
@@ -406,9 +438,11 @@ class WordloomViewModel(
         }
     }
 
-    fun review(card: CardEntity, rating: Rating, onDone: (ReviewOutcome) -> Unit) {
+    fun review(card: CardEntity, rating: Rating, onDone: (ReviewOutcome?) -> Unit = {}) {
         viewModelScope.launch {
-            onDone(repo.review(card, rating))
+            // Null means the write failed; the screen can tell the reader to retry
+            // instead of silently dropping the card from this sitting.
+            onDone(attempt { repo.review(card, rating) }.getOrNull())
         }
     }
 
@@ -418,13 +452,16 @@ class WordloomViewModel(
         // prefer the fully loaded one so the new card keeps a real gloss.
         val resolved = _studyEntries.value[entry.word.lowercase()] ?: entry
         viewModelScope.launch {
-            runCatching {
+            attempt {
                 val before = repo.card(resolved.word)
                 if (isNew) repo.addToDeck(resolved, saved = false)
                 val card = repo.card(resolved.word)
                 val interval = card?.let { repo.review(it, rating).intervalDays }
                 lastStudyUndo = {
-                    if (isNew) repo.removeFromDeck(resolved.word) else before?.let { repo.restoreCard(it) }
+                    // Undo must mirror the actual "before" row, not the queue's
+                    // isNew flag: a word that already had a card must get its
+                    // FSRS progress back rather than be deleted.
+                    if (before == null) repo.removeFromDeck(resolved.word) else repo.restoreCard(before)
                 }
                 interval
             }.onSuccess(onDone).onFailure { onDone(null) }
@@ -433,20 +470,29 @@ class WordloomViewModel(
 
     private var lastStudyUndo: (suspend () -> Unit)? = null
 
+    /** [runCatching] that never swallows coroutine cancellation. */
+    private inline fun <T> attempt(block: () -> T): Result<T> = try {
+        Result.success(block())
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Throwable) {
+        Result.failure(error)
+    }
+
     /** Reverts the most recent rating, so a mis-tap never schedules a card wrongly. */
     fun undoStudy() {
         viewModelScope.launch {
-            lastStudyUndo?.invoke()
+            lastStudyUndo?.let { undo -> attempt { undo() } }
             lastStudyUndo = null
         }
     }
 
     /** The reader says they already know this word: take it out of the queue. */
     fun markKnown(entry: WordEntry) {
-        viewModelScope.launch { runCatching { repo.removeFromDeck(entry.word) } }
+        viewModelScope.launch { attempt { repo.removeFromDeck(entry.word) } }
     }
 
     fun trimCache() {
-        viewModelScope.launch { repo.trimOldCache() }
+        viewModelScope.launch { attempt { repo.trimOldCache() } }
     }
 }

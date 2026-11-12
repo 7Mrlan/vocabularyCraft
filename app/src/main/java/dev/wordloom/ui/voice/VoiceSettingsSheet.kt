@@ -311,6 +311,21 @@ private fun SoundSettingsSection() {
     }
     Spacer(Modifier.height(6.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("评分音", fontSize = 13.sp, color = wl.ink, modifier = Modifier.weight(1f))
+        SoundToggle(settings.ratings) { sound.setRatings(it) }
+    }
+    Spacer(Modifier.height(6.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("拼写音", fontSize = 13.sp, color = wl.ink, modifier = Modifier.weight(1f))
+        SoundToggle(settings.spelling) { sound.setSpelling(it) }
+    }
+    Spacer(Modifier.height(6.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("练习答对音", fontSize = 13.sp, color = wl.ink, modifier = Modifier.weight(1f))
+        SoundToggle(settings.quiz) { sound.setQuiz(it) }
+    }
+    Spacer(Modifier.height(6.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
         Text("书架过卡声", fontSize = 13.sp, color = wl.ink, modifier = Modifier.weight(1f))
         SoundToggle(settings.pageTurn) { sound.setPageTurn(it) }
     }

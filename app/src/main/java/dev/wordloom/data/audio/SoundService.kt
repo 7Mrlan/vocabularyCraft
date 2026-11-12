@@ -24,6 +24,9 @@ enum class Sound(@RawRes val res: Int, val gain: Float) {
 data class SoundSettings(
     val enabled: Boolean = true,
     val volume: Float = 0.30f,
+    val ratings: Boolean = true,
+    val spelling: Boolean = true,
+    val quiz: Boolean = true,
     val pageTurn: Boolean = false,
 )
 
@@ -53,7 +56,13 @@ class SoundService private constructor(context: Context) {
     fun play(sound: Sound) {
         val current = _settings.value
         if (!current.enabled) return
-        if (sound == Sound.PageTurn && !current.pageTurn) return
+        val allowed = when (sound) {
+            Sound.Easy, Sound.Good, Sound.Hard, Sound.Again -> current.ratings
+            Sound.SpellRight, Sound.SpellWrong -> current.spelling
+            Sound.QuizCorrect -> current.quiz
+            Sound.PageTurn -> current.pageTurn
+        }
+        if (!allowed) return
         val id = ids[sound] ?: return
         val gain = (current.volume * sound.gain).coerceIn(0f, 1f)
         // A hair of pitch variation keeps repeated ratings from sounding like a
@@ -72,6 +81,21 @@ class SoundService private constructor(context: Context) {
         prefs.edit().putFloat(KEY_VOLUME, next).apply()
     }
 
+    fun setRatings(enabled: Boolean) {
+        _settings.value = _settings.value.copy(ratings = enabled)
+        prefs.edit().putBoolean(KEY_RATINGS, enabled).apply()
+    }
+
+    fun setSpelling(enabled: Boolean) {
+        _settings.value = _settings.value.copy(spelling = enabled)
+        prefs.edit().putBoolean(KEY_SPELLING, enabled).apply()
+    }
+
+    fun setQuiz(enabled: Boolean) {
+        _settings.value = _settings.value.copy(quiz = enabled)
+        prefs.edit().putBoolean(KEY_QUIZ, enabled).apply()
+    }
+
     fun setPageTurn(enabled: Boolean) {
         _settings.value = _settings.value.copy(pageTurn = enabled)
         prefs.edit().putBoolean(KEY_PAGE_TURN, enabled).apply()
@@ -85,6 +109,9 @@ class SoundService private constructor(context: Context) {
     private fun load(): SoundSettings = SoundSettings(
         enabled = prefs.getBoolean(KEY_ENABLED, true),
         volume = prefs.getFloat(KEY_VOLUME, 0.30f).coerceIn(0f, 1f),
+        ratings = prefs.getBoolean(KEY_RATINGS, true),
+        spelling = prefs.getBoolean(KEY_SPELLING, true),
+        quiz = prefs.getBoolean(KEY_QUIZ, true),
         pageTurn = prefs.getBoolean(KEY_PAGE_TURN, false),
     )
 
@@ -99,6 +126,9 @@ class SoundService private constructor(context: Context) {
 
         private const val KEY_ENABLED = "enabled"
         private const val KEY_VOLUME = "volume"
+        private const val KEY_RATINGS = "ratings"
+        private const val KEY_SPELLING = "spelling"
+        private const val KEY_QUIZ = "quiz"
         private const val KEY_PAGE_TURN = "page_turn"
     }
 }

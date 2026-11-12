@@ -15,6 +15,9 @@
 |---|---|
 | 英英查词（导读、其他形态、音标、释义、例句、synonyms） | ✅ |
 | US / UK 发音播放 + 全部连读 | ✅ |
+| AI 朗读（单词 / 例句；MiMo 或 OpenAI 兼容接口，密钥本机 Keystore 加密） | ✅ |
+| 首页品牌行三按钮 + 收纳抽屉（地图 / 备份 / 声音） | ✅ |
+| 首次启动 4 屏引导（AI 朗读配置 / 学习卡演示 / 去书架） | ✅ |
 | 搜索联想（原站 `autocomplete-ss`，带一行释义；结果按「词 / 短语」分组） | ✅ |
 | 词族（Word family，可点进任意派生词） | ✅ |
 | 同义词详情页（按义项分组，词可点） | ✅ |
@@ -138,8 +141,8 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 > 首次构建会下载 Gradle 依赖，约 3–5 分钟。
 
-> **release 包只含 arm64-v8a**（体积与原因见 [`docs/BUILD.md`](docs/BUILD.md) 第 2 节）；
-> debug 包是全 ABI，模拟器照常可用。
+> **release / debug 都只含 arm64-v8a**（体积与原因见 [`docs/BUILD.md`](docs/BUILD.md) 第 2 节）；
+> 需要 x86 模拟器时临时去掉过滤，不要提交。
 
 ### 模拟器 / 国内网络的注意事项
 
@@ -209,6 +212,9 @@ app/src/main/java/dev/wordloom/
 | `AGENTS.md` | 给 AI 助手的硬性约定（ABI 策略、依赖卫生、错误语义、深浅色规则） |
 | `docs/DESIGN.md` | 设计系统：配色令牌、字体、动效、图标、深色模式 |
 | `docs/BUILD.md` | 构建、体积与发布：工具链、**为什么 release 只打 arm64-v8a**、签名、CI、发布前检查清单 |
+| `docs/AI-TTS.md` | AI 朗读：MiMo 模型/音色、延迟实测、加密配置、预取/缓存与验收 |
+| `docs/REVIEW-AND-ROADMAP.md` | 2026-11 全仓审查结论、已定决策、完成度与后续顺序 |
+| `docs/ONBOARDING.md` | 首次下载动态引导：AI TTS 配置、学习卡演示、持久化与验收 |
 | `docs/WORDBOOKS.md` | 词书范围、来源与实施记录 |
 | `docs/LEARNING.md` / `docs/LEARNING-2.md` | 背单词系统的调研与设计（历史方案，部分未实现） |
 | `RESEARCH.md` | 早期可行性研究（存档，非当前实现） |
@@ -220,7 +226,7 @@ app/src/main/java/dev/wordloom/
 3. `gh release create v<versionName> app/build/outputs/apk/release/app-release.apk`
 4. 若只是替换已有版本的资产：`gh release upload v<versionName> <apk> --clobber`
 
-> **release 只打 arm64-v8a**（debug 仍是全 ABI，模拟器可用）。MapLibre 与 ML Kit 翻译各带
+> **release / debug 都只打 arm64-v8a**（需要模拟器时临时去掉过滤，不要提交）。MapLibre 与 ML Kit 翻译各带
 > 一份原生库，单 ABI 合计约 28 MiB（v4.0.0 实测 APK 38.0 MiB）；四个 ABI 全塞进一个 APK 会让包体涨到 ~117 MiB，
 > 而手机只加载其中一份。需要 32 位旧机时把 `abiFilters` 加上 `armeabi-v7a`，需要模拟器时用 debug 包。
 >

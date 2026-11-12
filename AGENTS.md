@@ -23,7 +23,7 @@ Wordloom：本地优先的英英词典 + FSRS 间隔重复复习 App（Android /
    `app/build.gradle.kts` 里 `ndk { abiFilters += listOf("arm64-v8a") }` 是有意为之：
    MapLibre 与 ML Kit 每个 ABI 一份原生库（单 ABI 约 28 MiB），四 ABI 打包会让 APK 从
    38 MiB 涨到 117 MiB 而手机只加载一份。**不要新增/删除 `abiFilters`，除非明确要求。**
-   debug 保持全 ABI（模拟器需要）。
+   debug 也只打 arm64-v8a（本机已不使用 x86 模拟器；需要时临时去掉过滤，不要提交）。
    这条不是靠自觉：`.github/workflows/release.yml` 的 **Verify APK (ABI rule + size baseline)**
    步骤会用 `aapt2` 检查 APK 只含 arm64-v8a，多一个 ABI 就让 CI 直接失败。
    注意：**体积本身没有硬上限**——加功能让包变大是正常的，CI 只在超过
@@ -60,6 +60,14 @@ Wordloom：本地优先的英英词典 + FSRS 间隔重复复习 App（Android /
    `if (playing)` 之类的状态分支里，否则一屏多个按钮会让 UI 线程每帧都在跑。
    音频统一走 `AudioCache.shared(context)`（共享连接池 + 同 URL 并发去重），
    不要在 composable 里各建一个 `OkHttpClient`。
+10. **TTS key 只进本地测试，不进正式包。** 正式 release 的 BuildConfig 必须为空；
+    本地测试用 `-PttsLocal` 从 gitignored `local.properties` 注入，且该 APK 不得上传。
+    最终配置走应用内加密 `TtsConfigStore`（Android Keystore AES/GCM + AtomicFile），
+    key 不进备份、日志或文档。细节见 `docs/AI-TTS.md`。
+11. **首次引导可跳过、不阻塞离线。** 引导只出现一次，完成后写 flag；
+    TTS 未配置时保留安静的入口，不反复弹窗。见 `docs/ONBOARDING.md`。
+12. **后续开发以文档为准。** 全仓审查结论、决策和顺序在
+    `docs/REVIEW-AND-ROADMAP.md`；不要凭记忆重新发明方案。
 
 ---
 

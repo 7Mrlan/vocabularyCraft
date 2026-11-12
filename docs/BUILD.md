@@ -61,7 +61,7 @@ ndk {
 **规则**：
 
 - release 只打 `arm64-v8a`（2017 年后的手机全部支持）；
-- **debug 保留全部 ABI**，否则 x86 模拟器装不上；
+- **debug 也只打 `arm64-v8a`**（本机已不使用 x86 模拟器）；需要模拟器时临时去掉过滤，不要提交；
 - 需要 32 位老机时，在 `abiFilters` 里加 `armeabi-v7a`（包体 +11 MiB）；
 - 需要在模拟器上装 release 时，临时把 `abiFilters` 去掉（包体 +59 MiB），别把过滤条件留在仓库里。
 
@@ -76,10 +76,10 @@ aapt2 dump badging app/build/outputs/apk/release/app-release.apk | findstr nativ
 
 ## 3. 体积账与体检
 
-> 以下数字来自 v4.0.0 本地出包实测（2026-11-12，见 §2 表）；每次发版后如体积变化明显，
+> 以下数字来自 4.1 无 key 本地出包实测（2026-11-12，见 §2 表）；每次发版后如体积变化明显，
 > 同步更新这里与 `gradle/apk-budget.properties`。
 
-当前 release APK（38.0 MiB，39,836,042 字节）的构成：
+当前 release APK（4.1，38.07 MiB，39,918,778 字节；arm64；无 TTS key）的构成：
 
 | 部分 | 未压缩体积 |
 |---|---|
@@ -178,6 +178,12 @@ apksigner verify --verbose --print-certs app/build/outputs/apk/release/app-relea
 - [ ] 体积对比 `gradle/apk-budget.properties` 的基线：超了没关系（只是提醒），
       但要能说清多出来的体积花在什么功能上，并在 release notes 里写一句
 - [ ] `apksigner verify`：签名符合预期（debug 或 release keystore）
+- [ ] release APK **不含 TTS key**：检查 BuildConfig / 字符串；本地测试包用
+      `-PttsLocal` 构建且不得上传，正式包不要带该参数
+- [ ] 首次启动进入 4 屏引导；跳过/完成后不再出现；第 2 屏能保存并试听 TTS
+- [ ] 首页品牌行只有三个按钮；收纳抽屉能打开地图 / 备份 / 声音，返回键能收起
+- [ ] 声音配置：未配置时显示「未配置」；填入 key 后试听、保存，杀进程重开仍生效；
+      密钥文件 `files/tts.encrypted` 不在备份/设备迁移范围内
 - [ ] 真机安装并走一遍：首页、深浅色切换、查词与跳转、复习评分、四选一练习、地图巡航、备份导出/导入
 - [ ] 词书：切换三本内置书与三本自动书，开卷 / 合卷、单元列表、词内状态筛选
 - [ ] 学习卡：四档评分、例句环左右翻页、中文层、撤销、「熟知」、拼写检查

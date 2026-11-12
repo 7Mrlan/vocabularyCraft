@@ -26,6 +26,8 @@ data class CardEntity(
     val dueAt: Long,
     val addedAt: Long,
     val preview: String,
+    /** When the reader bookmarked it; 0 for words added by a study session. */
+    val savedAt: Long = 0L,
 )
 
 @Serializable

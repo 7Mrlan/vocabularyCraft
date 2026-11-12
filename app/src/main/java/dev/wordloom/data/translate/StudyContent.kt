@@ -11,7 +11,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.net.URLEncoder
-import java.util.concurrent.ConcurrentHashMap
+import java.util.Collections
 import java.util.concurrent.TimeUnit
 
 data class StudyExample(val en: String, val zh: String, val audioUrl: String = "")
@@ -31,7 +31,15 @@ data class StudyDetails(
 object StudyContent {
 
     private val json = Json { ignoreUnknownKeys = true }
-    private val cache = ConcurrentHashMap<String, StudyDetails>()
+    // A long session can touch hundreds of words; keep the details bounded so the
+    // map cannot grow for the whole process lifetime.
+    private const val MAX_CACHE = 400
+    private val cache: MutableMap<String, StudyDetails> = Collections.synchronizedMap(
+        object : LinkedHashMap<String, StudyDetails>(64, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, StudyDetails>?): Boolean =
+                size > MAX_CACHE
+        },
+    )
     private val client = OkHttpClient.Builder()
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(12, TimeUnit.SECONDS)

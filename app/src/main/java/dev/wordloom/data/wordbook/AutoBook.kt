@@ -63,7 +63,8 @@ object AutoWords {
             .distinct()
 
     fun saved(cards: List<CardEntity>): List<String> =
-        cards.sortedByDescending { it.addedAt }
+        cards.filter { it.savedAt > 0L }
+            .sortedByDescending { it.savedAt }
             .map { it.word.lowercase() }
             .distinct()
 

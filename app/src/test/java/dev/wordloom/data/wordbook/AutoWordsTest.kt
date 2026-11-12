@@ -12,6 +12,7 @@ class AutoWordsTest {
         lapses: Int = 0,
         addedAt: Long = 0L,
         lastReviewAt: Long = 0L,
+        savedAt: Long = addedAt,
     ) = CardEntity(
         word = word,
         stability = 1.0,
@@ -22,6 +23,7 @@ class AutoWordsTest {
         dueAt = 0L,
         addedAt = addedAt,
         preview = "",
+        savedAt = savedAt,
     )
 
     @Test
@@ -56,6 +58,24 @@ class AutoWordsTest {
             card("late", addedAt = 50),
         )
         assertEquals(listOf("late", "early"), AutoWords.saved(cards))
+    }
+
+    @Test
+    fun `study-only cards stay out of the saved book`() {
+        val cards = listOf(
+            card("bookmarked", addedAt = 10, savedAt = 99),
+            card("studied", addedAt = 50, savedAt = 0),
+        )
+        assertEquals(listOf("bookmarked"), AutoWords.saved(cards))
+    }
+
+    @Test
+    fun `saved words follow the bookmark time, not the deck time`() {
+        val cards = listOf(
+            card("decked-late", addedAt = 900, savedAt = 10),
+            card("bookmarked-late", addedAt = 5, savedAt = 900),
+        )
+        assertEquals(listOf("bookmarked-late", "decked-late"), AutoWords.saved(cards))
     }
 
     @Test

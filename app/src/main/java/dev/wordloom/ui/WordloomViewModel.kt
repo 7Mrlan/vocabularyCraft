@@ -36,6 +36,8 @@ sealed interface WordUiState {
         val entry: WordEntry,
         val inDeck: Boolean,
         val requestedTerm: String = entry.word,
+        /** True when the reader bookmarked it (the 收藏夹). */
+        val saved: Boolean = false,
     ) : WordUiState
     data class NotFound(val term: String) : WordUiState
     data class Failed(val term: String, val message: String) : WordUiState
@@ -268,13 +270,21 @@ class WordloomViewModel(
 
     /** Seeds the page from an entry we already hold, so it opens without a spinner. */
     fun showWord(entry: WordEntry) {
-        val knownInDeck = cards.value.any { it.word.equals(entry.word, ignoreCase = true) }
-        _wordState.value = WordUiState.Loaded(entry, knownInDeck, entry.word)
+        val known = cards.value.firstOrNull { it.word.equals(entry.word, ignoreCase = true) }
+        _wordState.value = WordUiState.Loaded(
+            entry = entry,
+            inDeck = known != null,
+            requestedTerm = entry.word,
+            saved = (known?.savedAt ?: 0L) > 0L,
+        )
         viewModelScope.launch {
-            val inDeck = runCatching { repo.isInDeck(entry.word) }.getOrDefault(knownInDeck)
+            val card = runCatching { repo.card(entry.word) }.getOrNull()
             val state = _wordState.value
             if (state is WordUiState.Loaded && state.entry.word.equals(entry.word, ignoreCase = true)) {
-                _wordState.value = state.copy(inDeck = inDeck)
+                _wordState.value = state.copy(
+                    inDeck = if (card != null) true else state.inDeck,
+                    saved = if (card != null) card.savedAt > 0L else state.saved,
+                )
             }
         }
     }
@@ -309,8 +319,13 @@ class WordloomViewModel(
                 _wordState.value = if (entry == null || (!entry.hasContent && entry.ipa.isEmpty())) {
                     WordUiState.NotFound(cleaned)
                 } else {
-                    val inDeck = runCatching { repo.isInDeck(entry.word) }.getOrDefault(false)
-                    WordUiState.Loaded(entry, inDeck, cleaned)
+                    val card = runCatching { repo.card(entry.word) }.getOrNull()
+                    WordUiState.Loaded(
+                        entry = entry,
+                        inDeck = card != null,
+                        requestedTerm = cleaned,
+                        saved = (card?.savedAt ?: 0L) > 0L,
+                    )
                 }
             }.onFailure { error ->
                 _wordState.value = WordUiState.Failed(cleaned, error.message ?: "查询失败")
@@ -373,12 +388,24 @@ class WordloomViewModel(
         }
     }
 
-    fun toggleDeck(entry: WordEntry, currentlyInDeck: Boolean) {
+    /**
+     * The bookmark: adds the word to the deck on first tap and to the 收藏夹
+     * (savedAt) on every save. Un-bookmarking clears savedAt but leaves the
+     * review card — and its FSRS progress — alone.
+     */
+    fun toggleDeck(entry: WordEntry, currentlySaved: Boolean) {
         viewModelScope.launch {
-            if (currentlyInDeck) repo.removeFromDeck(entry.word) else repo.addToDeck(entry)
+            if (currentlySaved) {
+                repo.clearSaved(entry.word)
+            } else {
+                repo.addToDeck(entry, saved = true)
+            }
             val state = _wordState.value
             if (state is WordUiState.Loaded && state.entry.word == entry.word) {
-                _wordState.value = state.copy(inDeck = !currentlyInDeck)
+                _wordState.value = state.copy(
+                    inDeck = if (currentlySaved) state.inDeck else true,
+                    saved = !currentlySaved,
+                )
             }
         }
     }
@@ -397,7 +424,7 @@ class WordloomViewModel(
         viewModelScope.launch {
             runCatching {
                 val before = repo.card(resolved.word)
-                if (isNew) repo.addToDeck(resolved)
+                if (isNew) repo.addToDeck(resolved, saved = false)
                 val card = repo.card(resolved.word)
                 val interval = card?.let { repo.review(it, rating).intervalDays }
                 lastStudyUndo = {

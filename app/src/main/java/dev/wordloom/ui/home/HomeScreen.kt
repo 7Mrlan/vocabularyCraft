@@ -58,7 +58,7 @@ import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
 import dev.wordloom.ui.backup.BackupSheet
 import kotlinx.coroutines.launch
-import dev.wordloom.ui.components.pressable
+import dev.wordloom.ui.theme.wlPress
 import dev.wordloom.ui.theme.WordloomTheme
 
 private val HeroTop = Color(0xFF061B45)
@@ -403,6 +403,10 @@ private fun BrandRow(
             fontWeight = FontWeight.Bold,
             fontSize = 22.sp,
             color = Color.White,
+            // Four round actions already share this row; never let the wordmark
+            // wrap to a second line on a narrow screen.
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
         }
         Spacer(Modifier.weight(1f))
@@ -480,7 +484,7 @@ private fun PrimaryActionCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .pressable(onClick = onClick),
+            .wlPress(scale = 0.985f, dim = false, onClick = onClick),
         shape = RoundedCornerShape(18.dp),
         color = background,
     ) {
@@ -537,7 +541,7 @@ private fun ArrowCard(
     Surface(
         modifier = modifier
             .height(76.dp)
-            .pressable(onClick = onClick),
+            .wlPress(scale = 0.985f, dim = false, onClick = onClick),
         shape = RoundedCornerShape(18.dp),
         color = background,
     ) {
@@ -597,7 +601,7 @@ private fun DailyWordCard(
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
             .padding(top = 16.dp)
-            .pressable(onClick = onOpen),
+            .wlPress(scale = 0.985f, dim = false, onClick = onOpen),
         shape = RoundedCornerShape(22.dp),
         color = wl.surface,
         shadowElevation = 2.dp,

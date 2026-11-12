@@ -23,26 +23,32 @@ object WlMotion {
 }
 
 /**
- * The app's only press feedback: the target sinks a hair and dims. No ripple,
- * no tinted rectangle — on paper, a touch should move the ink, not paint a box.
+ * The app's only press feedback: the target sinks a hair and, for text-sized
+ * targets, dims. No ripple, no tinted rectangle — on paper, a touch should move
+ * the ink, not paint a box.
+ *
+ * Large paper cards pass [dim] = false and a shallower [scale]: dimming a whole
+ * white card reads as a flash, while a text button needs the extra weight.
  */
 @Composable
 fun Modifier.wlPress(
     enabled: Boolean = true,
+    scale: Float = 0.96f,
+    dim: Boolean = true,
     onClick: () -> Unit,
 ): Modifier {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.96f else 1f,
+    val pressedScale by animateFloatAsState(
+        targetValue = if (pressed) scale else 1f,
         animationSpec = WlMotion.press,
         label = "wlPress",
     )
     return this
         .graphicsLayer {
-            scaleX = scale
-            scaleY = scale
-            alpha = if (pressed) 0.72f else 1f
+            scaleX = pressedScale
+            scaleY = pressedScale
+            alpha = if (pressed && dim) 0.72f else 1f
         }
         .clickable(
             interactionSource = interaction,

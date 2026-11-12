@@ -139,8 +139,8 @@ val SerifFamily = FontFamily(
 | 场景 | 动效 | 为什么必要 |
 |---|---|---|
 | 页面进入/返回 | 无转场，硬切（`EnterTransition.None`） | 全屏滑动在真机上会掉帧，硬切反而更稳 |
-| 卡片按压 | 缩到 0.985（`WlMotion.press`） | 触摸反馈，单层 transform |
-| 文字/行按压 | `wlPress`：缩到 0.96 + 透明度 0.72 | 不用 Material 涟漪——纸面上没有灰色圆角矩形，全局 `NoIndication` |
+| 卡片按压 | `wlPress(scale = 0.985f, dim = false)` | 触摸反馈；整张白卡只缩放不变暗，单层 transform |
+| 文字/行按压 | `wlPress()`：缩到 0.96 + 透明度 0.72 | 不用 Material 涟漪——纸面上没有灰色圆角矩形，全局 `NoIndication` |
 | 列表增删 | `animateItem` | 交代行的空间关系 |
 | 搜索结果 | 逐条上浮（`Surfaced`） | 让结果从水线里长出来，而不是突然出现 |
 | 词条内容到达 | 140ms 淡入（`ContentFade`） | 标题与骨架同位置，正文安静浮现，无布局跳动 |

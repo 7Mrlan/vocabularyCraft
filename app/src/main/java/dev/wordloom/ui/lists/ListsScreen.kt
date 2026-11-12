@@ -41,7 +41,7 @@ import dev.wordloom.data.local.ListWithCount
 import dev.wordloom.ui.components.PoolHeader
 import dev.wordloom.ui.components.WlSheet
 import dev.wordloom.ui.theme.SerifFamily
-import dev.wordloom.ui.components.pressable
+import dev.wordloom.ui.theme.wlPress
 import dev.wordloom.ui.theme.WordloomTheme
 
 /**
@@ -198,7 +198,7 @@ private fun ListCard(
         modifier = modifier
             .fillMaxWidth()
             .background(wl.surfaceAlt, RoundedCornerShape(18.dp))
-            .pressable(onClick = onClick)
+            .wlPress(scale = 0.985f, dim = false, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

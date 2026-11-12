@@ -126,6 +126,7 @@ class WordRepository(
 
     suspend fun exportBackup(): String = withContext(Dispatchers.IO) {
         val file = BackupFile(
+            version = 2,
             exportedAt = System.currentTimeMillis(),
             cards = dao.allCards(),
             lists = dao.allLists(),
@@ -142,10 +143,17 @@ class WordRepository(
     suspend fun importBackup(text: String): Result<Int> = withContext(Dispatchers.IO) {
         try {
             val file = json.decodeFromString(BackupFile.serializer(), text)
-            require(file.version <= 1) { "备份文件版本过新" }
+            require(file.version <= 2) { "备份文件版本过新" }
 
             file.words.forEach { dao.putWord(it) }
-            file.cards.forEach { dao.putCard(it) }
+            // v1 backups predate the bookmark flag: keep their old behaviour so
+            // the 收藏夹 does not look empty after a restore.
+            val cards = if (file.version <= 1) {
+                file.cards.map { if (it.savedAt == 0L) it.copy(savedAt = it.addedAt) else it }
+            } else {
+                file.cards
+            }
+            cards.forEach { dao.putCard(it) }
 
             val existing = dao.allLists().associateBy { it.name to it.createdAt }
             val idMap = mutableMapOf<Long, Long>()
@@ -176,16 +184,23 @@ class WordRepository(
             list.filter { it.dueAt <= now }.sortedBy { it.dueAt }
         }
 
-    suspend fun isInDeck(word: String): Boolean = dao.card(word.lowercase()) != null
-
     suspend fun card(word: String): CardEntity? = dao.card(word.lowercase())
 
     suspend fun restoreCard(card: CardEntity) = dao.putCard(card)
 
-    suspend fun addToDeck(entry: WordEntry) {
+    /**
+     * Adds a word to the review deck. [saved] marks it as a manual bookmark
+     * (the 收藏夹 book); a study session adds its new words with saved = false.
+     * Bookmarking a word that is already in the deck just stamps savedAt.
+     */
+    suspend fun addToDeck(entry: WordEntry, saved: Boolean = true) {
         val key = entry.word.lowercase()
-        if (dao.card(key) != null) return
         val now = System.currentTimeMillis()
+        val existing = dao.card(key)
+        if (existing != null) {
+            if (saved && existing.savedAt == 0L) dao.putCard(existing.copy(savedAt = now))
+            return
+        }
         val preview = entry.senses.firstOrNull()?.definition.orEmpty().take(200)
         dao.putCard(
             CardEntity(
@@ -198,11 +213,18 @@ class WordRepository(
                 dueAt = now,
                 addedAt = now,
                 preview = preview,
+                savedAt = if (saved) now else 0L,
             )
         )
     }
 
     suspend fun removeFromDeck(word: String) = dao.deleteCard(word.lowercase())
+
+    /** Drops the bookmark but keeps the card and its review progress. */
+    suspend fun clearSaved(word: String) {
+        val key = word.lowercase()
+        dao.card(key)?.let { dao.putCard(it.copy(savedAt = 0L)) }
+    }
 
     suspend fun review(card: CardEntity, rating: Rating): ReviewOutcome {
         val outcome = Scheduler.review(

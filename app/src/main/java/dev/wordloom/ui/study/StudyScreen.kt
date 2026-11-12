@@ -1666,7 +1666,7 @@ private fun SpellingRound(
         )
         if (ok) {
             correctCount += 1
-            onPlay(entry.audio.firstOrNull()?.url.orEmpty())
+            entry.audio.firstOrNull()?.url?.takeIf { it.isNotBlank() }?.let(onPlay)
         }
     }
 

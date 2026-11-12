@@ -441,18 +441,22 @@ fun StudyScreen(
 
             total == 0 -> EmptyState(onBack = onBack)
 
-            current == null && spelling -> SpellingRound(
-                words = spellWords,
-                onPlay = { url -> player.play(url) },
-                onSound = { correct ->
-                    sfx.play(if (correct) Sound.SpellRight else Sound.SpellWrong)
-                },
-                onFinish = { correct ->
-                    spellScore = correct
-                    spellTaken = true
-                    spelling = false
-                },
-            )
+            current == null && spelling -> CompositionLocalProvider(
+                LocalSpeechActions provides speechActions,
+            ) {
+                SpellingRound(
+                    words = spellWords,
+                    onPlay = { url -> player.play(url) },
+                    onSound = { correct ->
+                        sfx.play(if (correct) Sound.SpellRight else Sound.SpellWrong)
+                    },
+                    onFinish = { correct ->
+                        spellScore = correct
+                        spellTaken = true
+                        spelling = false
+                    },
+                )
+            }
 
             current == null -> DoneState(
                 total = total,
@@ -522,16 +526,18 @@ fun StudyScreen(
 
     val reviewing = reviewIndex?.let { history.getOrNull(it) }
     if (reviewing != null) {
-        ReviewOverlay(
-            word = reviewing.first,
-            rating = reviewing.second,
-            entry = entryFor(reviewing.first),
-            index = reviewIndex ?: 0,
-            total = history.size,
-            canOlder = (reviewIndex ?: 0) > 0,
-            onOlder = { reviewIndex = (reviewIndex ?: 0) - 1 },
-            onClose = { reviewIndex = null },
-        )
+        CompositionLocalProvider(LocalSpeechActions provides speechActions) {
+            ReviewOverlay(
+                word = reviewing.first,
+                rating = reviewing.second,
+                entry = entryFor(reviewing.first),
+                index = reviewIndex ?: 0,
+                total = history.size,
+                canOlder = (reviewIndex ?: 0) > 0,
+                onOlder = { reviewIndex = (reviewIndex ?: 0) - 1 },
+                onClose = { reviewIndex = null },
+            )
+        }
     }
     }
 }

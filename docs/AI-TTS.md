@@ -85,7 +85,7 @@
 - `WordScreen`：词条页喇叭走 AI；AI 启用时隐藏“全部”真人连读。
 - 配置来源：release 的 BuildConfig 六项全空；用户 key 只从应用内写入加密 store。
 - 4.1 正式包：`Wordloom-4.1-arm64.apk`（同 `app/build/outputs/apk/release/app-release.apk`；
-  38.04 MiB，arm64，versionCode 14 / 4.1），已确认 APK 内不含用户 key。含 key 的本地测试包
+  arm64，versionCode 14 / 4.1），已确认 APK 内不含用户 key。含 key 的本地测试包
   只用于验证，不再交付。
 
 ## 5. 目标架构与剩余
@@ -113,10 +113,11 @@
 - ✅ 配置变化 → 缓存 key 变化，旧缓存自然失效。
 - ✅ 预取：书内页前 3 词、队列前 3 词、当前词 + 前 5 例句；并发 2；in-flight 去重。
 - ✅ 失败状态：`Loading / Playing / Failed`；失败一次后回退到旧 URL，不静默。
-- ⏳ 缓存：磁盘 LRU（上限待定，建议 128 MB）；命中 <50 ms。当前只增不减，需要清理策略。
-- ⏳ 音频焦点：requestAudioFocus；来电/其他 App 播放暂停；蓝牙切换处理。
-- ⏳ 可选流式：若换 `mimo-v2.5-tts` 英文 voice，使用 `pcm16` SSE + AudioTrack/Media3；
-  design 不做流式。
+- ✅ 缓存：128 MiB LRU；命中时刷新最近使用时间，正在写入/试听/测试的临时文件不参与清理。
+- ✅ 音频焦点：`AudioFocus` 请求 transient focus；来电或其他播放器接管时停止当前 clip，
+  播放结束/取消立即 abandon。
+- ⏸ 流式：design 音色没有实际提前音频，当前不启用；只有改用 `mimo-v2.5-tts` 英文预置音色时
+  才值得做 `pcm16` SSE + AudioTrack/Media3。当前选择预取/缓存。
 
 ### 5.4 英文质量
 

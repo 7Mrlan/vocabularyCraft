@@ -154,7 +154,9 @@ fun AppNav(
                     }
                 },
                 onTestTts = viewModel::testTts,
+                onStopAudio = viewModel::stopTts,
                 onFinish = { skipped, openBooks ->
+                    viewModel.stopTts()
                     onboarding.complete(skipped)
                     ttsStatus = viewModel.ttsStatus
                     // First launch replaces onboarding with home; replaying
@@ -409,6 +411,7 @@ fun AppNav(
             onSave = { draft, onResult ->
                 viewModel.saveTtsConfig(draft) { result ->
                     ttsStatus = viewModel.ttsStatus
+                    if (result.isSuccess) onboarding.markTtsConfigured()
                     onResult(result)
                 }
             },

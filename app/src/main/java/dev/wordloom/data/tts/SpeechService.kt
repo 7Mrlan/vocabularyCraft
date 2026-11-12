@@ -18,6 +18,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
+import java.io.IOException
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
@@ -114,7 +115,11 @@ class SpeechService(
                 val temporary = File(directory, "preview-${System.nanoTime()}.${resolved.extension}")
                 try {
                     client.synthesize(resolved, text, temporary)
-                    playFile(temporary, "preview") {}
+                    var started = false
+                    playFile(temporary, "preview") { state ->
+                        if (state is SpeechState.Playing) started = true
+                    }
+                    if (!started) throw IOException("无法播放试听音频")
                 } finally {
                     temporary.delete()
                 }
@@ -147,7 +152,11 @@ class SpeechService(
                 val file = File(directory, "test-${System.nanoTime()}.${resolved.extension}")
                 temporary = file
                 val synthesized = client.synthesize(resolved, text, file)
-                playFile(file, "test") {}
+                var started = false
+                playFile(file, "test") { state ->
+                    if (state is SpeechState.Playing) started = true
+                }
+                if (!started) throw IOException("无法播放测试音频")
                 Result.success(synthesized)
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -242,20 +251,23 @@ class SpeechService(
             stopPlayer()
             val media = MediaPlayer()
             player = media
-            val finish = {
+            val finish: (Boolean) -> Unit = { failed ->
                 runCatching { media.release() }
                 if (player === media) player = null
                 audioFocus.abandon()
                 if (continuation.isActive) {
-                    onState(SpeechState.Idle)
+                    onState(
+                        if (failed) SpeechState.Failed("无法播放音频")
+                        else SpeechState.Idle,
+                    )
                     continuation.resume(Unit)
                 }
             }
-            if (!audioFocus.request { finish() }) {
+            if (!audioFocus.request { finish(false) }) {
                 runCatching { media.release() }
                 if (player === media) player = null
                 onState(SpeechState.Failed("音频被其他应用占用"))
-                continuation.resume(Unit)
+                if (continuation.isActive) continuation.resume(Unit)
                 return@suspendCancellableCoroutine
             }
             try {
@@ -270,15 +282,14 @@ class SpeechService(
                     it.start()
                     onState(SpeechState.Playing(source))
                 }
-                media.setOnCompletionListener { finish() }
+                media.setOnCompletionListener { finish(false) }
                 media.setOnErrorListener { _, _, _ ->
-                    finish()
+                    finish(true)
                     true
                 }
                 media.prepareAsync()
             } catch (_: Throwable) {
-                onState(SpeechState.Failed("无法播放音频"))
-                finish()
+                finish(true)
             }
             continuation.invokeOnCancellation {
                 runCatching { media.release() }

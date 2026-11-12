@@ -41,7 +41,7 @@ internal fun OnboardingStepHeader(step: String, onSkip: () -> Unit) {
             color = wl.inkMuted,
             modifier = Modifier
                 .wlPress(onClick = onSkip)
-                .padding(horizontal = 8.dp, vertical = 12.dp),
+                .padding(horizontal = 8.dp, vertical = 16.dp),
         )
     }
 }
@@ -86,7 +86,7 @@ internal fun OnboardingPrimaryButton(
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.labelLarge.copy(fontSize = 15.sp),
             color = if (light) Color(0xFF061B45) else wl.surface,
-            modifier = Modifier.padding(vertical = 15.dp),
+            modifier = Modifier.padding(vertical = 16.dp),
         )
     }
 }

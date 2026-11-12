@@ -3,4 +3,5 @@
 <full-backup-content>
     <exclude domain="file" path="tts.encrypted" />
     <exclude domain="file" path="tts.encrypted.bak" />
+    <exclude domain="file" path="tts.encrypted.new" />
 </full-backup-content>

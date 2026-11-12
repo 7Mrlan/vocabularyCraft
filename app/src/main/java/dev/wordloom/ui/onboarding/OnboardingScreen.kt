@@ -62,6 +62,7 @@ fun OnboardingScreen(
     status: TtsStatus,
     onSaveTts: (TtsConfig, (Result<Unit>) -> Unit) -> Unit,
     onTestTts: (TtsConfig, String, (Result<TtsResult>) -> Unit) -> Unit,
+    onStopAudio: () -> Unit = {},
     onFinish: (skipped: Boolean, openBooks: Boolean) -> Unit,
 ) {
     val wl = WordloomTheme.colors
@@ -85,6 +86,7 @@ fun OnboardingScreen(
                     status = status,
                     onSave = onSaveTts,
                     onTest = onTestTts,
+                    onStopAudio = onStopAudio,
                     onNext = next,
                     onSkip = skip,
                 )

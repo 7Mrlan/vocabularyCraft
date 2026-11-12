@@ -49,6 +49,7 @@ internal fun TtsSetupPage(
     status: TtsStatus,
     onSave: (TtsConfig, (Result<Unit>) -> Unit) -> Unit,
     onTest: (TtsConfig, String, (Result<TtsResult>) -> Unit) -> Unit,
+    onStopAudio: () -> Unit,
     onNext: () -> Unit,
     onSkip: () -> Unit,
 ) {
@@ -106,7 +107,13 @@ internal fun TtsSetupPage(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 16.dp),
     ) {
-        OnboardingStepHeader(step = "02", onSkip = onSkip)
+        OnboardingStepHeader(
+            step = "02",
+            onSkip = {
+                onStopAudio()
+                onSkip()
+            },
+        )
         Spacer(Modifier.height(18.dp))
         Text(
             text = "让单词和例句会说话",
@@ -252,7 +259,10 @@ internal fun TtsSetupPage(
                     onSave(candidate) { result ->
                         busy = false
                         result.fold(
-                            onSuccess = { onNext() },
+                            onSuccess = {
+                                onStopAudio()
+                                onNext()
+                            },
                             onFailure = {
                                 failed = true
                                 message = it.message ?: "保存失败"
@@ -272,7 +282,10 @@ internal fun TtsSetupPage(
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .wlPress(onClick = onNext)
+                .wlPress {
+                    onStopAudio()
+                    onNext()
+                }
                 .padding(vertical = 10.dp),
         )
         Spacer(Modifier.height(48.dp))

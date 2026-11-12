@@ -2,6 +2,7 @@ package dev.wordloom
 
 import android.app.Application
 import dev.wordloom.data.WordRepository
+import dev.wordloom.data.audio.SoundService
 import dev.wordloom.data.local.WordloomDb
 import dev.wordloom.data.remote.DictionarySource
 import dev.wordloom.data.remote.VocabularyComSource
@@ -45,5 +46,8 @@ class WordloomApp : Application() {
         runCatching { org.maplibre.android.MapLibre.getInstance(this) }
             .onFailure { android.util.Log.w("Wordloom", "MapLibre init failed", it) }
         TranslationService.init()
+        // Warm the single SoundPool so the first rating already has its cue.
+        runCatching { SoundService.shared(this) }
+            .onFailure { android.util.Log.w("Wordloom", "SoundService init failed", it) }
     }
 }

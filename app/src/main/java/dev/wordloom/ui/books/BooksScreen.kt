@@ -145,6 +145,10 @@ fun BooksScreen(
             wheel.nearest(if (settling) settleTarget.toFloat() else position)
         }
     }
+    // Stacking is intentionally one page behind the finger: the z-order is
+    // frozen for the whole drag and only updates after the deck settles, so a
+    // card cannot pop above its neighbour exactly at the midpoint.
+    var stackAnchor by remember { mutableIntStateOf(nearest) }
     var detailReady by remember { mutableStateOf(false) }
     var spinning by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -223,7 +227,7 @@ fun BooksScreen(
     // System back closes the book before it leaves the shelf.
     BackHandler(enabled = detailOpen) { closeBook() }
 
-    var lastNearest by remember { mutableIntStateOf(0) }
+    var lastNearest by remember { mutableIntStateOf(nearest) }
     LaunchedEffect(nearest) {
         if (nearest != lastNearest) {
             lastNearest = nearest
@@ -312,6 +316,7 @@ fun BooksScreen(
                         .fillMaxSize()
                         .draggable(
                             orientation = Orientation.Horizontal,
+                            onDragStarted = { stackAnchor = nearest },
                             state = rememberDraggableState { delta ->
                                 if (settling) {
                                     scope.launch { settle.stop() }
@@ -339,6 +344,7 @@ fun BooksScreen(
                                     )
                                     position = wheel.normalize(target.toFloat())
                                     settling = false
+                                    stackAnchor = wheel.nearest(target.toFloat())
                                 }
                             },
                         ),
@@ -347,7 +353,7 @@ fun BooksScreen(
                         val spec = counts[base.id]?.let { base.copy(count = it.toString()) } ?: base
                         // Stack order follows the nearest page, not the animated
                         // float, so the z-order cannot flicker at a midpoint.
-                        val rank = wheel.stackOrder(index, nearest)
+                        val rank = wheel.stackOrder(index, stackAnchor)
                         BookCover(
                             spec = spec,
                             inReading = spec.id == currentId,
@@ -406,6 +412,7 @@ fun BooksScreen(
                                             )
                                             position = wheel.normalize(target.toFloat())
                                             settling = false
+                                            stackAnchor = wheel.nearest(target.toFloat())
                                         }
                                     } else if (spec.id != currentId) {
                                         onSelectBook(spec.id)

@@ -22,19 +22,20 @@
 | 项 | 状态 | 说明 |
 |---|---|---|
 | 4.0 全仓审查修复（数据/备份/学习状态/文档） | ✅ 已提交 | 3 个提交：`5f7c6d6`、`de4db3e`、`679016d` |
-| AI TTS 实际播放（学习卡单词/例句、学习卡/词条页喇叭） | ✅ 未提交 | design 音色；旧音源兜底 |
-| TTS 预取/磁盘缓存 | ✅ 未提交 | 书内页前 3 词、队列前 3 词、当前词 + 前 5 例句 |
-| 首词自动朗读 | ✅ 未提交、未真机验证 | AI 不依赖词条 audio；预取提前 |
-| **系统内可配置 TTS（加密）** | ✅ 未提交、未真机验证 | `TtsConfigStore`（Keystore AES/GCM + AtomicFile）、首页「声音」配置页、无 key release；见 `docs/AI-TTS.md` |
-| 首次下载动态引导（含 AI TTS 配置） | ✅ 未提交、未真机验证 | 4 屏 Pager；首启路由、跳过/完成 flag、TTS 测试与保存；见 `docs/ONBOARDING.md` |
-| 书架环形模型重构 | ❌ 未做 | 仍是 `dBase/dStack/artParallax/zIndex` 旧实现 |
-| 学习卡手势重构（取消上下切层） | ❌ 未做 | 仍是 `detectDragGestures` + axis 锁定 + 上下切层 |
-| 音效重做 / 声音设置 | ❌ 未做 | `make_sfx.py` 与 WAV 未改；三个 `SoundPool` 未合并 |
-| 首页品牌行三按钮 + 收纳抽屉 | ✅ 未提交、未真机验证 | 词书/词表/收纳把手；纸白抽屉含地图、备份、声音 |
-| 4.1 单测 | ✅ 2026-11-12 | `:app:testDebugUnitTest` 通过 |
-| 音频焦点 / 流式 PCM / 缓存 LRU | ❌ 未做 | 见 `docs/AI-TTS.md` |
+| AI TTS 实际播放（学习卡单词/例句、学习卡/词条页喇叭） | ✅ 已提交、未真机验证 | design 音色；旧音源兜底 |
+| TTS 预取/磁盘缓存 | ✅ 已提交、未真机验证 | 书内页前 3 词、队列前 3 词、当前词 + 前 5 例句；128 MiB LRU |
+| 首词自动朗读 | ✅ 已提交、未真机验证 | AI 不依赖词条 audio；预取提前 |
+| **系统内可配置 TTS（加密）** | ✅ 已提交、未真机验证 | `TtsConfigStore`（Keystore AES/GCM + AtomicFile）、首页「声音」配置页、无 key release；见 `docs/AI-TTS.md` |
+| 首次下载动态引导（含 AI TTS 配置） | ✅ 已提交、未真机验证 | 4 屏 Pager；首启路由、跳过/完成 flag、TTS 测试与保存；见 `docs/ONBOARDING.md` |
+| 书架环形模型重构 | ✅ 未真机验证 | `BookshelfWheel` 纯模型 + 单测；插图同层、层叠锚点冻结到回弹结束 |
+| 学习卡手势重构（取消上下切层） | ✅ 未真机验证 | 只识别水平拖动；中文/英文改按钮；单一朗读服务 + 音频焦点 |
+| 音效重做 / 声音设置 | ✅ 未真机验证 | 木质/毡质 WAV；一个 `SoundService`；音量、分组开关、书架声默认关 |
+| 首页品牌行三按钮 + 收纳抽屉 | ✅ 未真机验证 | 词书/词表/收纳把手；纸白抽屉含地图、备份、声音、重新看引导 |
+| 4.1 单测 | ✅ 2026-11-12 | `:app:testDebugUnitTest` 通过（含书架环、缓存 LRU） |
+| 音频焦点 / 缓存 LRU | ✅ 未真机验证 | `AudioFocus` + 128 MiB LRU；见 `docs/AI-TTS.md` |
+| 流式 PCM | ⏸ 不启用 | design 音色无实际提前音频；保留预取/缓存，避免无效复杂度 |
 
-## 3. 书架：抖动根因与目标架构
+## 3. 书架：抖动根因与已落地架构
 
 ### 3.1 根因
 
@@ -46,7 +47,7 @@
 3. **六张封面每帧重组/重绘**：拖动时 `position` 每帧变化，六张 `BookCover` 都在 composition，
    重算 Canvas、阴影、3D transform，低端机放大前两个问题。
 
-### 3.2 目标模型
+### 3.2 已落地模型
 
 ```kotlin
 BookshelfWheel (纯 Kotlin，可单测)
@@ -65,8 +66,7 @@ UI 规则：
   offset 只触发 layer invalidation，不触发六张封面重组。
 - **插图同层**：插图、底色、文字放同一个 layer；拖动中插图不动。视差只在回弹/选中时做很小的插值，
   不越过裁切边缘。
-- **稳定 zIndex**：不用 `|距离|`；由 `direction + nearestIndex` 决定，只在拖动开始/回弹目标变化时更新，
-  中点不交换。
+- **稳定 zIndex**：`stackAnchor` 在拖动开始冻结、回弹结束后才更新；拖动中点不交换。
 - **组合窗口**：拖动只组合中心 + 左右各一张；回弹目标超过一页时再扩展；不要六张全画。
 - **手势只做水平**：`Modifier.draggable(Orientation.Horizontal)` 或 `detectHorizontalDragGestures`；
   不要 `detectDragGestures` + axis。
@@ -89,7 +89,7 @@ UI 规则：
 | 低端机 60fps | 只 layer 变换；限制组合窗口；阴影不每帧重算 |
 | 插图裁切 | 插图同层；视差只在安全范围 |
 
-## 4. 学习卡：卡手根因与目标架构
+## 4. 学习卡：卡手根因与已落地架构
 
 ### 4.1 根因
 
@@ -101,14 +101,14 @@ UI 规则：
 - **子组件抢手势**：例句页 `SpeakerButton` 的 `clickable`；主卡/中文层 `verticalScroll` 与上下切层冲突。
 - **音频播放不是主因**：AudioCache 在 IO，MediaPlayer 异步；卡手来自 UI/手势。
 
-### 4.2 目标架构
+### 4.2 已落地架构
 
 - 拆成：`StudyDeckState`（队列/评分/回顾）、`StudyPageRing`（水平例句环）、
   `StudyLayerSwitch`（英文/中文层）、`StudyAudioCoordinator`（音频状态机）。
 - **取消上下滑动切层**：改用现有「中文 / 英文」按钮；垂直滚动不再与切层抢手势。
-- **水平例句环**：`HorizontalPager`（虚拟页 + 取模）或 `AnchoredDraggable(Orientation.Horizontal)`；
-  不要手写 axis 锁定。
-- **喇叭**：只识别 tap，不消费水平移动；切页/切卡停止旧 clip，只保留一个播放器。
+- **水平例句环**：保留现有三页虚拟环，但只接 `detectHorizontalDragGestures`；不再有 axis 锁定。
+- **喇叭**：`SpeechButton` 只识别 tap；AI 朗读由 `SpeechService` 单播放器取消旧 clip，
+  兜底 `AudioPlayer` 也只有一个 job。
 - **脉冲**：只在 `playing` 时存在，读在 `graphicsLayer`；拖动开始暂停。
 - 若保留自定义环：axis 阈值 16–24dp，允许手指未抬起前重新判定。
 
@@ -139,15 +139,15 @@ UI 规则：
 - 当前 4.1 是本地测试包，key 内置；**正式必须可配置、无 key**。
 - 待办：加密 `TtsConfigStore`、应用内「声音」配置页、release 无 key、音频焦点、LRU、可选流式。
 
-## 6. 音效：从游戏奖励改为安静阅览室
+## 6. 音效：从游戏奖励改为安静阅览室（已落地）
 
-### 6.1 现状
+### 6.1 旧现状
 
 `tools/sfx/make_sfx.py` 是纯加法正弦合成：`tone()` 2–4 个 partial + 指数衰减；`tick()` 噪声 + 210 Hz；
 无低通、无 room、无母带；频率偏高（880/1318/2637 Hz），音量 ~0.5；
 8 个事件，评分每次响、书架每次过卡响、练习/拼写也响。
 
-### 6.2 目标声音设计
+### 6.2 已落地声音设计
 
 | 事件 | 现在 | 目标 |
 |---|---|---|
@@ -164,23 +164,26 @@ UI 规则：
 - 默认音量 0.25–0.35；±2% 音高/力度随机；`SoundService` 统一 `SoundPool`、静音、音频焦点。
 - AI 音效：离线生成 one-shot（3–5 候选/事件），人工筛选、母带、OGG，运行时只播本地文件；
   不建议运行时生成。没有 AI 音效服务时先做物理建模候选。
-- **已知环境异常**：`tools/sfx/make_sfx.py` 磁盘尾部出现二进制乱码，但 `git show HEAD:` 正常、
-  `git hash-object` 与 HEAD 一致、`git status` 干净；音效重做前先重建/核对此文件，不要直接运行。
+- 已重建 `tools/sfx/make_sfx.py` 并重新生成 8 个 WAV：峰值 0.28–0.50，时长 50–355 ms，
+  `SoundService` 再乘 0.30 默认音量；书架过卡声默认关闭。
+- 旧的三个 `SoundPool` 已合并为 `SoundService.shared(context)`；评分/拼写/练习/书架分组开关在
+  「声音」设置里。
 
-## 7. 首页品牌行三按钮 + 收纳（已实现，4.1 未提交）
+## 7. 首页品牌行三按钮 + 收纳（已实现，未真机验证）
 
 - 品牌行只显示三个按钮：**词书**、**词表**、**收纳把手**。词书/词表是 40dp 半透明圆钮 +
   knockout 图标；把手是双线 Canvas，展开时旋转 45° 成 X。
 - 点把手从右上角展开**纸白抽屉**（218dp 宽、16dp 圆角、14dp 阴影）；动画为
   fade + scale（从 TopEnd）+ 上移 8dp，150–200ms，一次性，不循环。
-- 抽屉行：地图 / 备份与恢复 / 声音；声音未配置时右侧显示珊瑚色「未配置」。
+- 抽屉行：地图 / 备份与恢复 / 声音；声音未配置时右侧显示珊瑚色「未配置」；
+  底部「重新看引导」清 flag 后重播。
 - 不改变 hero 高度，不推搜索胶囊；抽屉 `zIndex` 覆盖搜索胶囊；点行关闭并导航；返回键关闭。
 - 「声音」打开 `VoiceSettingsSheet`：纸面、衬线标题、墨色保存按钮；默认推荐 MiMo
   voicedesign 音色；密钥只写入加密 store，界面上不回显。
 - 深色模式：hero 固定藏蓝，抽屉固定纸白 + 浅色墨值；设置 sheet 跟随主题。
-- 后续：首次引导直接指向「收纳 → 声音」；音效页在同一个 sheet 里加 tab。
+- 「声音」sheet 下半部已是音效设置：总开关、评分/拼写/练习/书架分组、音量、恢复默认。
 
-## 8. 首次下载动态引导（已实现，4.1 未提交）
+## 8. 首次下载动态引导（已实现，未真机验证）
 
 - `ui/onboarding/OnboardingStore.kt`：`wordloom_onboarding` 的 done / tts_skipped / seen_at。
 - `ui/onboarding/OnboardingScreen.kt`：4 页 `HorizontalPager`；欢迎、TTS、学习卡演示、书架。
@@ -188,17 +191,16 @@ UI 规则：
   保存走 `SpeechService` + `TtsConfigStore`。
 - 首启由 `AppNav` 读 flag 决定 `onboarding` / `home`；完成或跳过写 flag，去书架会先落到 home
   再打开 books，保证返回栈正常。
-- 尚未做「重新看引导」入口；完整流程/文案/验收见 **`docs/ONBOARDING.md`**。
+- 「重新看引导」已放在首页收纳抽屉；完整流程/文案/验收见 **`docs/ONBOARDING.md`**。
 
 ## 9. 后续顺序（按此执行）
 
 1. **可配置 TTS**：✅ 加密 store + 首页「声音」配置页 + release 无 key + 38 MB 包。
 2. **首次引导**：✅ 首次启动 4 屏动态引导；TTS 未配置时首页保留安静入口。
-3. **书架环形模型**：纯 Kotlin 模型 + 单测 + UI 改造；先修抖动/闪动。
-4. **学习卡手势/音频协调**：取消上下切层、水平 Pager/AnchoredDraggable、脉冲移出 composition、
-   单一播放器、音频焦点。
-5. **音效重做**：先物理建模候选试听，再决定 AI 素材；统一 SoundService 与声音设置。
-6. **首页收纳动画**：✅ 三按钮 + 纸白抽屉（4.1 未提交）。
+3. **书架环形模型**：✅ `BookshelfWheel` + 稳定层叠 + 插图同层（未真机验证）。
+4. **学习卡手势/音频协调**：✅ 水平拖动、按钮切层、单一朗读服务、音频焦点（未真机验证）。
+5. **音效重做**：✅ 木质/毡质短音、统一 SoundService、分组开关（未真机验证）。
+6. **首页收纳动画**：✅ 三按钮 + 纸白抽屉 + 重新看引导。
 7. 真机验收（延迟、帧率、音频焦点、深色模式），再发 4.1/4.1.1；不要移动 v4.0.0 tag。
 
 ## 10. 构建与验证

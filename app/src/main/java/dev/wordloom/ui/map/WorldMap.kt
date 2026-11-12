@@ -1,5 +1,6 @@
 package dev.wordloom.ui.map
 
+import android.annotation.SuppressLint
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -45,6 +46,9 @@ private val TourStops = listOf(
     18.0 to 78.0,     // South Asia
 )
 
+// MapLibre accepts negative zoom for a fully zoomed-out world view; the
+// platform lint range is narrower than the renderer's own contract.
+@SuppressLint("Range")
 @Composable
 fun WorldMap(
     modifier: Modifier = Modifier,

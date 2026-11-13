@@ -34,8 +34,8 @@ android {
         applicationId = "dev.wordloom"
         minSdk = 26
         targetSdk = 35
-        versionCode = 21
-        versionName = "5.0.3"
+        versionCode = 22
+        versionName = "5.0.4"
     }
 
     signingConfigs {

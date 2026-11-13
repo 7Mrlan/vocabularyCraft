@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,6 +51,9 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.movableContentOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.annotation.RawRes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -94,6 +98,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.cos
@@ -301,14 +306,14 @@ fun StudyScreen(
     LaunchedEffect(queue.firstOrNull()?.word, queue.size) {
         queue.take(3).forEach { item ->
             onNeedEntry(item.word)
-            // Warm the first three AI clips as soon as the queue exists, not
-            // when the card is first composed.
-            speechActions.prefetch(item.word)
             // The current card and the prefetch share one fetch (StudyContent
             // dedupes in flight), so the ring's page count is stable before it
             // is swiped.
             launch { StudyContent.details(item.word) }
         }
+        // Only the word on screen is warmed as AI audio; the next example is
+        // prefetched after the current page settles, not a whole batch ahead.
+        queue.take(1).forEach { item -> speechActions.prefetch(item.word) }
     }
     val progress = if (total == 0) 0f else completed.toFloat() / total
 
@@ -715,7 +720,7 @@ private fun examplesOf(details: StudyDetails?, entry: WordEntry): List<StudyExam
     }
 
 /** Page 0 is the entry (with the first example); page n is examples[n]. */
-private fun pageCountFor(examples: List<StudyExample>): Int = examples.size.coerceAtLeast(1)
+private fun pageCountFor(examples: List<StudyExample>): Int = examples.size.coerceAtLeast(2)
 
 private fun exampleForPage(examples: List<StudyExample>, page: Int): StudyExample? =
     if (page == 0) examples.firstOrNull() else examples.getOrNull(page)
@@ -777,7 +782,7 @@ private fun StudyCard(
     }
     LaunchedEffect(details, speech?.enabled) {
         if (speech != null && speech.enabled) {
-            details?.examples?.take(3)?.forEach { example -> speech.prefetch(example.en) }
+            details?.examples?.take(2)?.forEach { example -> speech.prefetch(example.en) }
         } else {
             details?.examples?.take(3)?.forEach { example ->
                 example.audioUrl.takeIf { it.isNotBlank() }?.let(onPrefetch)
@@ -954,7 +959,6 @@ private fun RatedRing(
     onNext: () -> Unit,
     onWrong: () -> Unit,
 ) {
-    val wl = WordloomTheme.colors
     val count = pageCountFor(examples)
     // A huge virtual count plus modulo content is an infinite ring: the
     // pager keeps native fling/preload and can always be swiped both ways.
@@ -964,9 +968,18 @@ private fun RatedRing(
         middle - middle % count
     }
     val pager = rememberPagerState(initialPage = start) { virtualCount }
-    val page = Math.floorMod(pager.currentPage, count)
 
-    RingAudio(pager.settledPage, examples, onAutoPlay)
+    // The heavy entry face keeps one composition as it moves between virtual
+    // cycles, instead of being re-composed at every loop.
+    val mainContent = remember(entry, details, examples, resetKey, onSelect) {
+        movableContentOf {
+            MainPage(entry, details, examples, resetKey, onSelect)
+        }
+    }
+
+    // No pager state is read in this body. The dots and audio read it in their
+    // own composables so a page flip never recomposes the pager or its pages.
+    RingAudioEffect(pager, examples, onAutoPlay)
 
     Column(modifier = Modifier.fillMaxSize()) {
         HorizontalPager(
@@ -975,31 +988,29 @@ private fun RatedRing(
             beyondViewportPageCount = 1,
             userScrollEnabled = count > 1,
         ) { virtual ->
-            RingPage(
-                entry = entry,
-                details = details,
-                examples = examples,
-                page = Math.floorMod(virtual, count),
-                resetKey = resetKey,
-                onSelect = onSelect,
-            )
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 10.dp),
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            repeat(count) { index ->
-                Box(
-                    modifier = Modifier
-                        .padding(horizontal = 2.5.dp)
-                        .size(if (index == page) 6.dp else 4.dp)
-                        .background(if (index == page) wl.ink else wl.outline, CircleShape),
-                )
+            val page = Math.floorMod(virtual, count)
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (page == 0) {
+                    // A movable composition can only live in one place; with a
+                    // two-page ring both neighbours are the main page, so keep
+                    // the regular composition for count 1–2 instead.
+                    if (count >= 3) {
+                        mainContent()
+                    } else {
+                        MainPage(entry, details, examples, resetKey, onSelect)
+                    }
+                } else {
+                    val example = exampleForPage(examples, page)
+                    if (example != null) {
+                        ExamplePage(entry = entry, example = example)
+                    } else {
+                        PendingExamplePage(details)
+                    }
+                }
             }
         }
+
+        PagerDots(pager, count)
 
         Spacer(Modifier.height(6.dp))
         RatedActions(
@@ -1012,64 +1023,95 @@ private fun RatedRing(
     }
 }
 
-/**
- * Page audio keys off the pager's settled page, so a fast second swipe cancels
- * the previous settle and only the page the finger lands on is spoken.
- */
 @Composable
-private fun RingAudio(
-    settledPage: Int,
-    examples: List<StudyExample>,
-    onAutoPlay: (String) -> Unit,
-) {
-    val speech = LocalSpeechActions.current
-    val count = pageCountFor(examples)
-    val page = Math.floorMod(settledPage, count)
-    val example = exampleForPage(examples, page) ?: return
-    val sentence = example.en
-    if (sentence.isBlank()) return
-    var lastKey by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(settledPage, examples, speech?.enabled) {
-        // The virtual page is unique even after a full loop, so returning to the
-        // same example reads it again; details replacing the fallback sentence
-        // also re-reads the sentence actually on screen.
-        val key = "$settledPage:$sentence"
-        if (key == lastKey) return@LaunchedEffect
-        lastKey = key
-        if (speech != null && speech.enabled) {
-            speech.speak(sentence, example.audioUrl.takeIf { it.isNotBlank() }) { state ->
-                if (state is SpeechState.Failed) lastKey = null
-            }
-        } else {
-            example.audioUrl.takeIf { it.isNotBlank() }?.let(onAutoPlay)
-        }
+private fun PendingExamplePage(details: StudyDetails?) {
+    val wl = WordloomTheme.colors
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(
+            text = if (details == null) "正在取例句…" else "没有更多例句",
+            fontSize = 12.5.sp,
+            color = wl.inkMuted,
+        )
     }
 }
 
 @Composable
-private fun RingPage(
+private fun MainPage(
     entry: WordEntry,
     details: StudyDetails?,
     examples: List<StudyExample>,
-    page: Int,
     resetKey: Long,
     onSelect: (String, Rect) -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier.fillMaxSize()) {
-        if (page == 0) {
-            MainFaceContent(
-                entry = entry,
-                details = details,
-                example = exampleForPage(examples, 0),
-                resetKey = resetKey,
-                onSelect = onSelect,
+    MainFaceContent(
+        entry = entry,
+        details = details,
+        example = exampleForPage(examples, 0),
+        resetKey = resetKey,
+        onSelect = onSelect,
+    )
+}
+
+@Composable
+private fun PagerDots(pager: PagerState, count: Int) {
+    val wl = WordloomTheme.colors
+    val page by remember(pager, count) {
+        derivedStateOf { Math.floorMod(pager.currentPage, count) }
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp),
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        repeat(count) { index ->
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 2.5.dp)
+                    .size(if (index == page) 6.dp else 4.dp)
+                    .background(if (index == page) wl.ink else wl.outline, CircleShape),
             )
-        } else {
-            // Page 1 is the second example: the first one lives on the main card.
-            exampleForPage(examples, page)?.let { example ->
-                ExamplePage(entry = entry, example = example)
+        }
+    }
+}
+
+/**
+ * Page audio keys off the settled page and waits 250 ms, so a fast second swipe
+ * cancels the pending sentence. Prefetch only the next example, not a batch.
+ */
+@Composable
+private fun RingAudioEffect(
+    pager: PagerState,
+    examples: List<StudyExample>,
+    onAutoPlay: (String) -> Unit,
+) {
+    val speech = LocalSpeechActions.current
+    var lastKey by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(pager, examples, speech?.enabled) {
+        snapshotFlow { pager.settledPage to pager.isScrollInProgress }.collectLatest { (settled, scrolling) ->
+            if (scrolling) return@collectLatest
+            delay(250)
+            if (pager.isScrollInProgress) return@collectLatest
+            val count = pageCountFor(examples)
+            val page = Math.floorMod(settled, count)
+            val example = exampleForPage(examples, page) ?: return@collectLatest
+            val sentence = example.en
+            if (sentence.isBlank()) return@collectLatest
+            val key = "$settled:$sentence"
+            if (key != lastKey) {
+                lastKey = key
+                if (speech != null && speech.enabled) {
+                    speech.speak(sentence, example.audioUrl.takeIf { it.isNotBlank() }) { state ->
+                        if (state is SpeechState.Failed) lastKey = null
+                    }
+                } else {
+                    example.audioUrl.takeIf { it.isNotBlank() }?.let(onAutoPlay)
+                }
+            }
+            // Warm only the next example, after the current page has settled.
+            val next = exampleForPage(examples, Math.floorMod(page + 1, count))?.en
+            if (!next.isNullOrBlank() && next != sentence && speech != null && speech.enabled) {
+                speech.prefetch(next)
             }
         }
     }

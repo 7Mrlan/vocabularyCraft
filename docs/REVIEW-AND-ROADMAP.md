@@ -23,7 +23,7 @@
 |---|---|---|
 | 4.0 全仓审查修复（数据/备份/学习状态/文档） | ✅ 已提交 | 3 个提交：`5f7c6d6`、`de4db3e`、`679016d` |
 | AI TTS 实际播放（学习卡单词/例句、学习卡/词条页喇叭） | ✅ 已提交、未真机验证 | design 音色；旧音源兜底 |
-| TTS 预取/磁盘缓存 | ✅ 已提交、未真机验证 | 书内页前 3 词、队列前 3 词、当前词 + 前 5 例句；128 MiB LRU |
+| TTS 预取/磁盘缓存 | ✅ 已提交、未真机验证 | 队列当前词、当前卡首两条例句，下一页落定后下一条；128 MiB LRU |
 | 首词自动朗读 | ✅ 已提交、未真机验证 | AI 不依赖词条 audio；预取提前 |
 | **系统内可配置 TTS（加密）** | ✅ 已提交、未真机验证 | `TtsConfigStore`（Keystore AES/GCM + AtomicFile）、首页「声音」配置页、无 key release；见 `docs/AI-TTS.md` |
 | 首次下载动态引导（含 AI TTS 配置） | ✅ 已提交、未真机验证 | 4 屏 Pager；首启路由、跳过/完成 flag、TTS 测试与保存；见 `docs/ONBOARDING.md` |
@@ -106,7 +106,7 @@ UI 规则：
 - 拆成：`StudyDeckState`（队列/评分/回顾）、`StudyPageRing`（水平例句环）、
   `StudyLayerSwitch`（英文/中文层）、`StudyAudioCoordinator`（音频状态机）。
 - **取消上下滑动切层**：改用现有「中文 / 英文」按钮；垂直滚动不再与切层抢手势。
-- **水平例句环**：`HorizontalPager` + `Int.MAX_VALUE` 虚拟页数、取模内容、`beyondViewportPageCount=1`；左右都能无限滑动；音频按 `settledPage` 播；整张 `StudyCard` 按词/呈现 key，评分页不会沿用上一张的英文层。
+- **水平例句环**：`HorizontalPager` + `Int.MAX_VALUE` 虚拟页数、取模内容、`beyondViewportPageCount=1`；左右都能无限滑动；音频按 `settledPage` 防抖 250ms 播；`currentPage`/`settledPage` 只在 PagerDots/RingAudio 子组件读取；3 条例句以上的主卡用 movableContent 跨虚拟循环保留 composition；整张 `StudyCard` 按词/呈现 key。
 - **喇叭**：`SpeechButton` 只识别 tap；AI 朗读由 `SpeechService` 单播放器取消旧 clip，
   兜底 `AudioPlayer` 也只有一个 job。
 - **脉冲**：只在 `playing` 时存在，读在 `graphicsLayer`；拖动开始暂停。

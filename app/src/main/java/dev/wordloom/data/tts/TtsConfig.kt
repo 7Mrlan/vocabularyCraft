@@ -64,8 +64,16 @@ data class TtsConfig(
     val effectiveInstructions: String
         get() = if (protocol == TtsProtocol.OPENAI || voiceDesign) instructions else ""
 
+    /**
+     * A key pasted from a dashboard may carry "Bearer ", quotes or line breaks.
+     * The store keeps exactly what was entered; only the wire form is cleaned,
+     * so a 401 from an otherwise valid key is usually this.
+     */
+    val requestKey: String
+        get() = key.normalizeApiKey()
+
     val enabled: Boolean
-        get() = endpoint.isNotBlank() && model.isNotBlank() && key.isNotBlank() &&
+        get() = endpoint.isNotBlank() && model.isNotBlank() && requestKey.isNotBlank() &&
             (protocol == TtsProtocol.MIMO || voice.isNotBlank())
 
     val extension: String
@@ -182,7 +190,7 @@ data class TtsDraft(
         model = model.trim(),
         voice = voice.trim(),
         instructions = instructions.trim(),
-        key = key.trim(),
+        key = key.normalizeApiKey(),
         fallback = fallback,
     )
 
@@ -231,3 +239,11 @@ fun TtsDraft.forTemplate(
         else -> presetVoice
     },
 )
+
+/** Strip the decoration dashboards like to put around a copied key. */
+internal fun String.normalizeApiKey(): String = trim()
+    .replace(Regex("(?i)^bearer\\s*"), "")
+    .removeSurrounding("\"")
+    .removeSurrounding("'")
+    .filterNot { it == '\n' || it == '\r' }
+    .trim()

@@ -100,6 +100,16 @@ class TtsConfigTest {
     }
 
     @Test
+    fun `a decorated pasted key is cleaned for the wire`() {
+        assertEquals("sk-abc", " Bearer sk-abc ".normalizeApiKey())
+        assertEquals("abc", "\"abc\"".normalizeApiKey())
+        assertEquals("abc", "abc\n".normalizeApiKey())
+        assertEquals("abc", preset().copy(key = "Bearer abc").requestKey)
+        assertTrue(preset().copy(key = "Bearer abc").enabled)
+        assertFalse(preset().copy(key = "Bearer ").enabled)
+    }
+
+    @Test
     fun `a custom setup survives untouched but a template pick replaces it`() {
         val base = TtsDraft(
             endpoint = "https://example.com/v1",

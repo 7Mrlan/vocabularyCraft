@@ -39,9 +39,9 @@ class TtsClient(private val client: OkHttpClient = defaultClient()) {
             .header("Content-Type", "application/json")
             .apply {
                 if (config.protocol == TtsProtocol.MIMO) {
-                    header("api-key", config.key)
+                    header("api-key", config.requestKey)
                 } else {
-                    header("Authorization", "Bearer ${config.key}")
+                    header("Authorization", "Bearer ${config.requestKey}")
                 }
             }
             .post(config.request(text).toRequestBody(JSON))
@@ -72,7 +72,7 @@ class TtsClient(private val client: OkHttpClient = defaultClient()) {
                     try {
                         response.use {
                             if (!response.isSuccessful) {
-                                throw IOException("AI 语音服务返回 ${response.code}")
+                                throw IOException(failureMessage(response))
                             }
                             val body = response.body ?: throw IOException("AI 语音没有返回音频")
                             val limit = if (config.protocol == TtsProtocol.MIMO) MAX_JSON else MAX_BYTES
@@ -108,6 +108,23 @@ class TtsClient(private val client: OkHttpClient = defaultClient()) {
                 }
             })
         }
+    }
+
+    /** A 401 is almost always the pasted key, not the model; say so. */
+    private fun failureMessage(response: Response): String {
+        val raw = runCatching { response.body?.string().orEmpty() }.getOrDefault("")
+        val detail = raw
+            .replace(Regex("(?i)sk-[A-Za-z0-9_-]+"), "sk-***")
+            .replace(Regex("(?i)(api[-_]?key|authorization|bearer)\\s*[:=]?\\s*\\S+"), "$1 ***")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+            .take(160)
+        val prefix = when (response.code) {
+            401, 403 -> "API 密钥无效或没有权限（${response.code}），请清除后重新粘贴完整密钥"
+            404 -> "AI 语音接口或模型不存在（404）"
+            else -> "AI 语音服务返回 ${response.code}"
+        }
+        return if (detail.isBlank()) prefix else "$prefix：$detail"
     }
 
     private fun writeMiMo(bytes: ByteArray, target: File) {

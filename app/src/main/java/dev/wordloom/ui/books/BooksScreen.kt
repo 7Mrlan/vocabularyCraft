@@ -231,8 +231,9 @@ fun BooksScreen(
     LaunchedEffect(nearest) {
         if (nearest != lastNearest) {
             lastNearest = nearest
+            // A page turn is heard, not felt: the old CLOCK_TICK made the
+            // shelf buzz under the finger while the paper sound was off.
             sounds.play(Sound.PageTurn)
-            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
         }
     }
 

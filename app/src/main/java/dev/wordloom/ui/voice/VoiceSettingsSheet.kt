@@ -1028,12 +1028,22 @@ private fun ToggleCell(
     hair: Color,
     paper: Color,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     onChange: (Boolean) -> Unit,
 ) {
+    val interaction = remember { MutableInteractionSource() }
     Row(
         modifier = modifier
+            .alpha(if (enabled) 1f else 0.4f)
             .heightIn(min = 34.dp)
-            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange),
+            .toggleable(
+                value = checked,
+                enabled = enabled,
+                role = Role.Switch,
+                onValueChange = onChange,
+                interactionSource = interaction,
+                indication = null,
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -1078,26 +1088,63 @@ private fun SoundSection(
     val context = LocalContext.current
     val sound = remember(context) { SoundService.shared(context) }
     val settings by sound.settings.collectAsStateWithLifecycle()
+    val master = settings.enabled
 
     Column {
         Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-            SoundToggleCell("启用音效", settings.enabled, ink, muted, hair, paper, Modifier.weight(1f)) {
+            SoundToggleCell("启用音效", master, ink, muted, hair, paper, Modifier.weight(1f)) {
                 sound.setEnabled(it)
             }
-            SoundToggleCell("评分音", settings.ratings, ink, muted, hair, paper, Modifier.weight(1f)) {
+            SoundToggleCell(
+                "评分音",
+                master && settings.ratings,
+                ink,
+                muted,
+                hair,
+                paper,
+                Modifier.weight(1f),
+                enabled = master,
+            ) {
                 sound.setRatings(it)
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-            SoundToggleCell("拼写音", settings.spelling, ink, muted, hair, paper, Modifier.weight(1f)) {
+            SoundToggleCell(
+                "拼写音",
+                master && settings.spelling,
+                ink,
+                muted,
+                hair,
+                paper,
+                Modifier.weight(1f),
+                enabled = master,
+            ) {
                 sound.setSpelling(it)
             }
-            SoundToggleCell("练习答对音", settings.quiz, ink, muted, hair, paper, Modifier.weight(1f)) {
+            SoundToggleCell(
+                "练习答对音",
+                master && settings.quiz,
+                ink,
+                muted,
+                hair,
+                paper,
+                Modifier.weight(1f),
+                enabled = master,
+            ) {
                 sound.setQuiz(it)
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-            SoundToggleCell("书架过卡声", settings.pageTurn, ink, muted, hair, paper, Modifier.weight(1f)) {
+            SoundToggleCell(
+                "书架过卡声",
+                master && settings.pageTurn,
+                ink,
+                muted,
+                hair,
+                paper,
+                Modifier.weight(1f),
+                enabled = master,
+            ) {
                 sound.setPageTurn(it)
             }
             Spacer(Modifier.weight(1f))
@@ -1116,6 +1163,7 @@ private fun SoundSection(
                 ink = ink,
                 hair = hair,
                 paper = paper,
+                enabled = master,
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.width(8.dp))
@@ -1134,13 +1182,13 @@ private fun SoundSection(
         ) {
             Text("试听", fontSize = NoteSize, letterSpacing = 1.2.sp, color = muted)
             Spacer(Modifier.width(12.dp))
-            Audition("评分", ink) { sound.preview(Sound.Easy) }
+            Audition("评分", ink, enabled = master) { sound.preview(Sound.Easy) }
             Spacer(Modifier.width(10.dp))
-            Audition("拼写", ink) { sound.preview(Sound.SpellRight) }
+            Audition("拼写", ink, enabled = master) { sound.preview(Sound.SpellRight) }
             Spacer(Modifier.width(10.dp))
-            Audition("练习", ink) { sound.preview(Sound.QuizCorrect) }
+            Audition("练习", ink, enabled = master) { sound.preview(Sound.QuizCorrect) }
             Spacer(Modifier.width(10.dp))
-            Audition("过卡", ink) { sound.preview(Sound.PageTurn) }
+            Audition("过卡", ink, enabled = master) { sound.preview(Sound.PageTurn) }
             Spacer(Modifier.weight(1f))
             Row(
                 modifier = Modifier
@@ -1165,6 +1213,7 @@ private fun SoundToggleCell(
     hair: Color,
     paper: Color,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     onChange: (Boolean) -> Unit,
 ) = ToggleCell(
     label = label,
@@ -1175,18 +1224,19 @@ private fun SoundToggleCell(
     hair = hair,
     paper = paper,
     modifier = modifier,
+    enabled = enabled,
     onChange = onChange,
 )
 
 @Composable
-private fun Audition(label: String, ink: Color, onClick: () -> Unit) {
+private fun Audition(label: String, ink: Color, enabled: Boolean = true, onClick: () -> Unit) {
     Text(
         text = label,
         fontFamily = SerifFamily,
         fontSize = 10.5.sp,
-        color = ink,
+        color = if (enabled) ink else ink.copy(alpha = 0.4f),
         modifier = Modifier
-            .wlPress(scale = 0.94f) { onClick() }
+            .wlPress(enabled = enabled, scale = 0.94f) { onClick() }
             .padding(vertical = 6.dp, horizontal = 2.dp),
     )
 }
@@ -1200,32 +1250,42 @@ private fun InkSlider(
     hair: Color,
     paper: Color,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     Box(
         modifier = modifier
             .height(30.dp)
+            .alpha(if (enabled) 1f else 0.4f)
             .progressSemantics(value, 0f..1f)
             .semantics {
                 progressBarRangeInfo = ProgressBarRangeInfo(value, 0f..1f)
                 setProgress { target ->
-                    onChange(target)
-                    onFinished()
-                    true
+                    if (!enabled) {
+                        false
+                    } else {
+                        onChange(target)
+                        onFinished()
+                        true
+                    }
                 }
             }
-            .pointerInput(Unit) {
+            .pointerInput(enabled) {
                 detectTapGestures { offset ->
-                    onChange((offset.x / size.width).coerceIn(0f, 1f))
-                    onFinished()
+                    if (enabled) {
+                        onChange((offset.x / size.width).coerceIn(0f, 1f))
+                        onFinished()
+                    }
                 }
             }
-            .pointerInput(Unit) {
+            .pointerInput(enabled) {
                 detectHorizontalDragGestures(
                     onDragEnd = onFinished,
                     onDragCancel = onFinished,
                 ) { change, _ ->
-                    change.consume()
-                    onChange((change.position.x / size.width).coerceIn(0f, 1f))
+                    if (enabled) {
+                        change.consume()
+                        onChange((change.position.x / size.width).coerceIn(0f, 1f))
+                    }
                 }
             },
     ) {

@@ -20,7 +20,7 @@ enum class Sound(@RawRes val res: Int, val gain: Float) {
     SpellRight(R.raw.spell_right, 0.62f),
     SpellWrong(R.raw.spell_wrong, 0.40f),
     QuizCorrect(R.raw.quiz_correct, 0.55f),
-    PageTurn(R.raw.gear_click, 0.32f),
+    PageTurn(R.raw.page_turn, 0.55f),
 }
 
 data class SoundSettings(
@@ -29,7 +29,7 @@ data class SoundSettings(
     val ratings: Boolean = true,
     val spelling: Boolean = true,
     val quiz: Boolean = true,
-    val pageTurn: Boolean = false,
+    val pageTurn: Boolean = true,
 )
 
 /**
@@ -133,7 +133,7 @@ class SoundService private constructor(context: Context) {
         ratings = prefs.getBoolean(KEY_RATINGS, true),
         spelling = prefs.getBoolean(KEY_SPELLING, true),
         quiz = prefs.getBoolean(KEY_QUIZ, true),
-        pageTurn = prefs.getBoolean(KEY_PAGE_TURN, false),
+        pageTurn = prefs.getBoolean(KEY_PAGE_TURN, true),
     )
 
     companion object {

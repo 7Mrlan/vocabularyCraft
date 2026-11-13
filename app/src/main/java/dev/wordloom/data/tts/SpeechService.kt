@@ -84,7 +84,7 @@ class SpeechService(
             model = config.model,
             voice = config.voice,
             instructions = config.instructions,
-            hasKey = config.key.isNotBlank(),
+            hasKey = config.requestKey.isNotBlank(),
             fallback = config.fallback,
         )
 

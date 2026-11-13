@@ -58,6 +58,22 @@ def soft_tick(dur: float, amp: float, cutoff: float) -> list[float]:
     return master(out, peak=0.65)
 
 
+def paper_swish(dur: float, amp: float, cutoff: float) -> list[float]:
+    """A page slipping on paper: a soft noise brush, not a gear or a click."""
+    n = int(dur * SR)
+    out = [0.0] * n
+    rnd = random.Random(7)
+    y = 0.0
+    alpha = min(1.0, 2 * math.pi * cutoff / SR)
+    for i in range(n):
+        x = rnd.uniform(-1.0, 1.0)
+        y += alpha * (x - y)
+        t = i / SR
+        env = (1.0 - math.exp(-t / 0.004)) * math.exp(-t / 0.05)
+        out[i] = amp * env * y
+    return master(out, peak=0.8)
+
+
 def mix(*parts: tuple[list[float], float]) -> list[float]:
     """Mix offset samples, then normalize and fade the result."""
     length = max(int(offset * SR) + len(samples) for samples, offset in parts)
@@ -120,8 +136,11 @@ def main() -> None:
     # 四选一答对 — one soft wood note; the old chord was too celebratory.
     write("quiz_correct", mix((tone(523.25, 0.18, 0.42, WOOD), 0.0),))
 
-    # 书架过卡 — a paper tick, off by default in the app.
-    write("gear_click", soft_tick(0.050, 0.22, 1600.0))
+    # 书架过卡 — paper slipping, plus one low felt tick as it settles.
+    write("page_turn", mix(
+        (paper_swish(0.16, 0.5, 1200.0), 0.0),
+        (tone(196.00, 0.09, 0.22, FELT), 0.035),
+    ))
 
 
 if __name__ == "__main__":

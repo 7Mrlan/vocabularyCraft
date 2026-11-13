@@ -432,3 +432,11 @@ adverb `#A894FF`…），由 `posColor(pos, dark)` 选择。
 
 复习进度条在深色下用主题 `primary`（亮蓝）画进度、`panel` 画轨道；`#00578A` 在深底上
 会糊成一片，不再使用。
+
+### 全屏状态栏（2026-11）
+
+- 状态栏由 `MainActivity` 全局隐藏（sticky：顶部下滑可临时唤出时间/通知）；底部导航栏保持不变。
+- 顶部间距统一改为 `immersiveTopPadding()` = `displayCutout` 顶部 + 最小 10dp；状态栏隐藏后不能再依赖 `statusBarsPadding`（它会变成 0）。
+- 首页品牌行、背单词/拼写、词条、词表、词书、地图、搜索/复习/练习的 PoolHeader、引导页全部走同一个修饰符；底部 `navigationBarsPadding` 不动。
+- 全屏后系统时间不显示是预期行为；灵动岛/挖孔仍由 displayCutout 让位。
+

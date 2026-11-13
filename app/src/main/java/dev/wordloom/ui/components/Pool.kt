@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,7 +42,7 @@ fun PoolHeader(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Brush.verticalGradient(listOf(top, bottom)))
-                .statusBarsPadding(),
+                .immersiveTopPadding(),
             content = content,
         )
         WaveDivider(

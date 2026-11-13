@@ -27,7 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.statusBarsPadding
+import dev.wordloom.ui.components.immersiveTopPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -184,7 +184,7 @@ fun HomeScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Brush.verticalGradient(listOf(HeroTop, HeroMid, HeroBottom)))
-                    .statusBarsPadding()
+                    .immersiveTopPadding()
                     .drawBehind {
                         if (pillCenterY > 0f) {
                             drawSearchRipples(Offset(x = 40.dp.toPx(), y = pillCenterY))
@@ -400,7 +400,7 @@ fun HomeScreen(
         visible = drawerOpen,
         modifier = Modifier
             .align(Alignment.TopEnd)
-            .statusBarsPadding()
+            .immersiveTopPadding()
             .padding(top = 68.dp, end = 20.dp)
             .zIndex(11f),
         enter = fadeIn(tween(150)) +

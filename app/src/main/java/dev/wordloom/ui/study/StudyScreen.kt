@@ -28,7 +28,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import dev.wordloom.ui.components.immersiveTopPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -332,7 +332,7 @@ fun StudyScreen(
                     ),
                 ),
             )
-            .statusBarsPadding()
+            .immersiveTopPadding()
             .navigationBarsPadding()
             .imePadding(),
     ) {
@@ -608,7 +608,7 @@ private fun ReviewOverlay(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
+                .immersiveTopPadding()
                 .navigationBarsPadding()
                 .padding(horizontal = 24.dp, vertical = 18.dp),
         ) {

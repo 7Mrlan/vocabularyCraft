@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import dev.wordloom.ui.components.immersiveTopPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -157,7 +157,7 @@ private fun WelcomePage(onStart: () -> Unit, onSkip: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
+                .immersiveTopPadding()
                 .navigationBarsPadding()
                 .padding(horizontal = 28.dp, vertical = 20.dp)
                 .padding(bottom = 54.dp),

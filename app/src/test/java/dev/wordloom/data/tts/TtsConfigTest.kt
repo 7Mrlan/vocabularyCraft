@@ -48,9 +48,17 @@ class TtsConfigTest {
     }
 
     @Test
-    fun `preset voices never rewrite the text`() {
-        assertEquals("record", preset().requestText("record"))
+    fun `preset voices also give a single word a full stop`() {
+        assertEquals("record.", preset().requestText("record"))
+        assertEquals("Record.", preset().requestText("  Record "))
+        assertEquals("give up", preset().requestText("give up"))
         assertEquals("Never make your students feel ignorant.", preset().requestText("Never make your students feel ignorant."))
+    }
+
+    @Test
+    fun `the openai compatible endpoint keeps the text exactly`() {
+        val openAi = preset().copy(protocol = TtsProtocol.OPENAI)
+        assertEquals("record", openAi.requestText("record"))
     }
 
     @Test

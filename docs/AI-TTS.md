@@ -7,7 +7,7 @@
 
 - **单词和例句都走 AI TTS**；旧 Vocabulary.com / Wiktionary 真人录音与 Youdao TTS 只作为兜底。
 - **两套模板**（声音页顶部「预置音色 / 设计音色」切换）：预置英文音色（默认 `mimo-v2.5-tts` + Chloe，另有 Mia / Milo / Dean 四张音色卡）与设计音色（`mimo-v2.5-tts-voicedesign` + 原有中文描述）。
-- **设计模板的单词补句号**：单个词在发送前加 `.`（`record` → `record.`），给生成式语音一个句子边界；句子与短语不动，预置模板按原文发送。
+- **MiMo 单词补句号**：单个词在发送前加 `.`（`record` → `record.`），给预置/设计两套语音一个句子边界；句子与短语不动，OpenAI 兼容接口按原文发送。
 - **失败回退是配置项**：默认开（合成失败用真人录音）；关闭后只用 AI 声音，失败提示并重试一次；未配置 key 时行为与以前一致。
 - **设计描述始终保留**：预置模板保存时也把描述存进配置，但预置请求不发送它（预置音色不接受描述）；切回设计模板时原样恢复。
 - **design 音色保留为第二套模板**：`mimo-v2.5-tts-voicedesign` + 用户原来的中文 instructions
@@ -73,7 +73,7 @@
 ## 4. 当前实现（4.1，工作区）
 
 - `data/tts/TtsConfig.kt`：endpoint / protocol / model / voice / instructions / key / fallback；
-  MIMO/OpenAI 请求体；URL 归一化；`requestText()`（设计模板单字补句号）；
+  MIMO/OpenAI 请求体；URL 归一化；`requestText()`（MiMo 单字补句号，OpenAI 原文）；
   `TtsDraft`（两个配置页共用的转换与校验）；加密存储用 kotlinx.serialization。
 - `data/tts/TtsClient.kt`：一次请求，无重试；MiMo JSON/base64 音频解析；WAV/MP3 校验；10/30/45 s 超时。
 - `data/tts/TtsConfigStore.kt`：Android Keystore AES/GCM + `AtomicFile`，文件 `filesDir/tts.encrypted`；

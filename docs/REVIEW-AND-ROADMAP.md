@@ -106,7 +106,7 @@ UI 规则：
 - 拆成：`StudyDeckState`（队列/评分/回顾）、`StudyPageRing`（水平例句环）、
   `StudyLayerSwitch`（英文/中文层）、`StudyAudioCoordinator`（音频状态机）。
 - **取消上下滑动切层**：改用现有「中文 / 英文」按钮；垂直滚动不再与切层抢手势。
-- **水平例句环**：±2 关键页窗口（`key(page)`），页变只重组环、不重组整张卡；只接 `detectHorizontalDragGestures`；例句音频在落定后 200ms 播，快速连滑会取消。
+- **水平例句环**：`HorizontalPager` + `Int.MAX_VALUE` 虚拟页数、取模内容、`beyondViewportPageCount=1`；左右都能无限滑动；音频按 `settledPage` 播；整张 `StudyCard` 按词/呈现 key，评分页不会沿用上一张的英文层。
 - **喇叭**：`SpeechButton` 只识别 tap；AI 朗读由 `SpeechService` 单播放器取消旧 clip，
   兜底 `AudioPlayer` 也只有一个 job。
 - **脉冲**：只在 `playing` 时存在，读在 `graphicsLayer`；拖动开始暂停。

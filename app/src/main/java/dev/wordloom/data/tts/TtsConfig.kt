@@ -43,14 +43,14 @@ data class TtsConfig(
     /**
      * The text the service actually receives (and the cache is keyed on).
      *
-     * A generated design voice has no sentence context for a bare headword, so
-     * single words get a full stop: "record" is sent as "record.". Sentences
-     * and multi-word phrases are untouched, and preset voices take the text
-     * exactly as written.
+     * A bare headword has no sentence context on the MiMo TTS models, so single
+     * words get a full stop: "record" is sent as "record." for both preset and
+     * design voices. Sentences and multi-word phrases are untouched, and the
+     * OpenAI-compatible speech endpoint keeps the text exactly as written.
      */
     fun requestText(text: String): String {
         val trimmed = text.trim()
-        if (!voiceDesign) return trimmed
+        if (protocol != TtsProtocol.MIMO) return trimmed
         if (trimmed.isEmpty()) return trimmed
         if (trimmed.any { it.isWhitespace() }) return trimmed
         if (trimmed.last() in ".!?,;:\"'") return trimmed

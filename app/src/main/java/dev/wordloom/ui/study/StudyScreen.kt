@@ -311,9 +311,10 @@ fun StudyScreen(
             // is swiped.
             launch { StudyContent.details(item.word) }
         }
-        // Only the word on screen is warmed as AI audio; the next example is
-        // prefetched after the current page settles, not a whole batch ahead.
-        queue.take(1).forEach { item -> speechActions.prefetch(item.word) }
+        // Warm the word on screen and the next one: the next card's TTS is
+        // then a cache hit when "下一词" is tapped. The next example is warmed
+        // after the current page settles, not a whole batch ahead.
+        queue.take(2).forEach { item -> speechActions.prefetch(item.word) }
     }
     val progress = if (total == 0) 0f else completed.toFloat() / total
 
@@ -1694,6 +1695,9 @@ private fun SpellingRound(
     LaunchedEffect(index) {
         details = StudyContent.details(entry.word)
         focus.requestFocus()
+        // The spelling cue belongs to the moment the word appears, not to the
+        // check result: the reader needs to hear it before typing.
+        onSpeak(entry.word)
     }
 
     fun advance() {
@@ -1720,7 +1724,6 @@ private fun SpellingRound(
         )
         if (ok) {
             correctCount += 1
-            onSpeak(entry.word)
         }
     }
 

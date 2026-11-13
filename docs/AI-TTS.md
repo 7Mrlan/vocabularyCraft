@@ -6,7 +6,7 @@
 ## 1. 已定决策
 
 - **单词和例句都走 AI TTS**；旧 Vocabulary.com / Wiktionary 真人录音与 Youdao TTS 只作为兜底。
-- **两套模板**（声音页顶部下拉）：预置英文音色（默认 `mimo-v2.5-tts` + Chloe，另有 Mia / Milo / Dean）与设计音色（`mimo-v2.5-tts-voicedesign` + 原有中文描述）。
+- **两套模板**（声音页顶部「预置音色 / 设计音色」切换）：预置英文音色（默认 `mimo-v2.5-tts` + Chloe，另有 Mia / Milo / Dean 四张音色卡）与设计音色（`mimo-v2.5-tts-voicedesign` + 原有中文描述）。
 - **设计模板的单词补句号**：单个词在发送前加 `.`（`record` → `record.`），给生成式语音一个句子边界；句子与短语不动，预置模板按原文发送。
 - **失败回退是配置项**：默认开（合成失败用真人录音）；关闭后只用 AI 声音，失败提示并重试一次；未配置 key 时行为与以前一致。
 - **设计描述始终保留**：预置模板保存时也把描述存进配置，但预置请求不发送它（预置音色不接受描述）；切回设计模板时原样恢复。
@@ -80,13 +80,19 @@
   key 只在这里落盘，且已在 `backup_rules.xml` / `data_extraction_rules.xml` 中排除出云备份与设备迁移。
 - `data/tts/SpeechService.kt`：优先读加密 store，debug/`-PttsLocal` 的 BuildConfig 只做首次引导种子；
   AI 优先、URL 兜底；`cacheDir/tts` 磁盘缓存；按
-  `protocol+endpoint+model+voice+instructions+text` 的 SHA-256 做 key；Semaphore 2；in-flight 去重；单个 MediaPlayer。
+  `protocol+endpoint+model+voice+有效instructions+text` 的 SHA-256 做 key
+  （预置音色不发送描述，所以描述也不进它的 key；voicedesign 与 OpenAI 兼容接口都进）；
+  Semaphore 2；in-flight 去重；单个 MediaPlayer。
 - `ui/voice/SpeechActions.kt`：`LocalSpeechActions`，学习卡/词条页统一入口。
 - `ui/voice/SpeechButton.kt`：AI 优先，旧 URL 兜底；播放脉冲在 `graphicsLayer` 读取，不再每帧重组。
-- `ui/voice/VoiceSettingsSheet.kt`：应用内「声音」配置页；顶部「朗读方式」与「音色」两个纸面下拉，
-  默认预置英文音色 + Chloe；设计模板显示音色描述。试听文本可编辑，带 record/read/lead/close/use/live
-  六个同形异读快选；密钥状态行（已保存 / 未配置）与「清除」；「合成失败时使用真人录音」开关；
-  保存后短暂显示「已保存」再关闭。音效分组下方带试听与墨色音量滑杆。
+- `ui/voice/VoiceSettingsSheet.kt`：应用内「声音」配置页。顶部「预置音色 / 设计音色」分段；
+  预置模式是四张 64dp 音色卡（Mia / Chloe / Milo / Dean，默认 Chloe，选中的卡纸白底 + 墨边 + 抬 2dp），
+  设计模式是音色描述框。试听文本可编辑，带 record/read/lead/close/use/live 六个快选词（点词即读）；
+  「连接」默认折叠为一行，展开才有接口地址、API 密钥（留空沿用 / 清除）与回退开关；
+  音效在同一页（五个开关、音量、分组试听、恢复默认）；底部固定试听 / 保存。
+  全页字号上限 14.5sp，常规高度一屏内，无滚动；展开连接或小屏才滚动。
+  非模板的自定义 MiMo 模型在未改动音色与模板时原样保留，并在音色卡上方显示当前配置；
+  OpenAI 兼容配置通过「连接」展开里的引擎切换直接编辑，OpenAI 时隐藏 MiMo 模板/音色卡。
 - 入口：首页品牌行「收纳 → 声音」；首次引导第 2 屏也可配置并试听；
   学习页/词条页仍保留喇叭与自动朗读。
 - `StudyScreen`：单词/例句自动朗读走 AI；`StudyCard` 预取当前词 + 前 5 例句；队列前 3 词预取。
@@ -111,13 +117,20 @@
 
 ### 5.2 应用内配置 UI（✅ 朗读页与音效页）
 
-- 「声音」底部抽屉：顶部「朗读方式」下拉（预置英文音色 / 设计音色）与「音色」下拉
-  （Chloe / Mia / Milo / Dean）；引擎（MiMo / OpenAI 兼容）、endpoint、key、
-  「合成失败时使用真人录音」开关；试听文本可编辑并带六个同形异读快选。
-- 密钥状态行（已保存 / 未配置）与「清除」；保存后短暂显示「已保存」。
-- 音效页：总音量（墨色滑杆）、评分/拼写/练习/书架分组开关、分组试听、恢复默认。
+- 「声音」底部抽屉：顶部「预置音色 / 设计音色」分段；预置模式为四张音色卡
+  （Mia 明亮 / Chloe 温暖 / Milo 沉稳 / Dean 低沉，默认 Chloe），设计模式为描述框。
+- 「连接」折叠行显示 `MiMo · host`（OpenAI 时显示 `OpenAI 兼容 · host`），展开后是
+  引擎切换（MiMo / OpenAI 兼容）、接口地址、OpenAI 的模型/声音、API 密钥
+  （已保存 / 留空沿用 / 清除）与「合成失败时使用真人录音」；密钥永不回显。
+- 试听文本可编辑，六个同形异读词一点即替换并朗读；底部固定试听 / 保存，错误就地显示在按钮上方。
+- 音效同页：总音量（墨色滑杆）、评分/拼写/练习/书架分组开关、分组试听、恢复默认。
 - 入口：首页品牌行「收纳 → 声音」；首次引导第 2 屏配置朗读。
-- 视觉：纸面、衬线标题、细墨线、圆形墨色按钮；没有 Material 灰色设置面板。
+- 视觉：纸面（浅色 #F7F4ED / 深色 surface）、15sp 以内的衬线标题与墨色线、圆形墨色保存按钮；
+  分区用 13dp 单线字形（波形 / 播放 / 钥匙 / 喇叭 / 重置），没有 Material 灰色设置面板。
+- 引擎切换：连接展开里可选 MiMo / OpenAI 兼容；OpenAI 时显示模型与声音字段，
+  隐藏 MiMo 模板/音色卡，已有描述原样保留。
+- 自定义配置保护：非模板的自定义 MiMo 模型在未改音色/模板时不会被静默覆盖；
+  只有点了音色卡或切换模板才写回模板模型。
 
 ### 5.3 播放与预取
 

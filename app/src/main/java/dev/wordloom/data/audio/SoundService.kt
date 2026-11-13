@@ -88,9 +88,18 @@ class SoundService private constructor(context: Context) {
     }
 
     fun setVolume(volume: Float) {
-        val next = volume.coerceIn(0f, 1f)
-        _settings.value = _settings.value.copy(volume = next)
-        prefs.edit().putFloat(KEY_VOLUME, next).apply()
+        previewVolume(volume)
+        commitVolume()
+    }
+
+    /** Live value while a finger is on the slider; no disk write per frame. */
+    fun previewVolume(volume: Float) {
+        _settings.value = _settings.value.copy(volume = volume.coerceIn(0f, 1f))
+    }
+
+    /** Write the value once, when the gesture ends. */
+    fun commitVolume() {
+        prefs.edit().putFloat(KEY_VOLUME, _settings.value.volume).apply()
     }
 
     fun setRatings(enabled: Boolean) {

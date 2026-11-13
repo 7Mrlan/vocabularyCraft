@@ -1,6 +1,8 @@
 package dev.wordloom.data.tts
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -17,6 +19,20 @@ class TtsCacheTest {
             writeBytes(ByteArray(bytes))
             setLastModified(modified)
         }
+
+    private fun key(
+        model: String = TtsDefaults.PRESET_MODEL,
+        voice: String = "Chloe",
+        instructions: String = "",
+        text: String = "record",
+    ) = TtsCache.key(
+        protocol = TtsProtocol.MIMO,
+        endpoint = TtsDefaults.ENDPOINT,
+        model = model,
+        voice = voice,
+        instructions = instructions,
+        text = text,
+    )
 
     @Test
     fun `oldest clips are removed until the budget fits`() {
@@ -51,5 +67,32 @@ class TtsCacheTest {
 
         assertTrue(partial.exists())
         assertTrue(clip.exists())
+    }
+
+    @Test
+    fun `the same request is the same clip`() {
+        assertEquals(key(), key())
+    }
+
+    @Test
+    fun `model voice and text each change the identity`() {
+        assertNotEquals(key(), key(model = TtsConfig.VOICE_DESIGN_MODEL))
+        assertNotEquals(key(), key(voice = "Mia"))
+        assertNotEquals(key(), key(text = "record."))
+    }
+
+    @Test
+    fun `a new description cannot replay an old design clip`() {
+        assertNotEquals(
+            key(model = TtsConfig.VOICE_DESIGN_MODEL, instructions = "warm"),
+            key(model = TtsConfig.VOICE_DESIGN_MODEL, instructions = "bright"),
+        )
+    }
+
+    @Test
+    fun `the key stays filesystem-safe`() {
+        val value = key(text = "../../etc/passwd")
+        assertEquals(40, value.length)
+        assertTrue(value.all { it in '0'..'9' || it in 'a'..'f' })
     }
 }

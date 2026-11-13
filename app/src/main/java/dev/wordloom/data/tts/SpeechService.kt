@@ -19,7 +19,6 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
 import java.io.IOException
-import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 
@@ -250,6 +249,7 @@ class SpeechService(
         if (!force && target.isFile && target.length() > 0) {
             // Refresh LRU position without changing the clip.
             target.setLastModified(System.currentTimeMillis())
+            lastError = null
             return target
         }
 
@@ -268,6 +268,7 @@ class SpeechService(
                         temporary.delete()
                     }
                     TtsCache.prune(directory, keep = target)
+                    lastError = null
                     target
                 } catch (cancelled: CancellationException) {
                     temporary.delete()
@@ -343,20 +344,14 @@ class SpeechService(
         audioFocus.abandon()
     }
 
-    private fun cacheKey(text: String): String {
-        val identity = listOf(
-            // Bump when the request shape changes; old clips then stop matching.
-            "tts-v2",
-            config.protocol.name,
-            config.endpoint,
-            config.model,
-            config.voice,
-            config.instructions,
-            text,
-        ).joinToString("\u0000")
-        return MessageDigest.getInstance("SHA-256")
-            .digest(identity.toByteArray())
-            .take(20)
-            .joinToString("") { "%02x".format(it) }
-    }
+    private fun cacheKey(text: String): String = TtsCache.key(
+        protocol = config.protocol,
+        endpoint = config.endpoint,
+        model = config.model,
+        voice = config.voice,
+        // Preset requests never send the description, so it is not part of
+        // their cache identity; voicedesign and OpenAI both do send it.
+        instructions = config.effectiveInstructions,
+        text = text,
+    )
 }

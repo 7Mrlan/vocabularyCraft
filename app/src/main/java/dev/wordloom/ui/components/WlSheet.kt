@@ -30,13 +30,17 @@ import dev.wordloom.ui.theme.WordloomTheme
 @Composable
 fun WlSheet(
     onDismiss: () -> Unit,
+    /** A screen may carry its own paper; the default is the app surface. */
+    containerColor: Color? = null,
+    /** The handle follows the paper instead of the app's cool outline. */
+    handleColor: Color? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val wl = WordloomTheme.colors
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = wl.surface,
+        containerColor = containerColor ?: wl.surface,
         contentColor = wl.ink,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         scrimColor = Color.Black.copy(alpha = 0.42f),
@@ -46,7 +50,7 @@ fun WlSheet(
                     .padding(top = 10.dp, bottom = 2.dp)
                     .width(40.dp)
                     .height(4.dp)
-                    .background(wl.outline, CircleShape),
+                    .background(handleColor ?: wl.outline, CircleShape),
             )
         },
     ) {

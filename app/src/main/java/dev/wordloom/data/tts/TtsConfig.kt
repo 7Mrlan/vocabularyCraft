@@ -12,6 +12,13 @@ enum class TtsProtocol { MIMO, OPENAI }
 /** The two ways a MiMo voice can be chosen. */
 enum class TtsTemplate { Preset, Design }
 
+/** The model a template writes; the sheet and the tests share this mapping. */
+val TtsTemplate.model: String
+    get() = when (this) {
+        TtsTemplate.Preset -> TtsDefaults.PRESET_MODEL
+        TtsTemplate.Design -> TtsConfig.VOICE_DESIGN_MODEL
+    }
+
 /**
  * A local AI-TTS endpoint, mirroring the config the ebook project already uses.
  *
@@ -49,6 +56,13 @@ data class TtsConfig(
         if (trimmed.last() in ".!?,;:\"'") return trimmed
         return "$trimmed."
     }
+
+    /**
+     * The description that actually reaches the provider. The preset MiMo
+     * voices reject it; OpenAI-compatible speech and voicedesign both use it.
+     */
+    val effectiveInstructions: String
+        get() = if (protocol == TtsProtocol.OPENAI || voiceDesign) instructions else ""
 
     val enabled: Boolean
         get() = endpoint.isNotBlank() && model.isNotBlank() && key.isNotBlank() &&
@@ -134,9 +148,10 @@ object TtsDefaults {
     const val PRESET_MODEL = "mimo-v2.5-tts"
     const val MODEL = PRESET_MODEL
     const val VOICE = "Chloe"
+    /** Official English voices, ordered from bright to deep. */
     val VOICES = listOf(
-        "Chloe" to "女声 · 官方英文示例",
         "Mia" to "女声 · 明亮",
+        "Chloe" to "女声 · 温暖",
         "Milo" to "男声 · 沉稳",
         "Dean" to "男声 · 低沉",
     )
@@ -176,6 +191,11 @@ data class TtsDraft(
         if (model.isBlank()) return "请填写模型名称"
         if (key.isBlank() && !hasSavedKey) return "请填写 API 密钥"
         if (protocol == TtsProtocol.OPENAI && voice.isBlank()) return "请填写声音名称"
+        if (protocol == TtsProtocol.MIMO && model == TtsDefaults.PRESET_MODEL &&
+            voice.isBlank()
+        ) {
+            return "请选择音色"
+        }
         if (protocol == TtsProtocol.MIMO && model == TtsConfig.VOICE_DESIGN_MODEL &&
             instructions.isBlank()
         ) {
@@ -184,3 +204,30 @@ data class TtsDraft(
         return null
     }
 }
+
+/**
+ * Resolve a template (or a preserved custom setup) into protocol/model/voice.
+ * Keeping this out of the composable is what makes the rule testable: a custom
+ * setup survives untouched saves, but the first deliberate template/voice pick
+ * switches to the standard MiMo configuration.
+ */
+fun TtsDraft.forTemplate(
+    template: TtsTemplate,
+    keepCustom: Boolean,
+    customProtocol: TtsProtocol,
+    customModel: String,
+    customVoice: String,
+    presetVoice: String,
+): TtsDraft = copy(
+    protocol = if (keepCustom) customProtocol else TtsProtocol.MIMO,
+    model = when {
+        keepCustom -> customModel
+        template == TtsTemplate.Design -> TtsTemplate.Design.model
+        else -> TtsTemplate.Preset.model
+    },
+    voice = when {
+        keepCustom -> customVoice
+        template == TtsTemplate.Design -> ""
+        else -> presetVoice
+    },
+)

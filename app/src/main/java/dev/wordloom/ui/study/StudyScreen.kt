@@ -52,6 +52,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.annotation.RawRes
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -307,6 +308,10 @@ fun StudyScreen(
             // Warm the first three AI clips as soon as the queue exists, not
             // when the card is first composed.
             speechActions.prefetch(item.word)
+            // The current card and the prefetch share one fetch (StudyContent
+            // dedupes in flight), so the ring's page count is stable before it
+            // is swiped.
+            launch { StudyContent.details(item.word) }
         }
     }
     val progress = if (total == 0) 0f else completed.toFloat() / total
@@ -707,12 +712,21 @@ private class RingState {
     var offset by mutableFloatStateOf(0f)
     var width by mutableFloatStateOf(1f)
     var job: Job? = null
+    /** Updated only after the spring has landed; audio keys off this, not index. */
+    var settledPage by mutableIntStateOf(0)
+    var settledVersion by mutableIntStateOf(0)
 }
 
 private fun examplesOf(details: StudyDetails?, entry: WordEntry): List<StudyExample> =
     details?.examples.orEmpty().ifEmpty {
         entry.senses.flatMap { sense -> sense.examples.map { StudyExample(it, "") } }.take(5)
     }
+
+/** Page 0 is the entry (with the first example); page n is examples[n]. */
+private fun pageCountFor(examples: List<StudyExample>): Int = examples.size.coerceAtLeast(1)
+
+private fun exampleForPage(examples: List<StudyExample>, page: Int): StudyExample? =
+    if (page == 0) examples.firstOrNull() else examples.getOrNull(page)
 
 @Composable
 private fun StudyCard(
@@ -743,11 +757,11 @@ private fun StudyCard(
     var detailsFailed by remember(item.word) { mutableStateOf(false) }
 
     val examples = remember(details, entry) { examplesOf(details, entry) }
-    val pageCount = 1 + examples.size
+    // Page 0 carries the first example; pages 1..n carry the remaining ones.
+    val pageCount = pageCountFor(examples)
 
     // One horizontal ring: page 0 is the word card, pages 1..n are examples.
     val ring = remember(item.word, presentation) { RingState() }
-    val page = ring.index.coerceIn(0, (pageCount - 1).coerceAtLeast(0))
     val wordAudioUrl = entry.audio.firstOrNull()?.url
     val gestureVelocity = remember { androidx.compose.ui.input.pointer.util.VelocityTracker() }
 
@@ -780,32 +794,10 @@ private fun StudyCard(
     }
     LaunchedEffect(details, speech?.enabled) {
         if (speech != null && speech.enabled) {
-            details?.examples?.take(5)?.forEach { example -> speech.prefetch(example.en) }
+            details?.examples?.take(3)?.forEach { example -> speech.prefetch(example.en) }
         } else {
             details?.examples?.take(3)?.forEach { example ->
                 example.audioUrl.takeIf { it.isNotBlank() }?.let(onPrefetch)
-            }
-        }
-    }
-
-    // Pages 1..n speak their own example when they land. Page 0 is the entry
-    // face now, so it stays quiet (the word itself was voiced on arrival).
-    val pageExample = if (page == 0) null else examples.getOrNull(page - 1)
-    val pageAudioUrl = pageExample?.audioUrl
-    var pageSpokenKey by remember(item.word, page) { mutableStateOf<String?>(null) }
-    LaunchedEffect(layer, page, pageAudioUrl, pageExample?.en, speech?.enabled) {
-        if (layer != Layer.English) return@LaunchedEffect
-        val example = pageExample ?: return@LaunchedEffect
-        val sentence = example.en
-        if (sentence.isBlank() || pageSpokenKey == sentence) return@LaunchedEffect
-        if ((speech != null && speech.enabled) || !pageAudioUrl.isNullOrBlank()) {
-            pageSpokenKey = sentence
-            if (speech != null && speech.enabled) {
-                speech.speak(sentence, pageAudioUrl) { state ->
-                    if (state is SpeechState.Failed) pageSpokenKey = null
-                }
-            } else {
-                pageAudioUrl?.let(onAutoPlay)
             }
         }
     }
@@ -820,10 +812,14 @@ private fun StudyCard(
         // density, or a 3x screen would trigger on a much slower finger.
         val fling = FLING_DP_PER_SECOND * density
         // Distance or speed: a short, fast flick still turns the page.
-        val step = when {
-            ring.offset < -threshold || vx < -fling -> 1
-            ring.offset > threshold || vx > fling -> -1
-            else -> 0
+        val step = if (pageCount <= 1) {
+            0
+        } else {
+            when {
+                ring.offset < -threshold || vx < -fling -> 1
+                ring.offset > threshold || vx > fling -> -1
+                else -> 0
+            }
         }
         ring.job?.cancel()
         if (step != 0) {
@@ -841,6 +837,10 @@ private fun StudyCard(
                 animationSpec = spring(dampingRatio = 0.9f, stiffness = 700f),
             ) { value, _ -> ring.offset = value }
             ring.offset = 0f
+            if (step != 0) {
+                ring.settledPage = ring.index
+                ring.settledVersion += 1
+            }
         }
     }
 
@@ -857,7 +857,7 @@ private fun StudyCard(
         // vertical scroll can never be mistaken for a layer change and the
         // first diagonal movement never locks the card out of paging.
         val cardGestures = Modifier.pointerInput(item.word, layer, pageCount) {
-            if (layer != Layer.English) return@pointerInput
+            if (layer != Layer.English || pageCount <= 1) return@pointerInput
             detectHorizontalDragGestures(
                 onDragStart = { position ->
                     // A new touch owns the offset; never fight a running settle.
@@ -932,11 +932,10 @@ private fun StudyCard(
                             entry = entry,
                             details = details,
                             examples = examples,
-                            page = page,
-                            offsetProvider = { ring.offset },
-                            onWidth = { ring.width = it },
+                            ring = ring,
                             resetKey = presentation.toLong(),
                             onSelect = onSelect,
+                            onAutoPlay = onAutoPlay,
                             onToggleChinese = { layer = Layer.Chinese },
                             onNext = {
                                 val rating = pending ?: Rating.Good
@@ -1027,24 +1026,62 @@ private fun ringPath(width: Float, height: Float, radius: Float, inset: Float): 
     }
 }
 
+private data class RingSlot(val page: Int, val delta: Int)
+
+/** Signed distance on the ring: the page at count-1 is -1 from page 0. */
+private fun ringDelta(page: Int, current: Int, count: Int): Int {
+    val raw = page - current
+    return when {
+        raw > count / 2 -> raw - count
+        raw < -(count / 2) -> raw + count
+        else -> raw
+    }
+}
+
+/**
+ * Pages to compose around the current one. A two-page ring needs the same
+ * example on both sides, so count 2 keeps two positions for it; larger rings
+ * keep a unique composition per page that moves with the ring instead of
+ * being rebuilt at each of the three fixed slots.
+ */
+private fun ringSlots(page: Int, count: Int): List<RingSlot> {
+    if (count <= 1) return listOf(RingSlot(0, 0))
+    if (count == 2) {
+        val other = Math.floorMod(page + 1, 2)
+        return listOf(RingSlot(other, -1), RingSlot(other, 1), RingSlot(page, 0))
+    }
+    val seen = LinkedHashMap<Int, RingSlot>()
+    for (offset in -2..2) {
+        val candidate = Math.floorMod(page + offset, count)
+        if (!seen.containsKey(candidate)) {
+            seen[candidate] = RingSlot(candidate, ringDelta(candidate, page, count))
+        }
+    }
+    return seen.values.toList()
+}
+
 @Composable
 private fun RatedRing(
     entry: WordEntry,
     details: StudyDetails?,
     examples: List<StudyExample>,
-    page: Int,
-    // Read inside graphicsLayer so a drag invalidates drawing, not composition.
-    offsetProvider: () -> Float,
-    onWidth: (Float) -> Unit,
+    ring: RingState,
     resetKey: Long,
     onSelect: (String, Rect) -> Unit,
+    onAutoPlay: (String) -> Unit,
     onToggleChinese: () -> Unit,
     onNext: () -> Unit,
     onWrong: () -> Unit,
 ) {
     val wl = WordloomTheme.colors
     var widthPx by remember { mutableFloatStateOf(1f) }
-    val count = 1 + examples.size
+    val count = pageCountFor(examples)
+    val page = ring.index.coerceIn(0, count - 1)
+    val slots = remember(page, count) { ringSlots(page, count) }
+
+    // Audio lives here, not in StudyCard: a page turn should recompose the
+    // ring, never the whole card.
+    RingAudio(ring, examples, onAutoPlay)
 
     Column(modifier = Modifier.fillMaxSize()) {
         Box(
@@ -1053,38 +1090,26 @@ private fun RatedRing(
                 .weight(1f)
                 .onSizeChanged {
                     widthPx = it.width.toFloat().coerceAtLeast(1f)
-                    onWidth(widthPx)
+                    ring.width = widthPx
                 },
         ) {
-            // Both neighbours are always composed off-screen, so the first
-            // pixel of a drag never has to lay out a new page.
-            RingPage(
-                entry = entry,
-                details = details,
-                examples = examples,
-                page = Math.floorMod(page + 1, count),
-                resetKey = resetKey,
-                onSelect = onSelect,
-                modifier = Modifier.graphicsLayer { translationX = offsetProvider() + widthPx },
-            )
-            RingPage(
-                entry = entry,
-                details = details,
-                examples = examples,
-                page = Math.floorMod(page - 1, count),
-                resetKey = resetKey,
-                onSelect = onSelect,
-                modifier = Modifier.graphicsLayer { translationX = offsetProvider() - widthPx },
-            )
-            RingPage(
-                entry = entry,
-                details = details,
-                examples = examples,
-                page = page,
-                resetKey = resetKey,
-                onSelect = onSelect,
-                modifier = Modifier.graphicsLayer { translationX = offsetProvider() },
-            )
+            // Each logical page keeps its composition while it moves around
+            // the ring; only a page entering the ±2 window is laid out.
+            slots.sortedByDescending { kotlin.math.abs(it.delta) }.forEach { slot ->
+                key(if (count <= 2) "${slot.page}@${slot.delta}" else slot.page) {
+                    RingPage(
+                        entry = entry,
+                        details = details,
+                        examples = examples,
+                        page = slot.page,
+                        resetKey = resetKey,
+                        onSelect = onSelect,
+                        modifier = Modifier.graphicsLayer {
+                            translationX = slot.delta * widthPx + ring.offset
+                        },
+                    )
+                }
+            }
         }
 
         Row(
@@ -1114,6 +1139,42 @@ private fun RatedRing(
     }
 }
 
+/**
+ * Page audio keys off the settled page, not the live index: a fast second
+ * swipe cancels the spring (and its version bump), so only the page the finger
+ * actually lands on is spoken.
+ */
+@Composable
+private fun RingAudio(
+    ring: RingState,
+    examples: List<StudyExample>,
+    onAutoPlay: (String) -> Unit,
+) {
+    val speech = LocalSpeechActions.current
+    val count = pageCountFor(examples)
+    val settledPage = ring.settledPage.coerceIn(0, count - 1)
+    val version = ring.settledVersion
+    var lastKey by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(version, settledPage, examples, speech?.enabled) {
+        val example = exampleForPage(examples, settledPage) ?: return@LaunchedEffect
+        val sentence = example.en
+        if (sentence.isBlank()) return@LaunchedEffect
+        // If details replace the entry fallback after the settle, the visible
+        // sentence changes too; speak the one actually on screen.
+        val key = "$version:$settledPage:$sentence"
+        if (key == lastKey) return@LaunchedEffect
+        lastKey = key
+        if (speech != null && speech.enabled) {
+            speech.speak(sentence, example.audioUrl.takeIf { it.isNotBlank() }) { state ->
+                if (state is SpeechState.Failed) lastKey = null
+            }
+        } else {
+            example.audioUrl.takeIf { it.isNotBlank() }?.let(onAutoPlay)
+        }
+    }
+}
+
 @Composable
 private fun RingPage(
     entry: WordEntry,
@@ -1129,11 +1190,13 @@ private fun RingPage(
             MainFaceContent(
                 entry = entry,
                 details = details,
+                example = exampleForPage(examples, 0),
                 resetKey = resetKey,
                 onSelect = onSelect,
             )
         } else {
-            examples.getOrNull(page - 1)?.let { example ->
+            // Page 1 is the second example: the first one lives on the main card.
+            exampleForPage(examples, page)?.let { example ->
                 ExamplePage(entry = entry, example = example)
             }
         }
@@ -1278,6 +1341,7 @@ private fun GradeOption(
 private fun MainFaceContent(
     entry: WordEntry,
     details: StudyDetails?,
+    example: StudyExample?,
     resetKey: Long,
     onSelect: (String, Rect) -> Unit,
 ) {
@@ -1330,6 +1394,27 @@ private fun MainFaceContent(
             )
         }
 
+        // The first example comes before the long blurb so it is visible
+        // without scrolling; the ring carries the remaining examples.
+        example?.let { ex ->
+            Spacer(Modifier.height(14.dp))
+            HighlightedSentence(
+                sentence = ex.en,
+                word = entry.word,
+                fontSize = 14.sp,
+                lineHeight = 21.sp,
+            )
+            if (ex.zh.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = ex.zh,
+                    fontSize = 12.5.sp,
+                    lineHeight = 18.sp,
+                    color = wl.inkMuted,
+                )
+            }
+        }
+
         entry.shortBlurb?.takeIf { it.isNotBlank() }?.let { blurb ->
             Spacer(Modifier.height(14.dp))
             SelectableText(
@@ -1366,8 +1451,6 @@ private fun MainFaceContent(
             }
         }
 
-        // The examples live in the horizontal ring; repeating the first one here
-        // made page 1 an exact duplicate of the main card.
         if (entry.wordFamily.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
             Text(

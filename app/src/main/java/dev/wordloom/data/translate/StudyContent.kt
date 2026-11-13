@@ -1,7 +1,10 @@
 package dev.wordloom.data.translate
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -45,16 +48,36 @@ object StudyContent {
         .readTimeout(12, TimeUnit.SECONDS)
         .build()
 
-    suspend fun details(word: String): StudyDetails? = withContext(Dispatchers.IO) {
+    // Fetching is shared by the queue prefetch and the card itself, and outlives
+    // a canceled caller (a new card must not cancel the next card's prefetch).
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val inFlight = mutableMapOf<String, CompletableDeferred<StudyDetails?>>()
+
+    suspend fun details(word: String): StudyDetails? {
         val key = word.trim().lowercase()
-        if (key.isEmpty()) return@withContext null
-        cache[key] ?: try {
-            fetch(key)?.also { cache[key] = it }
-        } catch (cancelled: kotlinx.coroutines.CancellationException) {
-            throw cancelled
-        } catch (_: Throwable) {
-            null
+        if (key.isEmpty()) return null
+        cache[key]?.let { return it }
+        val pending = synchronized(inFlight) {
+            inFlight[key] ?: CompletableDeferred<StudyDetails?>().also { deferred ->
+                inFlight[key] = deferred
+                scope.launch {
+                    try {
+                        val result = try {
+                            fetch(key)?.also { cache[key] = it }
+                        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                            throw cancelled
+                        } catch (_: Throwable) {
+                            null
+                        }
+                        deferred.complete(result)
+                    } finally {
+                        if (!deferred.isCompleted) deferred.complete(null)
+                        synchronized(inFlight) { inFlight.remove(key) }
+                    }
+                }
+            }
         }
+        return pending.await()
     }
 
     private fun fetch(word: String): StudyDetails? {

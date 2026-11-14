@@ -25,6 +25,7 @@ class TtsCacheTest {
         voice: String = "Chloe",
         instructions: String = "",
         text: String = "record",
+        hint: String = "",
     ) = TtsCache.key(
         protocol = TtsProtocol.MIMO,
         endpoint = TtsDefaults.ENDPOINT,
@@ -32,6 +33,7 @@ class TtsCacheTest {
         voice = voice,
         instructions = instructions,
         text = text,
+        hint = hint,
     )
 
     @Test
@@ -79,6 +81,12 @@ class TtsCacheTest {
         assertNotEquals(key(), key(model = TtsConfig.VOICE_DESIGN_MODEL))
         assertNotEquals(key(), key(voice = "Mia"))
         assertNotEquals(key(), key(text = "record."))
+    }
+
+    @Test
+    fun `a word hint changes the identity and an empty hint does not`() {
+        assertEquals(key(), key(hint = ""))
+        assertNotEquals(key(), key(hint = "read as a noun"))
     }
 
     @Test

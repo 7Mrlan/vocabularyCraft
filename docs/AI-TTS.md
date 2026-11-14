@@ -1,6 +1,6 @@
 # AI TTS：决策、现状与目标架构
 
-> 状态时间：2026-11-12。分支：`animation`。
+> 状态时间：2026-11-14。分支：`test` / `animation` / `main`。
 > 本文是 TTS 的唯一事实来源；压缩对话后按本文继续。
 
 ## 1. 已定决策
@@ -8,8 +8,9 @@
 - **单词和例句都走 AI TTS**；旧 Vocabulary.com / Wiktionary 真人录音与 Youdao TTS 只作为兜底。
 - **两套模板**（声音页顶部「预置音色 / 设计音色」切换）：预置英文音色（默认 `mimo-v2.5-tts` + Chloe，另有 Mia / Milo / Dean 四张音色卡）与设计音色（`mimo-v2.5-tts-voicedesign` + 原有中文描述）。
 - **MiMo 单词补句号**：单个词在发送前加 `.`（`record` → `record.`），给预置/设计两套语音一个句子边界；句子与短语不动，OpenAI 兼容接口按原文发送。
+- **单词发音提示**：单词请求在 user message 里带词性 + US IPA + 美式口音指令（`WordHint`），assistant 仍只说单词；句子/例句不带，保持原有朗读。这条提示是 MiMo 官方支持的「导演注释」，不会被读出来。
 - **失败回退是配置项**：默认开（合成失败用真人录音）；关闭后只用 AI 声音，失败提示并重试一次；未配置 key 时行为与以前一致。
-- **设计描述始终保留**：预置模板保存时也把描述存进配置，但预置请求不发送它（预置音色不接受描述）；切回设计模板时原样恢复。
+- **设计描述始终保留**：预置模板保存时也把描述存进配置，但预置请求不发送设计描述；单词提示是另一段 user 内容，预置也会发送；切回设计模板时原样恢复。
 - **design 音色保留为第二套模板**：`mimo-v2.5-tts-voicedesign` + 用户原来的中文 instructions
   （“温润知性的成熟女声，中低音，音色干净，吐字清晰，语速从容，句末自然下落，不过分甜。”），
   但不再是默认；默认是预置英文音色。
@@ -49,7 +50,7 @@
 ### 请求格式
 
 - MIMO：`POST /v1/chat/completions`，header `api-key`。
-  - `messages`: user = instructions（可选；voicedesign 必填），assistant = 待合成文本。
+  - `messages`: user = instructions（可选；voicedesign 必填）+ 单词提示（可选），assistant = 待合成文本。
   - `audio`: `{ "format": "wav" | "pcm16", "voice": "<id>", "optimize_text_preview": false }`
   - `optimize_text_preview` **只支持 voicedesign**；预置音色传它会 400。
   - 非流式响应是 JSON：`choices[0].message.audio.data` 是 base64 WAV。
@@ -75,13 +76,14 @@
 - `data/tts/TtsConfig.kt`：endpoint / protocol / model / voice / instructions / key / fallback；
   MIMO/OpenAI 请求体；URL 归一化；`requestText()`（MiMo 单字补句号，OpenAI 原文）；
   `TtsDraft`（两个配置页共用的转换与校验）；加密存储用 kotlinx.serialization。
+- `data/tts/WordHint.kt`：单词的词性 + US IPA + 美式口音导演注释；`from(entry)` 取第一个 sense 与 US 音标，缺字段时仍给出口音提示。
 - `data/tts/TtsClient.kt`：一次请求，无重试；MiMo JSON/base64 音频解析；WAV/MP3 校验；10/30/45 s 超时。
 - `data/tts/TtsConfigStore.kt`：Android Keystore AES/GCM + `AtomicFile`，文件 `filesDir/tts.encrypted`；
   key 只在这里落盘，且已在 `backup_rules.xml` / `data_extraction_rules.xml` 中排除出云备份与设备迁移。
 - `data/tts/SpeechService.kt`：优先读加密 store，debug/`-PttsLocal` 的 BuildConfig 只做首次引导种子；
   AI 优先、URL 兜底；`cacheDir/tts` 磁盘缓存；按
   `protocol+endpoint+model+voice+有效instructions+text` 的 SHA-256 做 key
-  （预置音色不发送描述，所以描述也不进它的 key；voicedesign 与 OpenAI 兼容接口都进）；
+  （预置音色不发送设计描述，所以描述不进它的 key；单词提示单独进 key；voicedesign 与 OpenAI 兼容接口都进描述）；
   Semaphore 2；in-flight 去重；单个 MediaPlayer。
 - `ui/voice/SpeechActions.kt`：`LocalSpeechActions`，学习卡/词条页统一入口。
 - `ui/voice/SpeechButton.kt`：AI 优先，旧 URL 兜底；播放脉冲在 `graphicsLayer` 读取，不再每帧重组。
@@ -134,7 +136,7 @@
 
 ### 5.3 播放与预取
 
-- ✅ 配置变化 → 缓存 key 变化（含 `tts-v2` 格式版本与补句号后的文本），旧缓存自然失效。
+- ✅ 配置变化 → 缓存 key 变化（含 `tts-v3` 格式版本、补句号后的文本与单词提示），旧缓存自然失效。
 - ✅ 预取：队列当前 + 下一词；当前卡首两条例句；下一页落定后下一条；并发 2；in-flight 去重。拼写模式的单词在进入词卡时朗读，而不是检查后。
 - ✅ 失败状态：`Loading / Playing / Failed`；重试一次后，按「合成失败时使用真人录音」
   决定回退旧 URL 还是提示失败（提示里带服务端原因，如 401 / 超时）。

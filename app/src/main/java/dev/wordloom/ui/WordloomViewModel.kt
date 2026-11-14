@@ -16,6 +16,7 @@ import dev.wordloom.data.tts.SpeechState
 import dev.wordloom.data.tts.TtsConfig
 import dev.wordloom.data.tts.TtsResult
 import dev.wordloom.data.tts.TtsStatus
+import dev.wordloom.data.tts.WordHint
 import dev.wordloom.data.wordbook.WordBook
 import dev.wordloom.data.wordbook.WordBookSelection
 import dev.wordloom.data.wordbook.WordBookStore
@@ -225,9 +226,10 @@ class WordloomViewModel(
         text: String,
         fallbackUrl: String?,
         onState: (SpeechState) -> Unit = {},
-    ) = speech.speak(text, fallbackUrl, onState)
+        hint: WordHint? = null,
+    ) = speech.speak(text, fallbackUrl, hint, onState)
 
-    fun prefetchTts(text: String) = speech.prefetch(text)
+    fun prefetchTts(text: String, hint: WordHint? = null) = speech.prefetch(text, hint)
 
     fun stopTts() = speech.stop()
 

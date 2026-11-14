@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import dev.wordloom.data.model.WordEntry
+import dev.wordloom.data.tts.WordHint
 import dev.wordloom.ui.components.SearchPill
 import dev.wordloom.ui.components.WaveDivider
 import dev.wordloom.ui.theme.SerifFamily
@@ -820,6 +821,7 @@ private fun DailyWordCard(
                     dev.wordloom.ui.voice.SpeechButton(
                         text = entry.word,
                         fallbackUrl = clip.url,
+                        hint = WordHint.from(entry),
                     )
                 }
             }

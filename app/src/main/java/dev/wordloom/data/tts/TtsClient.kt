@@ -30,7 +30,12 @@ data class TtsResult(
  */
 class TtsClient(private val client: OkHttpClient = defaultClient()) {
 
-    suspend fun synthesize(config: TtsConfig, text: String, target: File): TtsResult {
+    suspend fun synthesize(
+        config: TtsConfig,
+        text: String,
+        target: File,
+        hint: WordHint? = null,
+    ): TtsResult {
         require(config.enabled) { "AI 语音未配置" }
         require(text.isNotBlank()) { "没有可朗读的文本" }
 
@@ -44,7 +49,7 @@ class TtsClient(private val client: OkHttpClient = defaultClient()) {
                     header("Authorization", "Bearer ${config.requestKey}")
                 }
             }
-            .post(config.request(text).toRequestBody(JSON))
+            .post(config.request(text, hint).toRequestBody(JSON))
             .build()
 
         val started = System.nanoTime()

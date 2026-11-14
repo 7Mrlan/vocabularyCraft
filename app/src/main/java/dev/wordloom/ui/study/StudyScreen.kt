@@ -113,6 +113,7 @@ import dev.wordloom.data.translate.StudyDetails
 import dev.wordloom.data.audio.Sound
 import dev.wordloom.data.audio.SoundService
 import dev.wordloom.data.tts.SpeechState
+import dev.wordloom.data.tts.WordHint
 import dev.wordloom.data.translate.StudyExample
 import dev.wordloom.srs.Rating
 import dev.wordloom.ui.components.rememberAudioPlayer
@@ -314,7 +315,9 @@ fun StudyScreen(
         // Warm the word on screen and the next one: the next card's TTS is
         // then a cache hit when "下一词" is tapped. The next example is warmed
         // after the current page settles, not a whole batch ahead.
-        queue.take(2).forEach { item -> speechActions.prefetch(item.word) }
+        queue.take(2).forEach { item ->
+            speechActions.prefetchWord(item.word, WordHint.from(entryFor(item.word)))
+        }
     }
     val progress = if (total == 0) 0f else completed.toFloat() / total
 
@@ -460,7 +463,7 @@ fun StudyScreen(
                         // when the reader chose an AI-only voice.
                         val clip = entryFor(word).audio.firstOrNull()?.url
                         if (speech != null && speech.enabled) {
-                            speech.speak(word, clip) { }
+                            speech.speakWord(word, WordHint.from(entryFor(word)), clip) { }
                         } else if (!clip.isNullOrBlank()) {
                             player.play(clip)
                         }
@@ -666,6 +669,7 @@ private fun ReviewOverlay(
                                 text = word,
                                 fallbackUrl = clip.url,
                                 modifier = Modifier.size(30.dp),
+                                hint = WordHint.from(entry),
                             )
                         }
                     }
@@ -761,7 +765,7 @@ private fun StudyCard(
         if (wordSpoken) return@LaunchedEffect
         if (speech != null && speech.enabled) {
             wordSpoken = true
-            speech.speak(item.word, wordAudioUrl) { state ->
+            speech.speakWord(item.word, WordHint.from(entry), wordAudioUrl) { state ->
                 if (state is SpeechState.Failed) wordSpoken = false
             }
         } else if (!wordAudioUrl.isNullOrBlank()) {
@@ -779,7 +783,9 @@ private fun StudyCard(
     // enabled this is synthesis, not a URL download; with AI off it is the old
     // human/Youdao clip prefetch.
     LaunchedEffect(item.word, speech?.enabled) {
-        if (speech != null && speech.enabled) speech.prefetch(item.word)
+        if (speech != null && speech.enabled) {
+            speech.prefetchWord(item.word, WordHint.from(entry))
+        }
     }
     LaunchedEffect(details, speech?.enabled) {
         if (speech != null && speech.enabled) {
@@ -1192,7 +1198,7 @@ private fun WordFace(entry: WordEntry, onGrade: (Rating) -> Unit) {
                 Spacer(Modifier.width(8.dp))
             }
             entry.audio.firstOrNull()?.let { clip ->
-                SpeechButton(text = entry.word, fallbackUrl = clip.url)
+                SpeechButton(text = entry.word, fallbackUrl = clip.url, hint = WordHint.from(entry))
             }
         }
         Spacer(Modifier.weight(1f))
@@ -1282,6 +1288,7 @@ private fun MainFaceContent(
                     text = entry.word,
                     fallbackUrl = clip.url,
                     modifier = Modifier.size(30.dp),
+                    hint = WordHint.from(entry),
                 )
             }
         }
@@ -1411,6 +1418,7 @@ private fun ChineseFace(
                     text = entry.word,
                     fallbackUrl = clip.url,
                     modifier = Modifier.size(30.dp),
+                    hint = WordHint.from(entry),
                 )
             }
         }
@@ -1804,6 +1812,7 @@ private fun SpellingRound(
                                 text = entry.word,
                                 fallbackUrl = clip.url,
                                 modifier = Modifier.size(28.dp),
+                                hint = WordHint.from(entry),
                             )
                         }
                     }

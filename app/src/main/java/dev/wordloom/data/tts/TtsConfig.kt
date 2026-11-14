@@ -93,15 +93,32 @@ data class TtsConfig(
             }
         }
 
-    fun request(text: String): ByteArray {
+    /**
+     * The director's note that is never spoken: a voicedesign voice
+     * description, OpenAI instructions, or a word's sense and pronunciation.
+     * Kept separate from [request] so the rules are testable without org.json.
+     */
+    fun direction(hint: WordHint? = null): String = buildString {
+        if ((voiceDesign || protocol == TtsProtocol.OPENAI) && instructions.isNotBlank()) {
+            append(instructions.trim())
+        }
+        if (hint != null && hint.instruction.isNotBlank()) {
+            if (isNotEmpty()) append("\n\n")
+            append(hint.instruction)
+        }
+    }
+
+    fun request(text: String, hint: WordHint? = null): ByteArray {
         val root = JSONObject().put("model", model)
         if (protocol == TtsProtocol.MIMO) {
             val messages = JSONArray()
-            // Preset voices reject the design description; only the design
-            // template carries it. Keeping it stored lets a switch back to
-            // Design restore the reader's own words.
-            if (voiceDesign && instructions.isNotBlank()) {
-                messages.put(JSONObject().put("role", "user").put("content", instructions.trim()))
+            // The user message is a director's note and is never spoken. A
+            // voicedesign setup carries the voice description there; a word
+            // also carries its sense and dictionary pronunciation. Keeping the
+            // description stored lets a switch back to Design restore it.
+            val note = direction(hint)
+            if (note.isNotBlank()) {
+                messages.put(JSONObject().put("role", "user").put("content", note))
             }
             messages.put(JSONObject().put("role", "assistant").put("content", text))
             val audio = JSONObject().put("format", "wav")
@@ -111,7 +128,8 @@ data class TtsConfig(
             root.put("messages", messages).put("audio", audio).put("stream", false)
         } else {
             root.put("voice", voice).put("input", text).put("response_format", "mp3")
-            if (instructions.isNotBlank()) root.put("instructions", instructions.trim())
+            val note = direction(hint)
+            if (note.isNotBlank()) root.put("instructions", note)
         }
         return root.toString().toByteArray(Charsets.UTF_8)
     }

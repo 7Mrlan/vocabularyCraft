@@ -128,6 +128,10 @@ fun AppNav(
             enabled = ttsStatus.enabled,
             speak = { text, fallbackUrl, onState -> viewModel.speakTts(text, fallbackUrl, onState) },
             prefetch = { text -> viewModel.prefetchTts(text) },
+            speakWord = { word, hint, fallbackUrl, onState ->
+                viewModel.speakTts(word, fallbackUrl, onState, hint)
+            },
+            prefetchWord = { word, hint -> viewModel.prefetchTts(word, hint) },
         )
     }
 

@@ -68,6 +68,7 @@ import dev.wordloom.data.local.CardEntity
 import dev.wordloom.srs.DAY_MS
 import dev.wordloom.ui.components.PlayAllChip
 import dev.wordloom.ui.components.rememberAudioPlayer
+import dev.wordloom.data.tts.WordHint
 import dev.wordloom.ui.voice.LocalSpeechActions
 import dev.wordloom.ui.voice.SpeechButton
 import dev.wordloom.ui.theme.SansFamily
@@ -465,7 +466,7 @@ private fun WordContent(
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(text = "🇺🇸", fontSize = 16.sp)
                                 usClips.forEach { clip ->
-                                    SpeechButton(text = entry.word, fallbackUrl = clip.url)
+                                    SpeechButton(text = entry.word, fallbackUrl = clip.url, hint = WordHint.from(entry))
                                 }
                                 if (usIpa != null) {
                                     Text(
@@ -484,7 +485,7 @@ private fun WordContent(
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(text = "🇬🇧", fontSize = 16.sp)
                                 if (ukAudio != null) {
-                                    SpeechButton(text = entry.word, fallbackUrl = ukAudio.url)
+                                    SpeechButton(text = entry.word, fallbackUrl = ukAudio.url, hint = WordHint.from(entry))
                                 }
                                 if (ukIpa != null) {
                                     Text(
@@ -501,7 +502,7 @@ private fun WordContent(
                         // flag rather than putting them under one we cannot vouch for.
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             entry.audio.forEach { clip ->
-                                SpeechButton(text = entry.word, fallbackUrl = clip.url)
+                                SpeechButton(text = entry.word, fallbackUrl = clip.url, hint = WordHint.from(entry))
                             }
                             if (entry.ipa.isNotEmpty()) {
                                 Text(

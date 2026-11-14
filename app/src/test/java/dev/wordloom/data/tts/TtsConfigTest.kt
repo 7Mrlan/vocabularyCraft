@@ -56,6 +56,23 @@ class TtsConfigTest {
     }
 
     @Test
+    fun `a word hint joins the director note while the spoken text stays the word`() {
+        val hint = WordHint("record", "/ˈrekərd/", "noun")
+        val note = preset().direction(hint)
+
+        assertTrue(note.contains("/ˈrekərd/"))
+        assertTrue(note.contains("noun"))
+        assertTrue(note.contains("native American English"))
+        assertEquals("record.", preset().requestText("record"))
+    }
+
+    @Test
+    fun `a preset without a hint has no director note`() {
+        assertEquals("", preset().direction())
+        assertEquals("a described voice", design().direction())
+    }
+
+    @Test
     fun `the openai compatible endpoint keeps the text exactly`() {
         val openAi = preset().copy(protocol = TtsProtocol.OPENAI)
         assertEquals("record", openAi.requestText("record"))

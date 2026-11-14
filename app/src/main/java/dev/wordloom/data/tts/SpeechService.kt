@@ -173,9 +173,9 @@ class SpeechService(
     }
 
     /** Warm a clip without playing it; safe to call repeatedly. */
-    fun prefetch(text: String) {
+    fun prefetch(text: String, hint: WordHint? = null) {
         if (!enabled || text.isBlank()) return
-        scope.launch { prepare(text) }
+        scope.launch { prepare(text, hint) }
     }
 
     /**
@@ -183,15 +183,20 @@ class SpeechService(
      * off, a failed synthesis is retried once and then reported — the old URL is
      * never played, so the voice stays the one they configured.
      */
-    fun speak(text: String, fallbackUrl: String?, onState: (SpeechState) -> Unit = {}) {
+    fun speak(
+        text: String,
+        fallbackUrl: String?,
+        hint: WordHint? = null,
+        onState: (SpeechState) -> Unit = {},
+    ) {
         job?.cancel()
         stopPlayer()
         job = scope.launch {
             onState(SpeechState.Loading)
-            var synthesized = if (enabled) prepare(text) else null
+            var synthesized = if (enabled) prepare(text, hint) else null
             if (synthesized == null && enabled) {
                 // One retry: transient network failures are the common case.
-                synthesized = prepare(text, force = true)
+                synthesized = prepare(text, hint, force = true)
             }
             if (synthesized != null) {
                 playFile(synthesized, "AI", onState)
@@ -241,10 +246,10 @@ class SpeechService(
         scope.cancel()
     }
 
-    private suspend fun prepare(text: String, force: Boolean = false): File? {
+    private suspend fun prepare(text: String, hint: WordHint? = null, force: Boolean = false): File? {
         if (!enabled || text.isBlank()) return null
         val request = config.requestText(text)
-        val key = cacheKey(request)
+        val key = cacheKey(request, hint?.instruction.orEmpty())
         val target = File(directory, "$key.${config.extension}")
         if (!force && target.isFile && target.length() > 0) {
             // Refresh LRU position without changing the clip.
@@ -261,7 +266,7 @@ class SpeechService(
                 if (!force && target.isFile && target.length() > 0) return@withPermit target
                 val temporary = File(directory, "$key-${System.nanoTime()}.part")
                 try {
-                    client.synthesize(config, request, temporary)
+                    client.synthesize(config, request, temporary, hint)
                     if (!temporary.isFile || temporary.length() == 0L) return@withPermit null
                     if (!temporary.renameTo(target)) {
                         temporary.copyTo(target, overwrite = true)
@@ -344,14 +349,15 @@ class SpeechService(
         audioFocus.abandon()
     }
 
-    private fun cacheKey(text: String): String = TtsCache.key(
+    private fun cacheKey(text: String, hint: String = ""): String = TtsCache.key(
         protocol = config.protocol,
         endpoint = config.endpoint,
         model = config.model,
         voice = config.voice,
-        // Preset requests never send the description, so it is not part of
-        // their cache identity; voicedesign and OpenAI both do send it.
+        // Preset requests never send the design description, but the word
+        // hint is sent for presets too, so it is part of the identity.
         instructions = config.effectiveInstructions,
         text = text,
+        hint = hint,
     )
 }

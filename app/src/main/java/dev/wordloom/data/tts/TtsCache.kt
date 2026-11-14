@@ -15,8 +15,8 @@ object TtsCache {
     /**
      * The identity of one clip. Every input that can change the audio is in the
      * key, so switching template, voice or description can never replay an old
-     * file. Preset voices ignore instructions, so their key must too — otherwise
-     * editing a description would silently duplicate cache entries.
+     * file. Preset voices ignore the design description, but a word hint (sense
+     * and IPA) is sent even for presets, so it is part of the identity too.
      */
     fun key(
         protocol: TtsProtocol,
@@ -25,15 +25,17 @@ object TtsCache {
         voice: String,
         instructions: String,
         text: String,
+        hint: String = "",
     ): String {
         val identity = listOf(
             // Bump when the request shape changes; old clips then stop matching.
-            "tts-v2",
+            "tts-v3",
             protocol.name,
             endpoint,
             model,
             voice,
             instructions,
+            hint,
             text,
         ).joinToString("\u0000")
         return MessageDigest.getInstance("SHA-256")

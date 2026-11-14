@@ -30,6 +30,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import dev.wordloom.R
 import dev.wordloom.data.tts.SpeechState
+import dev.wordloom.data.tts.WordHint
 import dev.wordloom.ui.components.rememberAudioPlayer
 import dev.wordloom.ui.theme.WlMotion
 import dev.wordloom.ui.theme.WordloomTheme
@@ -46,6 +47,7 @@ fun SpeechButton(
     text: String,
     fallbackUrl: String?,
     modifier: Modifier = Modifier,
+    hint: WordHint? = null,
 ) {
     val wl = WordloomTheme.colors
     val speech = LocalSpeechActions.current
@@ -92,11 +94,16 @@ fun SpeechButton(
             ) {
                 if (speech != null && speech.enabled) {
                     playing = true
-                    speech.speak(text, fallbackUrl) { state ->
+                    val onState: (SpeechState) -> Unit = { state ->
                         playing = state is SpeechState.Playing
                         if (state is SpeechState.Failed) {
                             Toast.makeText(context, state.message, Toast.LENGTH_SHORT).show()
                         }
+                    }
+                    if (hint != null) {
+                        speech.speakWord(text, hint, fallbackUrl, onState)
+                    } else {
+                        speech.speak(text, fallbackUrl, onState)
                     }
                 } else {
                     val url = fallbackUrl?.takeIf { it.isNotBlank() } ?: return@clickable
